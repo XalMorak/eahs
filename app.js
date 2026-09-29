@@ -91,14 +91,16 @@ function landing(){
 
 function loginForm(role){
   $("#app").innerHTML = `
-    <div class="card">
-      <h3>${roleName(role)} нэвтрэх</h3>
-      <label>SAP / нэр</label><input id="sap"/>
-      <label>Нууц үг</label><input id="pin" type="password"/>
-      <p class="muted">Жишээ: ажилтан 1108650 / 1234 · ахлах akhakh / 1234 · admin / 1234</p>
-      <button class="btn" id="ok">Нэвтрэх</button>
-      <div style="height:8px"></div>
-      <button class="btn ghost" id="back">Буцах</button>
+    <div class="fhead"><h2>ЭАХС</h2><span>${roleName(role)} нэвтрэх</span></div>
+    <div class="loginbox">
+      <div class="card">
+        <label class="f">SAP / нэр</label><input id="sap" autocomplete="username"/>
+        <label class="f">Нууц үг</label><input id="pin" type="password" autocomplete="current-password"/>
+        <p class="muted">Жишээ: 1108650 / 1234 · akhakh / 1234 · admin / 1234</p>
+        <button class="btn" id="ok">Нэвтрэх</button>
+        <div style="height:8px"></div>
+        <button class="btn ghost" id="back">Буцах</button>
+      </div>
     </div>`;
   $("#back").onclick = landing;
   $("#ok").onclick = ()=>{
@@ -123,8 +125,10 @@ function workerHome(){
   const roster = load("eahs_roster",[]).find(x=>x.sap===session.sap && x.arrive===today());
   const infect = load("eahs_infect",[]).find(x=>x.sap===session.sap && x.date===today());
   $("#app").innerHTML = `
+    <div class="fhead"><h2>ЭАХС · Ажилтан</h2><span>${session.name}</span></div>
+    <div class="page">
     <div class="card"><b>${session.name}</b><div class="muted">SAP ${session.sap} · ${session.alba}</div>
-      <button class="btn ghost" id="out">Гарах</button></div>
+      <div style="height:8px"></div><button class="btn ghost" id="out">Гарах</button></div>
     <button class="home-btn" id="uhaan"><b>УХААН</b>
       <span class="muted">${uhaan.length?"Өнөөдөр бөглөсөн":"Өнөөдөр бөглөөгүй — ажил эхлэхийн өмнө"}</span></button>
     <button class="home-btn" id="fat"><b>Ядаргаа</b>
@@ -135,7 +139,7 @@ function workerHome(){
       <p>Цагаан дэвтэр: ${session.bookExp||"—"} ${expBadge(session.bookExp)}</p>
       <p>Жилийн шинжилгээ: ${session.exam||"—"} ${expBadge(session.exam)}</p>
     </div>
-    <button class="btn ghost" id="haz">Аюул мэдэгдэх</button>`;
+    <button class="btn ghost" id="haz">Аюул мэдэгдэх</button></div>`;
   $("#out").onclick = landing;
   $("#uhaan").onclick = uhaanForm;
   $("#fat").onclick = ()=> needF ? fatigueForm() : alert("Одоо бөглөх шаардлагагүй");
