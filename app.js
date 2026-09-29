@@ -410,6 +410,41 @@ function patchU(id, p){
   const i=all.findIndex(x=>x.id===id); if(i>=0){ all[i]={...all[i],...p}; save("eahs_uhaan",all); }
 }
 
+function hygieneShell(active, inner){
+  return `<div class="dash">
+    <aside class="side">
+      <h1>✚ Эрүүл ахуйчийн хяналтын самбар</h1>
+      ${[["тойм","Тойм"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Шинэ ажилтан"],["excel","Excel"],["тохиргоо","Тохиргоо"]].map(([k,l])=>
+        `<button class="navb ${active===k?"on":""}" data-nav="${k}">${l}</button>`).join("")}
+      <button class="navb" data-nav="гарах">Гарах</button>
+    </aside>
+    <div class="main">${inner}</div>
+  </div>`;
+}
+function bindHygieneNav(){
+  $("#app").onclick = e=>{
+    const nav=e.target.closest("[data-nav]")?.dataset.nav;
+    if(nav==="тойм") hygieneHome();
+    else if(nav==="ядаргаа") fatigueListPage();
+    else if(nav==="аюул") hazardListPage();
+    else if(nav==="халдвар") infectListPage();
+    else if(nav==="хуваарь") rosterPage();
+    else if(nav==="дэвтэр") bookPage();
+    else if(nav==="ажилтан") newEmp();
+    else if(nav==="excel") reportPage();
+    else if(nav==="тохиргоо") settingsPage();
+    else if(nav==="гарах") landing();
+    const tr=e.target.closest("tr[data-u]");
+    if(tr) viewUhaan(tr.dataset.u, "hygiene");
+    const hs=e.target.closest("[data-st]");
+    if(hs && e.target.tagName==="SELECT"){
+      const all=load("eahs_hazards",[]);
+      const i=all.findIndex(x=>x.id===hs.dataset.st);
+      if(i>=0){ all[i].status=e.target.value; save("eahs_hazards",all); }
+    }
+  };
+}
+
 function hygieneHome(){
   const u=load("eahs_uhaan",[]), f=load("eahs_fatigue",[]), h=load("eahs_hazards",[]), inf=load("eahs_infect",[]);
   const users=load("eahs_users",[]).filter(x=>x.role==="worker");
@@ -417,21 +452,7 @@ function hygieneHome(){
   const neu=h.filter(x=>x.status==="Шинэ").length;
   const exp=users.filter(w=>w.bookExp && daysBetween(today(),w.bookExp)<=30).length;
   const ir=inf.filter(x=>x.risk && x.date===today()).length;
-  $("#app").innerHTML=`
-    <div class="dash">
-      <aside class="side">
-        <h1>✚ Эрүүл ахуйчийн хяналтын самбар</h1>
-        <button class="navb on">Тойм</button>
-        <button class="navb" id="nfat">Ядаргаа</button>
-        <button class="navb" id="nhaz">Аюул</button>
-        <button class="navb" id="ninf">Халдвар</button>
-        <button class="navb" id="nros">Хуваарь</button>
-        <button class="navb" id="nemp">Шинэ ажилтан</button>
-        <button class="navb" id="nrep">Excel</button>
-        <button class="navb" id="nset">Тохиргоо</button>
-        <button class="navb" id="out">Гарах</button>
-      </aside>
-      <div class="main">
+  $("#app").innerHTML = hygieneShell("тойм", `
         <h2 style="margin-top:0">Эрүүл ахуйчийн хяналтын самбар</h2>
         <p class="muted">Өнөөдөр: ${today()}</p>
         <div class="kpis">
@@ -454,19 +475,8 @@ function hygieneHome(){
         <div class="card"><h3>УХААН</h3>
           <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Төлөв</th></tr>
           ${u.slice(0,12).map(x=>`<tr data-u="${x.id}"><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${stU(x)}</td></tr>`).join("")}
-        </table></div>
-      </div>
-    </div>`;
-  $("#out").onclick=landing;
-  $("#nrep").onclick=reportPage;
-  $("#nemp").onclick=newEmp;
-  $("#nros").onclick=rosterPage;
-  $("#nset").onclick=settingsPage;
-  $("#nhaz").onclick=()=>document.querySelector(".card:nth-of-type(1)")?.scrollIntoView();
-  $("#app").onclick=e=>{
-    const tr=e.target.closest("tr[data-u]");
-    if(tr) viewUhaan(tr.dataset.u, "hygiene");
-  };
+        </table></div>`);
+  bindHygieneNav();
 }
 function stH(s){
   if(s==="Шинэ") return `<span class="badge b-new">Шинэ</span>`;
@@ -474,15 +484,62 @@ function stH(s){
   return `<span class="badge b-ok">Шийдвэрлэсэн</span>`;
 }
 
+function fatigueListPage(){
+  const f=load("eahs_fatigue",[]);
+  $("#app").innerHTML=hygieneShell("ядаргаа", `<h2>Ядаргаа</h2>
+    <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Оноо</th><th>Түвшин</th></tr>
+    ${f.map(x=>`<tr><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${x.score}</td><td>${x.level}</td></tr>`).join("")||"<tr><td colspan=5>Хоосон</td></tr>"}
+    </table>`);
+  bindHygieneNav();
+}
+function hazardListPage(){
+  const h=load("eahs_hazards",[]);
+  $("#app").innerHTML=hygieneShell("аюул", `<h2>Аюул</h2>
+    ${h.map(x=>`<div class="card"><b>${x.date} · ${x.area}</b> · ${x.risk}<div class="muted">${x.det||""}</div>
+      <div class="thumbs">${(x.photos||[]).slice(0,4).map(p=>`<img src="${p}">`).join("")}</div>
+      <select data-st="${x.id}">${["Шинэ","Шалгаж байна","Шийдвэрлэсэн"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
+    </div>`).join("")||"<p>Хоосон</p>"}`);
+  bindHygieneNav();
+}
+function infectListPage(){
+  const inf=load("eahs_infect",[]);
+  $("#app").innerHTML=hygieneShell("халдвар", `<h2>Халдвар</h2>
+    <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Үр дүн</th></tr>
+    ${inf.map(x=>`<tr><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${x.risk?"Эрсдэлтэй":"Орж болно"}</td></tr>`).join("")||"<tr><td colspan=4>Хоосон</td></tr>"}
+    </table>`);
+  bindHygieneNav();
+}
+function bookPage(){
+  const users=load("eahs_users",[]).filter(x=>x.role==="worker");
+  $("#app").innerHTML=hygieneShell("дэвтэр", `<h2>Цагаан дэвтэр / жилийн шинжилгээ</h2>
+    <table><tr><th>Нэр</th><th>SAP</th><th>Дэвтэр</th><th>Шинжилгээ</th></tr>
+    ${users.map(w=>`<tr><td>${w.name}</td><td>${w.sap}</td><td>${w.bookExp||"—"} ${expBadge(w.bookExp)}</td><td>${w.exam||"—"} ${expBadge(w.exam)}</td></tr>`).join("")}
+    </table>`);
+  bindHygieneNav();
+}
+
 function reportPage(){
-  $("#app").innerHTML=`<div class="card"><h3>Тайлан</h3>
-    <p class="muted">УХААН Excel-д орохгүй. Аюулын файлаас зурагтай хуудас гарна.</p>
-    <label>Эхлэх</label><input type="date" id="from" value="${addDays(-13)}"/>
-    <label>Дуусах</label><input type="date" id="to" value="${today()}"/>
-    <button class="btn" id="xl">Excel татах (аюул+зураг, халдвар, ядаргаа)</button>
-    <div style="height:8px"></div><button class="btn ghost" id="back">Буцах</button></div>`;
-  $("#back").onclick=hygieneHome;
-  $("#xl").onclick=()=>exportExcel($("#from").value,$("#to").value);
+  $("#app").innerHTML=hygieneShell("excel", `<h2>Excel татах</h2>
+    <div class="card">
+      <p class="muted">УХААН орохгүй. Хэрэгтэй тайлангаа сонгоно уу.</p>
+      <label class="f">Эхлэх</label><input type="date" id="from" value="${addDays(-13)}"/>
+      <label class="f">Дуусах</label><input type="date" id="to" value="${today()}"/>
+      <p><b>Аль тайлан</b></p>
+      <label><input type="checkbox" id="x-ayul" checked/> Аюул (зурагтай)</label><br>
+      <label><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label><br>
+      <label><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
+      <div style="height:12px"></div>
+      <button class="btn" id="xl">Татах</button>
+    </div>`);
+  bindHygieneNav();
+  $("#xl").onclick=()=>{
+    const kinds=[];
+    if($("#x-ayul").checked) kinds.push("ayul");
+    if($("#x-inf").checked) kinds.push("inf");
+    if($("#x-fat").checked) kinds.push("fat");
+    if(!kinds.length){ alert("Дор хаяж нэг тайлан сонгоно уу"); return; }
+    exportExcel($("#from").value,$("#to").value,kinds);
+  };
 }
 function addDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 
@@ -492,7 +549,7 @@ function dataUrlToBuf(url){
   return u;
 }
 
-async function exportExcel(from,to){
+async function exportExcel(from,to,kinds=["ayul","inf","fat"]){
   const wb=new ExcelJS.Workbook();
   wb.creator="EAHS";
   const inR=(d)=>d>=from && d<=to;
@@ -500,77 +557,83 @@ async function exportExcel(from,to){
   const inf=load("eahs_infect",[]).filter(x=>inR(x.date));
   const fat=load("eahs_fatigue",[]).filter(x=>inR(x.date));
 
-  const s1=wb.addWorksheet("Аюул");
-  s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв"]);
-  hz.forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,(x.photos||[]).length,x.status]));
-
-  const sP=wb.addWorksheet("Аюул_зураг");
-  sP.addRow(["Огноо","Газар","Мэдээлэгч","Зураг №"]);
-  let r=2;
-  for(const x of hz){
-    (x.photos||[]).forEach((p,i)=>{
-      sP.getRow(r).values=[x.date,x.area,x.reporter,i+1];
-      sP.getRow(r).height=80;
-      try{
-        const id=wb.addImage({buffer:dataUrlToBuf(p), extension:"jpeg"});
-        sP.addImage(id,{tl:{col:4,row:r-1}, ext:{width:120,height:90}});
-      }catch(e){}
-      r++;
-    });
+  if(kinds.includes("ayul")){
+    const s1=wb.addWorksheet("Аюул");
+    s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв"]);
+    hz.forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,(x.photos||[]).length,x.status]));
+    const sP=wb.addWorksheet("Аюул_зураг");
+    sP.addRow(["Огноо","Газар","Мэдээлэгч","Зураг №"]);
+    let r=2;
+    for(const x of hz){
+      (x.photos||[]).forEach((p,i)=>{
+        sP.getRow(r).values=[x.date,x.area,x.reporter,i+1];
+        sP.getRow(r).height=80;
+        try{
+          const id=wb.addImage({buffer:dataUrlToBuf(p), extension:"jpeg"});
+          sP.addImage(id,{tl:{col:4,row:r-1}, ext:{width:120,height:90}});
+        }catch(e){}
+        r++;
+      });
+    }
+    sP.getColumn(5).width=22;
   }
-  sP.getColumn(5).width=22;
-
-  const s2=wb.addWorksheet("Халдвар");
-  s2.addRow(["Огноо","SAP","Нэр","Алба","Үр дүн","Хариу"]);
-  inf.forEach(x=>s2.addRow([x.date,x.sap,x.name,x.alba,x.risk?"Эрсдэлтэй":"Орж болно",(x.ans||[]).map(a=>a.q+":"+a.a).join("; ")]));
-
-  const s3=wb.addWorksheet("Ядаргаа");
-  s3.addRow(["Огноо","SAP","Нэр","Алба","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Төвлөрөл","Оноо","Түвшин"]);
-  fat.forEach(x=>s3.addRow([x.date,x.sap,x.name,x.alba,x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q11,x.score,x.level]));
+  if(kinds.includes("inf")){
+    const s2=wb.addWorksheet("Халдвар");
+    s2.addRow(["Огноо","SAP","Нэр","Алба","Үр дүн","Хариу"]);
+    inf.forEach(x=>s2.addRow([x.date,x.sap,x.name,x.alba,x.risk?"Эрсдэлтэй":"Орж болно",(x.ans||[]).map(a=>a.q+":"+a.a).join("; ")]));
+  }
+  if(kinds.includes("fat")){
+    const s3=wb.addWorksheet("Ядаргаа");
+    s3.addRow(["Огноо","SAP","Нэр","Алба","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Төвлөрөл","Оноо","Түвшин"]);
+    fat.forEach(x=>s3.addRow([x.date,x.sap,x.name,x.alba,x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q11,x.score,x.level]));
+  }
 
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=`EAHS_${from}_${to}.xlsx`;
+  a.download=`EAHS_${kinds.join("-")}_${from}_${to}.xlsx`;
   a.click();
 }
 
 function newEmp(){
-  $("#app").innerHTML=`<div class="card"><h3>Шинэ ажилтан</h3>
-    <label>SAP</label><input id="sap"/>
-    <label>Нэр</label><input id="name"/>
-    <label>Алба</label><select id="alba">${ALBA.map(a=>`<option>${a}</option>`).join("")}</select>
-    <label>Хүйс</label><select id="gender"><option>Эр</option><option>Эм</option></select>
-    <label>Ажил</label><input id="job"/>
-    <label>Нууц үг</label><input id="pin" value="1234"/>
-    <label>Цагаан дэвтэр дуусах</label><input type="date" id="book"/>
-    <label>Жилийн шинжилгээ дуусах</label><input type="date" id="exam"/>
+  $("#app").innerHTML=hygieneShell("ажилтан", `<h2>Шинэ ажилтан</h2>
+    <div class="card">
+    <label class="f">SAP</label><input id="sap"/>
+    <label class="f">Нэр</label><input id="nm"/>
+    <label class="f">Алба</label><select id="alba">${ALBA.map(a=>`<option>${a}</option>`).join("")}</select>
+    <label class="f">Хүйс</label><select id="gender"><option>Эр</option><option>Эм</option></select>
+    <label class="f">Ажил</label><input id="job"/>
+    <label class="f">Нууц үг</label><input id="pin" value="1234"/>
+    <label class="f">Цагаан дэвтэр дуусах</label><input type="date" id="book"/>
+    <label class="f">Жилийн шинжилгээ дуусах</label><input type="date" id="exam"/>
     <button class="btn" id="save">Хадгалах</button>
-    <div style="height:8px"></div><button class="btn ghost" id="back">Буцах</button></div>`;
-  $("#back").onclick=hygieneHome;
+    </div>`);
+  bindHygieneNav();
   $("#save").onclick=()=>{
     const users=load("eahs_users",[]);
     if(users.some(x=>x.sap===$("#sap").value.trim())){ alert("SAP давхардсан"); return; }
-    users.push({sap:$("#sap").value.trim(), name:$("#name").value, role:"worker", alba:$("#alba").value, gender:$("#gender").value, job:$("#job").value, pin:$("#pin").value, bookExp:$("#book").value, exam:$("#exam").value});
+    users.push({sap:$("#sap").value.trim(), name:$("#nm").value, role:"worker", alba:$("#alba").value, gender:$("#gender").value, job:$("#job").value, pin:$("#pin").value, bookExp:$("#book").value, exam:$("#exam").value});
     save("eahs_users", users); alert("Хадгаллаа"); hygieneHome();
   };
 }
 
 function rosterPage(){
   const users=load("eahs_users",[]).filter(x=>x.role==="worker");
-  $("#app").innerHTML=`<div class="card"><h3>Талбарын хуваарь</h3>
-    <label>Ажилтан</label><select id="sap">${users.map(u=>`<option value="${u.sap}">${u.name} (${u.sap})</option>`).join("")}</select>
-    <label>Ирэх өдөр</label><input type="date" id="arrive" value="${today()}"/>
-    <label>Гарах өдөр</label><input type="date" id="leave"/>
+  $("#app").innerHTML=hygieneShell("хуваарь", `<h2>Талбарын хуваарь</h2>
+    <div class="card">
+    <label class="f">Ажилтан</label><select id="sap">${users.map(u=>`<option value="${u.sap}">${u.name} (${u.sap})</option>`).join("")}</select>
+    <label class="f">Ирэх өдөр</label><input type="date" id="arrive" value="${today()}"/>
+    <label class="f">Гарах өдөр</label><input type="date" id="leave"/>
     <button class="btn" id="add">Нэмэх</button>
+    </div>
     <table><tr><th>Ирэх</th><th>Нэр</th><th>Гарах</th></tr>
     ${load("eahs_roster",[]).map(x=>`<tr><td>${x.arrive}</td><td>${x.name}</td><td>${x.leave||""}</td></tr>`).join("")}
-    </table>
-    <button class="btn ghost" id="back">Буцах</button></div>`;
-  $("#back").onclick=hygieneHome;
+    </table>`);
+  bindHygieneNav();
   $("#add").onclick=()=>{
     const u=users.find(x=>x.sap===$("#sap").value);
+    if(!u) return;
     const all=load("eahs_roster",[]);
     all.unshift({sap:u.sap,name:u.name,arrive:$("#arrive").value,leave:$("#leave").value});
     save("eahs_roster",all); rosterPage();
@@ -579,15 +642,16 @@ function rosterPage(){
 
 function settingsPage(){
   const s=load("eahs_settings",{});
-  $("#app").innerHTML=`<div class="card"><h3>Тохиргоо</h3>
-    <label>Ядаргаа хэд хоногт 1</label><input type="number" id="fd" value="${s.fatigueDays||7}"/>
-    <label>Баримт дуусахад хориглох</label>
+  $("#app").innerHTML=hygieneShell("тохиргоо", `<h2>Тохиргоо</h2>
+    <div class="card">
+    <label class="f">Ядаргаа хэд хоногт 1</label><input type="number" id="fd" value="${s.fatigueDays||7}"/>
+    <label class="f">Баримт дуусахад хориглох</label>
     <select id="bl"><option value="0">Зөвхөн анхааруул</option><option value="1">Хоригло</option></select>
     <button class="btn" id="save">Хадгалах</button>
-    <div style="height:8px"></div><button class="btn ghost" id="back">Буцах</button></div>`;
+    </div>`);
   $("#bl").value = s.blockExpired?"1":"0";
-  $("#back").onclick=hygieneHome;
-  $("#save").onclick=()=>{ save("eahs_settings",{fatigueDays:+$("#fd").value||7, blockExpired:$("#bl").value==="1"}); alert("Хадгаллаа"); hygieneHome(); };
+  bindHygieneNav();
+  $("#save").onclick=()=>{ save("eahs_settings",{fatigueDays:+$("#fd").value||7, blockExpired:$("#bl").value==="1"}); alert("Хадгаллаа"); };
 }
 
 if(session?.role==="worker") workerHome();
