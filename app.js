@@ -52,29 +52,36 @@ seed();
 
 let session = load("eahs_session", null);
 const $ = sel => document.querySelector(sel);
-function setWho(){
-  $("#who").textContent = session ? `${session.name} · ${roleName(session.role)}` : "";
-}
+function setWho(){}
 function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", hygiene:"Эрүүл ахуйч"}[r]||""; }
 
-function go(fn){ $("#app").innerHTML = ""; fn(); setWho(); }
+function go(fn){ $("#app").innerHTML = ""; fn(); }
 
 function landing(){
-  session = null; save("eahs_session", null); setWho();
+  session = null; save("eahs_session", null);
   $("#app").innerHTML = `
-    <div class="card">
-      <h2>Эрүүл ахуйн хяналтын систем</h2>
-      <p class="muted">УХААН · ядаргаа · аюул · халдвар</p>
-      <button class="btn" data-g="login-worker">Ажилтан нэвтрэх</button>
-      <div style="height:8px"></div>
-      <button class="btn ghost" data-g="hazard">Аюулыг мэдээлэх (нэвтрэхгүй)</button>
-      <div style="height:8px"></div>
-      <button class="btn ghost" data-g="login-supervisor">Ахлах нэвтрэх</button>
-      <div style="height:8px"></div>
-      <button class="btn ghost" data-g="login-hygiene">Эрүүл ахуйчийн самбар</button>
+    <div class="land">
+      <div>
+        <div class="land-in">
+          <div class="brand">
+            <div class="logo">🍃</div>
+            <div>
+              <h1>ЭАХС</h1>
+              <p>Эрүүл ахуйн хяналтын систем</p>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="menu-btn solid" data-g="login-worker">👤 Ажилтан нэвтрэх ›</button>
+            <button class="menu-btn line" data-g="hazard">⚠ Аюулыг мэдээлэх (нэвтрэхгүй) ›</button>
+            <button class="menu-btn solid" data-g="login-supervisor">📋 Ахлах нэвтрэх ›</button>
+            <button class="menu-btn solid" data-g="login-hygiene">📋 Эрүүл ахуйчийн самбар ›</button>
+          </div>
+        </div>
+        <div class="foot-sites">Оюут · Манлай · Эрчим баар · Оффис</div>
+      </div>
     </div>`;
   $("#app").onclick = e=>{
-    const g = e.target.dataset.g;
+    const g = e.target.closest("[data-g]")?.dataset.g;
     if(g==="hazard") hazardForm();
     if(g==="login-worker") loginForm("worker");
     if(g==="login-supervisor") loginForm("supervisor");
@@ -208,42 +215,53 @@ function uhaanForm(){
 function fatigueForm(){
   const g = session.gender==="Эм";
   $("#app").innerHTML = `
-    <div class="card"><h3>Алжаал ядаргааны үнэлгээ</h3>
-      <p class="muted">SAP ${session.sap} · ${session.name} · ${today()} · ${session.alba}</p>
-      <label>5. Сүүлийн 24 цагт хэдэн цаг унтсан бэ?</label>
-      <select id="q5"><option>7 ба түүнээс их</option><option>6-7 цаг</option><option>6 цагаас бага</option></select>
-      <label>6. Сүүлийн 48 цагт хэдэн цаг унтсан бэ?</label>
-      <select id="q6"><option>14 цагаас их</option><option>12-14 цаг</option><option>12 цагаас бага</option></select>
-      <label>7. Ээлж дуусах үед хэдэн цаг сэрүүн байх вэ?</label>
-      <select id="q7"><option>14 цагаас бага</option><option>14-16 цаг</option><option>16 цагаас илүү</option></select>
-      <label>${g?"9":"8"}. Сүүлийн 12 цагт архи (${g?"ЭМ":"ЭР"})</label>
-      <select id="q8"><option>Согтууруулах ундаа хэрэглээгүй</option><option>1-3</option><option>4-6</option></select>
-      <label>10. Эм тариа / нэмэлт?</label>
-      <select id="q10"><option>Үгүй</option><option>Тийм</option></select>
-      <label>11. Анхаарал төвлөрөл</label>
-      <select id="q11"><option>Тийм, чадаж байна</option><option>Тийм , гэхдээ тийм ч сайн биш</option><option>Нойрмог эвшээсэн , анхаарал төвлөрүүлхэд хүндрэлтэй</option></select>
-      <button class="btn" id="calc">Оноо тооцох</button>
+    <div class="fhead"><h2>✚ Алжаал ядаргааны үнэлгээ</h2><span>Олон нийтийн эрүүл мэндийн үнэлгээний хэрэгсэл</span></div>
+    <div class="fwrap">
+      <div class="lockgrid">
+        <div class="cell">🔒 SAP<b>${session.sap}</b></div>
+        <div class="cell">🔒 Нэр<b>${session.name}</b></div>
+        <div class="cell">🔒 Огноо<b>${today()}</b></div>
+        <div class="cell">🔒 Тасаг / Нэгж<b>${session.alba}</b></div>
+      </div>
+      <div class="chips">${ALBA.map(a=>`<span class="chip ${a===session.alba?"on":""}">${a}</span>`).join("")}</div>
+      ${qblock("q5","5. Сүүлийн 24 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 24 цагт нийт хэдэн цаг унтав?",["7 ба түүнээс их","6-7 цаг","6 цагаас бага"])}
+      ${qblock("q6","6. Сүүлийн 48 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 48 цагт нийт хэдэн цаг унтав?",["14 цагаас их","12-14","12 цагаас бага"])}
+      ${qblock("q7","7. Ээлж дуусах үед сэрүүн байсан цаг (ойролцоогоор)","Та ээлж эхэлснээс хойш ээлж дуустал хэдэн цаг сэрүүн байв?",["14 цагаас бага","14-16","16 цагаас илүү"])}
+      ${qblock("q8", g?"9. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — ЭМ":"8. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — ЭР","Та сүүлийн 24 цагт хэдэн стандарт нэгж архи хэрэглэсэн бэ?",["1-3","4-6","хэрэглээгүй"])}
+      ${qblock("q10","10. Эмийн хэрэглээ (сүүлийн 24 цаг)","Та сүүлийн 24 цагт ямар нэг эм, нойрны эм, тайвшруулах эм хэрэглэсэн үү?",["Үгүй","Тийм"])}
+      ${qblock("q11","11. Анхаарал төвлөрөл / Сэтгэцийн хурц байдал","Та өөрийгөө ямар түвшинд үнэлэх вэ?",["Маш сайн / Хурц","Дунд зэрэг / Хангалттай","Муу / Бүдэг"])}
+      <button class="btn" id="calc">Оноо тооцох →</button>
       <div style="height:8px"></div><button class="btn ghost" id="back">Буцах</button>
     </div>`;
+  $("#app").onclick = e=>{
+    const o=e.target.closest(".opt");
+    if(o){ o.parentElement.querySelectorAll(".opt").forEach(x=>x.classList.remove("on")); o.classList.add("on"); }
+  };
   $("#back").onclick = workerHome;
   $("#calc").onclick = ()=>{
-    const map3 = (v,opts)=>opts.indexOf(v);
-    const s5 = map3($("#q5").value,["7 ба түүнээс их","6-7 цаг","6 цагаас бага"]);
-    const s6 = map3($("#q6").value,["14 цагаас их","12-14 цаг","12 цагаас бага"]);
-    const s7 = map3($("#q7").value,["14 цагаас бага","14-16 цаг","16 цагаас илүү"]);
-    const s8 = map3($("#q8").value,["Согтууруулах ундаа хэрэглээгүй","1-3","4-6"]);
-    const s10 = $("#q10").value==="Тийм"?2:0;
-    const s11 = map3($("#q11").value,["Тийм, чадаж байна","Тийм , гэхдээ тийм ч сайн биш","Нойрмог эвшээсэн , анхаарал төвлөрүүлхэд хүндрэлтэй"]);
+    const val = id => document.querySelector("#"+id+" .opt.on")?.textContent.trim();
+    if(!val("q5")||!val("q6")||!val("q7")||!val("q8")||!val("q10")||!val("q11")){ alert("Бүх асуултыг сонгоно уу"); return; }
+    const map3 = (v,opts)=>Math.max(0,opts.indexOf(v));
+    const s5 = map3(val("q5"),["7 ба түүнээс их","6-7 цаг","6 цагаас бага"]);
+    const s6 = map3(val("q6"),["14 цагаас их","12-14","12 цагаас бага"]);
+    const s7 = map3(val("q7"),["14 цагаас бага","14-16","16 цагаас илүү"]);
+    const s8 = val("q8")==="хэрэглээгүй"?0:val("q8")==="1-3"?1:2;
+    const s10 = val("q10")==="Тийм"?2:0;
+    const s11 = map3(val("q11"),["Маш сайн / Хурц","Дунд зэрэг / Хангалттай","Муу / Бүдэг"]);
     let score = s5+s6+s7+s8+s10+s11;
     let level = score<=3?"Бага":score<=7?"Дунд":"Өндөр";
-    if($("#q10").value==="Тийм" || s11===2) level = level==="Бага"?"Дунд":level;
+    if(val("q10")==="Тийм" || s11===2) level = level==="Бага"?"Дунд":level;
     if(s8===2 && s5===2) level="Өндөр";
     const rec={id:uid(), sap:session.sap, name:session.name, alba:session.alba, gender:session.gender, date:today(),
-      q5:$("#q5").value,q6:$("#q6").value,q7:$("#q7").value,q8:$("#q8").value,q10:$("#q10").value,q11:$("#q11").value,score,level};
+      q5:val("q5"),q6:val("q6"),q7:val("q7"),q8:val("q8"),q10:val("q10"),q11:val("q11"),score,level};
     const all=load("eahs_fatigue",[]); all.unshift(rec); save("eahs_fatigue",all);
     alert(`${level} оноо: ${score}/12`+(level==="Өндөр"?" — ахлах/эрүүл ахуйчид мэдэгдлээ":""));
     workerHome();
   };
+}
+function qblock(id,title,sub,opts){
+  return `<div class="qcard" id="${id}"><h3>${title}</h3><p class="muted">${sub}</p>
+    <div class="opts">${opts.map(o=>`<div class="opt">${o}</div>`).join("")}</div></div>`;
 }
 
 function infectForm(){
@@ -268,30 +286,44 @@ function infectForm(){
 let hazardPics = [];
 function hazardForm(){
   hazardPics = [];
+  const CLS = ["Бодис","Биологийн","Цаг агаарын","Тээврийн хэрэгсэл","Цахилгаан","Байгалийн орчин","Эргономик","Гэрэлтүүлэг","Механик","Хувь хүний","Даралт","Дуу чимээ","Ажлын орчин","Дулаан","Гадаа аюул","Хог хаягдал"];
   $("#app").innerHTML = `
-    <div class="card"><h3>Аюулыг мэдээлэх хуудас</h3>
-      <p class="muted">RECORD AN OBSERVED HAZARD</p>
-      <h4>Ерөнхий мэдээлэл</h4>
-      <label>Аюулыг харсан газар, харьяа хэлтэс</label><select id="area">${ALBA.map(a=>`<option>${a}</option>`).join("")}</select>
-      <label>Огноо</label><input type="date" id="hdate" value="${today()}"/>
-      <label>Хариуцах хэлтэс</label><input id="acc"/>
-      <label>Мэдээлсэн хүн</label><input id="rep" value="${session?.name||""}"/>
-      <label>Ахлах / судласан хүн</label><input id="rev"/>
-      <h4>Аюулын тайлбар</h4>
-      <div id="types">${HAZ_TYPES.map(t=>`<label><input type="checkbox" value="${t}"/> ${t}</label>`).join("")}</div>
-      <p>Ангилал</p>
-      <div id="cls">${HAZ_CLASS.map(t=>`<label><input type="checkbox" value="${t}"/> ${t}</label>`).join("")}</div>
-      <label>Эрсдэл</label>
+    <div class="hpage"><div class="hcard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><b style="color:#0E6B5C">Oyu Tolgoi</b></div>
+        <div style="text-align:center"><h2 style="margin:0">АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h2><div class="muted">RECORD AN OBSERVED HAZARD</div></div>
+        <div>🛡</div>
+      </div>
+      <div class="hbar">ЕРӨНХИЙ МЭДЭЭЛЭЛ  GENERAL INFORMATION</div>
+      <div class="hgrid">
+        <div><label>Ажлын талбар</label><select id="area">${ALBA.map(a=>`<option>${a}</option>`).join("")}</select></div>
+        <div><label>Огноо</label><input type="date" id="hdate" value="${today()}"/></div>
+        <div><label>Хариуцах хэлтэс</label><input id="acc" placeholder="Сонгоно уу"/></div>
+        <div><label>Мэдээлэгч</label><input id="rep" value="${session?.name||""}" placeholder="Нэр, албан тушаал"/></div>
+        <div><label>Шалгагч</label><input id="rev" placeholder="Нэр, албан тушаал"/></div>
+      </div>
+      <div class="hbar">АЮУЛЫН ТАЙЛБАР  HAZARD DESCRIPTION</div>
+      <p>Аюулын төрөл / Hazard type</p>
+      <div class="types" id="types">${["Эрүүл мэнд / Health","Аюулгүй байдал / Safety","Байгаль орчин / Environment","Хамгаалалт / Security"].map(t=>`<label><input type="checkbox" value="${t.split(" / ")[0]}"/> ${t}</label>`).join("")}</div>
+      <p>Аюулын ангилал (нэгийг сонгоно)</p>
+      <div class="cls" id="cls">${CLS.map(t=>`<button type="button">${t}</button>`).join("")}</div>
+      <label class="f">Аюулын дэлгэрэнгүй тайлбар</label><textarea id="det" maxlength="1000" rows="3" placeholder="Аюулын байршил, нөхцөл, юу ажиглагдсаныг дэлгэрэнгүй бичнэ үү..."></textarea>
+      <label class="f">Шууд авсан арга хэмжээ</label><textarea id="act" maxlength="500" rows="2" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?..."></textarea>
+      <label class="f">Эрсдэл</label>
       <select id="risk"><option>Бага</option><option>Дунд зэрэг</option><option>Их</option><option>Маш их</option></select>
-      <label>Харсан аюулаа дэлгэрэнгүй</label><textarea id="det"></textarea>
-      <label>Авсан шуурхай арга хэмжээ</label><textarea id="act"></textarea>
-      <label>Зураг (багадаа 2)</label>
-      <input type="file" id="pics" accept="image/*" multiple/>
+      <div class="drop" style="margin-top:12px">📷 Зураг оруулах — багадаа 2 зураг (JPG/PNG, 5MB)
+        <input type="file" id="pics" accept="image/*" multiple/></div>
       <div class="thumbs" id="thumbs"></div>
-      <button class="btn" id="send">Илгээх</button>
-      <div style="height:8px"></div>
+      <button class="btn" id="send" style="margin-top:12px">✉ Илгээх / Submit</button>
+      <p class="muted" style="text-align:center">🔒 Таны мэдээлэл нууцлагдана.</p>
       <button class="btn ghost" id="back">Буцах</button>
-    </div>`;
+    </div></div>`;
+  let pickedCls="";
+  $("#cls").onclick=e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    $("#cls").querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); pickedCls=b.textContent;
+  };
   $("#pics").onchange = async e=>{
     for(const f of [...e.target.files]){
       const data = await fileToData(f);
@@ -303,10 +335,9 @@ function hazardForm(){
   $("#send").onclick = ()=>{
     if(hazardPics.length<2){ alert("Багадаа 2 зураг оруулна уу"); return; }
     const types=[...document.querySelectorAll("#types input:checked")].map(x=>x.value);
-    const cls=[...document.querySelectorAll("#cls input:checked")].map(x=>x.value);
-    const rec={id:uid(), area:$("#area").value, date:$("#hdate").value, acc:$("#acc").value, reporter:$("#rep").value, reviewer:$("#rev").value, types, cls, risk:$("#risk").value, det:$("#det").value, act:$("#act").value, photos:hazardPics.slice(0,8), status:"Шинэ", created:nowStr()};
+    const rec={id:uid(), area:$("#area").value, date:$("#hdate").value, acc:$("#acc").value, reporter:$("#rep").value, reviewer:$("#rev").value, types, cls:pickedCls?[pickedCls]:[], risk:$("#risk").value, det:$("#det").value, act:$("#act").value, photos:hazardPics.slice(0,8), status:"Шинэ", created:nowStr()};
     const all=load("eahs_hazards",[]); all.unshift(rec); save("eahs_hazards",all);
-    alert("Мэдэгдэл хүлээн авлаа. Эрүүл ахуйчийн самбарт шинэ төлөвтэй орлоо.");
+    alert("Мэдэгдэл хүлээн авлаа.");
     session?.role==="worker"?workerHome():landing();
   };
 }
@@ -378,48 +409,65 @@ function patchU(id, p){
 function hygieneHome(){
   const u=load("eahs_uhaan",[]), f=load("eahs_fatigue",[]), h=load("eahs_hazards",[]), inf=load("eahs_infect",[]);
   const users=load("eahs_users",[]).filter(x=>x.role==="worker");
-  const todayU=u.filter(x=>x.date===today());
-  const miss=users.filter(w=>!todayU.some(x=>x.sap===w.sap)).length;
-  const stop=u.filter(x=>x.stop && x.date===today()).length;
+  const hi=f.filter(x=>x.level==="Өндөр" && x.date===today()).length;
   const neu=h.filter(x=>x.status==="Шинэ").length;
   const exp=users.filter(w=>w.bookExp && daysBetween(today(),w.bookExp)<=30).length;
+  const ir=inf.filter(x=>x.risk && x.date===today()).length;
   $("#app").innerHTML=`
-    <div class="card"><b>Эрүүл ахуйчийн самбар</b> <button class="btn ghost" id="out">Гарах</button></div>
-    <div class="kpi">
-      <div class="card">УХААН бөглөөгүй<b>${miss}</b></div>
-      <div class="card">Зогсоосон / өндөр<b>${stop + f.filter(x=>x.level==="Өндөр"&&x.date===today()).length}</b></div>
-      <div class="card">Шинэ аюул<b>${neu}</b></div>
-      <div class="card">Баримт 30 хоног<b>${exp}</b></div>
-    </div>
-    <div class="row">
-      <button class="btn" id="rep">Тайлан / Excel</button>
-      <button class="btn ghost" id="emp">Шинэ ажилтан</button>
-      <button class="btn ghost" id="ros">Хуваарь</button>
-      <button class="btn ghost" id="set">Тохиргоо</button>
-    </div>
-    <div class="card"><h3>УХААН (ахлахтай ижил харагдана)</h3>
-      <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Төлөв</th></tr>
-      ${u.slice(0,15).map(x=>`<tr data-u="${x.id}"><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${stU(x)}</td></tr>`).join("")}
-      </table></div>
-    <div class="card"><h3>Аюул</h3>
-      ${h.slice(0,10).map(x=>`<div class="item"><div><b>${x.date} ${x.area}</b> · ${x.risk}<br><span class="muted">${(x.types||[]).join(", ")}</span>
-      <div class="thumbs">${(x.photos||[]).slice(0,3).map(p=>`<img src="${p}">`).join("")}</div></div>
-      <select data-st="${x.id}">${["Шинэ","Шалгаж байна","Шийдвэрлэсэн"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select></div>`).join("")||"Хоосон"}
+    <div class="dash">
+      <aside class="side">
+        <h1>✚ Эрүүл ахуйчийн хяналтын самбар</h1>
+        <button class="navb on">Тойм</button>
+        <button class="navb" id="nfat">Ядаргаа</button>
+        <button class="navb" id="nhaz">Аюул</button>
+        <button class="navb" id="ninf">Халдвар</button>
+        <button class="navb" id="nros">Хуваарь</button>
+        <button class="navb" id="nemp">Шинэ ажилтан</button>
+        <button class="navb" id="nrep">Excel</button>
+        <button class="navb" id="nset">Тохиргоо</button>
+        <button class="navb" id="out">Гарах</button>
+      </aside>
+      <div class="main">
+        <h2 style="margin-top:0">Эрүүл ахуйчийн хяналтын самбар</h2>
+        <p class="muted">Өнөөдөр: ${today()}</p>
+        <div class="kpis">
+          <div class="kpi"><i style="background:#d92d20">🔋</i><div>Өндөр ядаргаа<b>${hi}</b><span class="muted">ажилтан</span></div></div>
+          <div class="kpi"><i style="background:#dc6803">⚠</i><div>Шинэ аюул<b>${neu}</b><span class="muted">бүртгэл</span></div></div>
+          <div class="kpi"><i style="background:#1570ef">📄</i><div>Баримт 30 хоног<b>${exp}</b><span class="muted">баримт</span></div></div>
+          <div class="kpi"><i style="background:#079455">✔</i><div>Халдварын эрсдэл<b>${ir}</b><span class="muted">өндөр эрсдэлтэй</span></div></div>
+        </div>
+        <div class="card"><h3>Аюулын жагсаалт</h3>
+          ${h.slice(0,6).map(x=>`<div class="item"><div><b>${x.det||x.types?.[0]||"Аюул"}</b><div class="muted">${x.area}</div></div>${stH(x.status)}</div>`).join("")||"Хоосон"}
+        </div>
+        <div class="card"><h3>Ажилтнуудын тойм</h3>
+          <table><tr><th>Ажилтан</th><th>SAP</th><th>Тасаг</th><th>Ядаргаа</th><th>Цагаан дэвтэр</th></tr>
+          ${users.map(w=>{
+            const last=f.filter(x=>x.sap===w.sap)[0];
+            return `<tr><td>${w.name}</td><td>${w.sap}</td><td>${w.alba}</td><td>${last?last.level+" ("+last.score+")":"—"}</td><td>${expBadge(w.bookExp)}</td></tr>`;
+          }).join("")}
+          </table>
+        </div>
+        <div class="card"><h3>УХААН</h3>
+          <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Төлөв</th></tr>
+          ${u.slice(0,12).map(x=>`<tr data-u="${x.id}"><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${stU(x)}</td></tr>`).join("")}
+        </table></div>
+      </div>
     </div>`;
   $("#out").onclick=landing;
-  $("#rep").onclick=reportPage;
-  $("#emp").onclick=newEmp;
-  $("#ros").onclick=rosterPage;
-  $("#set").onclick=settingsPage;
-  $("#app").onchange=e=>{
-    const id=e.target.dataset.st; if(!id) return;
-    const all=load("eahs_hazards",[]);
-    const i=all.findIndex(x=>x.id===id); if(i>=0){ all[i].status=e.target.value; save("eahs_hazards",all); }
-  };
+  $("#nrep").onclick=reportPage;
+  $("#nemp").onclick=newEmp;
+  $("#nros").onclick=rosterPage;
+  $("#nset").onclick=settingsPage;
+  $("#nhaz").onclick=()=>document.querySelector(".card:nth-of-type(1)")?.scrollIntoView();
   $("#app").onclick=e=>{
     const tr=e.target.closest("tr[data-u]");
     if(tr) viewUhaan(tr.dataset.u, "hygiene");
   };
+}
+function stH(s){
+  if(s==="Шинэ") return `<span class="badge b-new">Шинэ</span>`;
+  if(s==="Шалгаж байна") return `<span class="badge b-wait">Шалгаж байна</span>`;
+  return `<span class="badge b-ok">Шийдвэрлэсэн</span>`;
 }
 
 function reportPage(){
