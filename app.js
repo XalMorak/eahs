@@ -26,29 +26,70 @@ const U3 = [
   "Удаан хугацааны турш давтсан хөдөлгөөн хийх"
 ];
 
-function load(k, d){ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch{ return d; } }
-function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+const CLOUD_KEYS = ["eahs_users","eahs_settings","eahs_uhaan","eahs_fatigue","eahs_hazards","eahs_infect","eahs_roster"];
+const firebaseConfig = {
+  apiKey:"AIzaSyCj0zqo31QoCw2ggpOl2Aewu8u95azL6jQ",
+  authDomain:"borluulalt-f9d70.firebaseapp.com",
+  databaseURL:"https://borluulalt-f9d70-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"borluulalt-f9d70"
+};
+let _fb = null;
+function load(k, d){ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch{ return d; } }
+function save(k, v){
+  localStorage.setItem(k, JSON.stringify(v));
+  if(_fb && CLOUD_KEYS.includes(k)){
+    _fb.ref("eahs/"+k).set(v).catch(e=>console.warn("fb",e));
+  }
+}
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function today(){ return new Date().toISOString().slice(0,10); }
 function nowStr(){ return new Date().toLocaleString("mn-MN"); }
 
-function seed(){
+function seedLocal(){
   if(!load("eahs_users", null)){
-    save("eahs_users", [
+    localStorage.setItem("eahs_users", JSON.stringify([
       {sap:"1108650", name:"Б. Энхбаяр", role:"worker", alba:"Оюут баар", gender:"Эр", job:"Тусгаар", pin:"1234", book:"ЦД-2025-1", bookExp:"2026-12-10", exam:"2026-11-01"},
       {sap:"50012346", name:"С. Болормаа", role:"worker", alba:"Оюут баар", gender:"Эм", job:"Тогооч", pin:"1234", book:"ЦД-2025-2", bookExp:"2026-10-20", exam:"2026-12-01"},
       {sap:"akhakh", name:"Д. Ганболд", role:"supervisor", alba:"Оюут баар", gender:"Эр", job:"Ахлах", pin:"1234"},
       {sap:"admin", name:"Эрүүл ахуйч", role:"hygiene", alba:"Оффис", gender:"Эм", job:"Эрүүл ахуйч", pin:"1234"}
-    ]);
+    ]));
   }
   if(!load("eahs_settings", null)){
-    save("eahs_settings", {fatigueDays:7, blockExpired:false});
+    localStorage.setItem("eahs_settings", JSON.stringify({fatigueDays:7, blockExpired:false}));
   }
   ["eahs_uhaan","eahs_fatigue","eahs_hazards","eahs_infect","eahs_roster"].forEach(k=>{
-    if(load(k,null)===null) save(k,[]);
+    if(load(k,null)===null) localStorage.setItem(k, JSON.stringify([]));
   });
 }
-seed();
+
+async function initCloud(){
+  seedLocal();
+  if(typeof firebase==="undefined") return;
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    _fb = firebase.database();
+    if(firebase.auth){
+      try{ await firebase.auth().signInAnonymously(); }catch(e){ console.warn(e); }
+    }
+    const snap = await _fb.ref("eahs").once("value");
+    const cloud = snap.val();
+    if(cloud){
+      CLOUD_KEYS.forEach(k=>{
+        if(cloud[k]!=null) localStorage.setItem(k, JSON.stringify(cloud[k]));
+      });
+    } else {
+      const pack={};
+      CLOUD_KEYS.forEach(k=>pack[k]=load(k, k==="eahs_settings"?{fatigueDays:7}:[]));
+      await _fb.ref("eahs").set(pack);
+    }
+    _fb.ref("eahs").on("value", s=>{
+      const v=s.val(); if(!v) return;
+      CLOUD_KEYS.forEach(k=>{
+        if(v[k]!=null) localStorage.setItem(k, JSON.stringify(v[k]));
+      });
+    });
+  }catch(e){ console.warn("cloud", e); }
+}
 
 let session = load("eahs_session", null);
 const $ = sel => document.querySelector(sel);
@@ -352,10 +393,10 @@ function fileToData(f){
       const img=new Image();
       img.onload=()=>{
         const c=document.createElement("canvas");
-        const w=Math.min(900,img.width), h=img.height*(w/img.width);
+        const w=Math.min(640,img.width), h=img.height*(w/img.width);
         c.width=w; c.height=h;
         c.getContext("2d").drawImage(img,0,0,w,h);
-        res(c.toDataURL("image/jpeg",0.7));
+        res(c.toDataURL("image/jpeg",0.55));
       };
       img.src=r.result;
     };
@@ -616,6 +657,72 @@ function newEmp(){
     users.push({sap:$("#sap").value.trim(), name:$("#nm").value, role:"worker", alba:$("#alba").value, gender:$("#gender").value, job:$("#job").value, pin:$("#pin").value, bookExp:$("#book").value, exam:$("#exam").value});
     save("eahs_users", users); alert("Хадгаллаа"); hygieneHome();
   };
+  const box = document.createElement("div");
+  box.className="card";
+  box.innerHTML=`<h3>Excel-ээр оруулах</h3>
+    <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр, Шинжилгээ</p>
+    <button class="btn ghost" id="tmpl">Загвар татах</button>
+    <div style="height:8px"></div>
+    <input type="file" id="ximp" accept=".xlsx,.xls"/>
+    <div id="ximperr" class="muted"></div>
+    <button class="btn" id="ximpok">Шалгаад оруулах</button>`;
+  document.querySelector(".main").appendChild(box);
+  let pending=null;
+  $("#tmpl").onclick=async ()=>{
+    const wb=new ExcelJS.Workbook(); const s=wb.addWorksheet("Ажилтан");
+    s.addRow(["SAP","Нэр","Алба","Хүйс","Ажил","Нууц үг","Цагаан дэвтэр","Шинжилгээ"]);
+    s.addRow(["50019999","Жишээ Нэр","Оюут баар","Эр","Тогооч","1234","2026-12-31","2026-11-01"]);
+    const buf=await wb.xlsx.writeBuffer();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+    a.download="EAHS_ajiltan_zagvar.xlsx"; a.click();
+  };
+  $("#ximp").onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const wb=new ExcelJS.Workbook();
+    await wb.xlsx.load(await f.arrayBuffer());
+    const sh=wb.worksheets[0];
+    const rows=[]; const errs=[];
+    sh.eachRow((row,i)=>{
+      if(i===1) return;
+      const sap=String(row.getCell(1).value||"").trim();
+      const name=String(row.getCell(2).value||"").trim();
+      const alba=String(row.getCell(3).value||"").trim();
+      const gender=String(row.getCell(4).value||"").trim();
+      const job=String(row.getCell(5).value||"").trim();
+      const pin=String(row.getCell(6).value||"1234").trim();
+      const bookExp=excelDate(row.getCell(7).value);
+      const exam=excelDate(row.getCell(8).value);
+      if(!sap) { errs.push(i+"-р мөр: SAP хоосон"); return; }
+      if(!name) { errs.push(i+"-р мөр: Нэр хоосон"); return; }
+      if(ALBA.length && alba && !ALBA.includes(alba)) errs.push(i+"-р мөр: Алба танигдаагүй («"+alba+"»). Оруулна.");
+      if(gender && gender!=="Эр" && gender!=="Эм") errs.push(i+"-р мөр: Хүйс Эр/Эм биш");
+      rows.push({sap,name,role:"worker",alba:ALBA.includes(alba)?alba:(alba||"Оффис"),gender:gender==="Эм"?"Эм":"Эр",job,pin,bookExp,exam});
+    });
+    pending=rows;
+    $("#ximperr").innerHTML = (errs.length?("<div class='warnbox'>"+errs.join("<br>")+"</div>"):"<div class='muted'>Алдаагүй. ")+rows.length+" мөр бэлэн.</div>";
+  };
+  $("#ximpok").onclick=()=>{
+    if(!pending||!pending.length){ alert("Файл сонгоно уу"); return; }
+    const users=load("eahs_users",[]);
+    const skip=[];
+    pending.forEach(p=>{
+      if(users.some(u=>u.sap===p.sap)) skip.push(p.sap);
+      else users.push(p);
+    });
+    save("eahs_users", users);
+    alert("Орлоо: "+(pending.length-skip.length)+ (skip.length?" · давхардсан SAP: "+skip.join(", "):""));
+    newEmp();
+  };
+}
+function excelDate(v){
+  if(v==null||v==="") return "";
+  if(typeof v==="number"){
+    const d=new Date(Math.round((v-25569)*86400*1000));
+    return d.toISOString().slice(0,10);
+  }
+  const s=String(v).slice(0,10);
+  return s;
 }
 
 function rosterPage(){
@@ -654,7 +761,10 @@ function settingsPage(){
   $("#save").onclick=()=>{ save("eahs_settings",{fatigueDays:+$("#fd").value||7, blockExpired:$("#bl").value==="1"}); alert("Хадгаллаа"); };
 }
 
-if(session?.role==="worker") workerHome();
-else if(session?.role==="supervisor") supervisorHome();
-else if(session?.role==="hygiene") hygieneHome();
-else landing();
+initCloud().then(()=>{
+  session = load("eahs_session", null);
+  if(session?.role==="worker") workerHome();
+  else if(session?.role==="supervisor") supervisorHome();
+  else if(session?.role==="hygiene") hygieneHome();
+  else landing();
+});
