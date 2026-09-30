@@ -310,20 +310,45 @@ function qblock(id,title,sub,opts){
 }
 
 function infectForm(){
-  const qs=["Бөөлжих","Суулгах","Халуурах","Хэвлийгээр өвдөх","Ойр хавийн хүнд ижил өвчин"];
-  $("#app").innerHTML = `<div class="card"><h3>Гэдэсний халдварт өвчин тандах</h3>
-    <p class="muted">${session.name} · ${today()}</p>
-    ${qs.map((q,i)=>`<label>${q}</label><select id="i${i}"><option>Үгүй</option><option>Тийм</option></select>`).join("")}
-    <button class="btn" id="send">Илгээх</button>
-    <div style="height:8px"></div><button class="btn ghost" id="back">Буцах</button></div>`;
+  const qs = [
+    {id:"f1", t:"Та сүүлийн 72 цагийн хугацаанд ил задгай хадгалсан, үнэр амт өөрчлөгдсөн, хордлого үүсгэж болзошгүй хоол хүнс хэрэглэсэн үү?", o:["Тийм","Үгүй"]},
+    {id:"f2", t:"Таньд дотор муухайрах, гэдэс базлах, гүйлгэх шинж тэмдэг илэрч байна уу?", o:["Тийм","Үгүй","Илэрсэн, одоо эдгэсэн"]},
+    {id:"f3", t:"Та амралтын хугацаанд дээрх шинж тэмдэг илэрсэн хүнтэй хавьтал болсон уу?", o:["Тийм","Үгүй","Мэдэхгүй"]},
+    {id:"f4", t:"Танд бэртэл гэмтэл авсан зэрэг эрүүл мэндийн асуудал байна уу? (Тийм бол ахлах ажилтандаа мэдэгдэнэ үү)", o:["Тийм","Үгүй"]},
+    {id:"f5", t:"Нойр, амралт хангалттай авч ажилдаа бэлэн байх нөхцөлийг хангаж чадаж байна уу?", o:["Тийм","Үгүй"]}
+  ];
+  $("#app").innerHTML = `
+    <div class="fhead"><h2>Гэдэсний халдварт өвчнийг тандах</h2></div>
+    <div class="fwrap">
+      <p class="muted">ГХӨ-г эрт илрүүлэх, халдвар дамжихаас сэргийлэх зорилготой.</p>
+      <div class="lockgrid" style="grid-template-columns:1fr 1fr">
+        <div class="cell">Овог нэр<b>${session.name}</b></div>
+        <div class="cell">SAP / алба<b>${session.sap} · ${session.alba}</b></div>
+      </div>
+      <label class="f">Ээлжинд ирэх хугацаа *</label>
+      <input type="date" id="arrive" value="${today()}"/>
+      ${qs.map(q=>`<div class="qcard" id="${q.id}"><h3>${q.t}</h3>
+        <div class="opts" style="grid-template-columns:${q.o.length===3?"1fr 1fr 1fr":"1fr 1fr"}">
+          ${q.o.map(o=>`<div class="opt">${o}</div>`).join("")}
+        </div></div>`).join("")}
+      <button class="btn" id="send">Илгээх</button>
+      <div style="height:8px"></div>
+      <button class="btn ghost" id="back">Буцах</button>
+    </div>`;
+  $("#app").onclick = e=>{
+    const o=e.target.closest(".opt");
+    if(o){ o.parentElement.querySelectorAll(".opt").forEach(x=>x.classList.remove("on")); o.classList.add("on"); }
+  };
   $("#back").onclick = workerHome;
   $("#send").onclick = ()=>{
-    const ans = qs.map((q,i)=>({q, a:$("#i"+i).value}));
-    const risk = ans.some(x=>x.a==="Тийм");
+    const val = id => document.querySelector("#"+id+" .opt.on")?.textContent.trim();
+    if(qs.some(q=>!val(q.id))){ alert("Бүх асуултыг хариулна уу"); return; }
+    const ans = qs.map(q=>({q:q.t, a:val(q.id)}));
+    const risk = val("f1")==="Тийм" || val("f2")==="Тийм" || val("f3")==="Тийм" || val("f4")==="Тийм" || val("f5")==="Үгүй";
     const all=load("eahs_infect",[]);
-    all.unshift({id:uid(), sap:session.sap, name:session.name, alba:session.alba, date:today(), ans, risk});
+    all.unshift({id:uid(), sap:session.sap, name:session.name, alba:session.alba, date:$("#arrive").value||today(), ans, risk});
     save("eahs_infect", all);
-    alert(risk?"Эрсдэлтэй — ажилд оруулахгүй, эрүүл ахуйчид мэдэгдсэн":"Ажилд орж болно");
+    alert(risk?"Эрсдэлтэй — ажилд оруулахгүй. Эрүүл ахуйч / ахлах харна.":"Ажилд орж болно");
     workerHome();
   };
 }
