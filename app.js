@@ -344,11 +344,10 @@ function infectForm(){
     const val = id => document.querySelector("#"+id+" .opt.on")?.textContent.trim();
     if(qs.some(q=>!val(q.id))){ alert("Бүх асуултыг хариулна уу"); return; }
     const ans = qs.map(q=>({q:q.t, a:val(q.id)}));
-    const risk = val("f1")==="Тийм" || val("f2")==="Тийм" || val("f3")==="Тийм" || val("f4")==="Тийм" || val("f5")==="Үгүй";
     const all=load("eahs_infect",[]);
-    all.unshift({id:uid(), sap:session.sap, name:session.name, alba:session.alba, date:$("#arrive").value||today(), ans, risk});
+    all.unshift({id:uid(), sap:session.sap, name:session.name, alba:session.alba, date:$("#arrive").value||today(), ans, verdict:"huleegdej"});
     save("eahs_infect", all);
-    alert(risk?"Эрсдэлтэй — ажилд оруулахгүй. Эрүүл ахуйч / ахлах харна.":"Ажилд орж болно");
+    alert("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
     workerHome();
   };
 }
@@ -508,6 +507,26 @@ function bindHygieneNav(){
       const i=all.findIndex(x=>x.id===hs.dataset.st);
       if(i>=0){ all[i].status=e.target.value; save("eahs_hazards",all); }
     }
+    const infs=e.target.closest("[data-inf]");
+    if(infs && e.target.tagName==="SELECT"){
+      const all=load("eahs_infect",[]);
+      const i=all.findIndex(x=>x.id===infs.dataset.inf);
+      if(i>=0){ all[i].verdict=e.target.value; save("eahs_infect",all); }
+    }
+  };
+  $("#app").onchange = e=>{
+    const infs=e.target.closest("[data-inf]");
+    if(infs){
+      const all=load("eahs_infect",[]);
+      const i=all.findIndex(x=>x.id===infs.dataset.inf);
+      if(i>=0){ all[i].verdict=e.target.value; save("eahs_infect",all); }
+    }
+    const hs=e.target.closest("[data-st]");
+    if(hs){
+      const all=load("eahs_hazards",[]);
+      const i=all.findIndex(x=>x.id===hs.dataset.st);
+      if(i>=0){ all[i].status=e.target.value; save("eahs_hazards",all); }
+    }
   };
 }
 
@@ -517,7 +536,7 @@ function hygieneHome(){
   const hi=f.filter(x=>x.level==="Өндөр" && x.date===today()).length;
   const neu=h.filter(x=>x.status==="Шинэ").length;
   const exp=users.filter(w=>w.bookExp && daysBetween(today(),w.bookExp)<=30).length;
-  const ir=inf.filter(x=>x.risk && x.date===today()).length;
+  const ir=inf.filter(x=>x.verdict==="ersdel" && x.date===today()).length + inf.filter(x=>(!x.verdict||x.verdict==="huleegdej") && x.date===today()).length;
   $("#app").innerHTML = hygieneShell("тойм", `
         <h2 style="margin-top:0">Эрүүл ахуйчийн хяналтын самбар</h2>
         <p class="muted">Өнөөдөр: ${today()}</p>
@@ -569,10 +588,18 @@ function hazardListPage(){
 }
 function infectListPage(){
   const inf=load("eahs_infect",[]);
-  $("#app").innerHTML=hygieneShell("халдвар", `<h2>Халдвар</h2>
-    <table><tr><th>Огноо</th><th>Нэр</th><th>Алба</th><th>Үр дүн</th></tr>
-    ${inf.map(x=>`<tr><td>${x.date}</td><td>${x.name}</td><td>${x.alba}</td><td>${x.risk?"Эрсдэлтэй":"Орж болно"}</td></tr>`).join("")||"<tr><td colspan=4>Хоосон</td></tr>"}
-    </table>`);
+  $("#app").innerHTML=hygieneShell("халдвар", `<h2>Халдвар — үр дүн гаргах</h2>
+    <p class="muted">Ажилтан зөвхөн бөглөсөн. Орж болно / оруулахгүй-г эндээс та тогтооно.</p>
+    ${inf.map(x=>`<div class="card">
+      <b>${x.date} · ${x.name}</b> <span class="muted">${x.sap} · ${x.alba}</span>
+      <div style="margin:8px 0">${(x.ans||[]).map(a=>`<div class="item"><p>${a.q}</p><b>${a.a}</b></div>`).join("")}</div>
+      <label class="f">Үр дүн</label>
+      <select data-inf="${x.id}">
+        <option value="huleegdej" ${(!x.verdict||x.verdict==="huleegdej")?"selected":""}>Хүлээгдэж байна</option>
+        <option value="orjbolno" ${x.verdict==="orjbolno"?"selected":""}>Орж болно</option>
+        <option value="ersdel" ${x.verdict==="ersdel"||x.risk?"selected":""}>Ажилд оруулахгүй</option>
+      </select>
+    </div>`).join("")||"<p>Хоосон</p>"}`);
   bindHygieneNav();
 }
 function bookPage(){
@@ -646,7 +673,7 @@ async function exportExcel(from,to,kinds=["ayul","inf","fat"]){
   if(kinds.includes("inf")){
     const s2=wb.addWorksheet("Халдвар");
     s2.addRow(["Огноо","SAP","Нэр","Алба","Үр дүн","Хариу"]);
-    inf.forEach(x=>s2.addRow([x.date,x.sap,x.name,x.alba,x.risk?"Эрсдэлтэй":"Орж болно",(x.ans||[]).map(a=>a.q+":"+a.a).join("; ")]));
+    inf.forEach(x=>s2.addRow([x.date,x.sap,x.name,x.alba,x.verdict==="ersdel"?"Ажилд оруулахгүй":x.verdict==="orjbolno"?"Орж болно":"Хүлээгдэж",(x.ans||[]).map(a=>a.q+":"+a.a).join("; ")]));
   }
   if(kinds.includes("fat")){
     const s3=wb.addWorksheet("Ядаргаа");
