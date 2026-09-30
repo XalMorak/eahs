@@ -33,12 +33,28 @@ const firebaseConfig = {
   databaseURL:"https://borluulalt-f9d70-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:"borluulalt-f9d70"
 };
-let _fb = null;
+let _fb = null, _cloudState = "off";
+function setCloud(state, msg){
+  _cloudState = state;
+  let el = document.getElementById("cloudbar");
+  if(!el){ el=document.createElement("div"); el.id="cloudbar"; document.body.appendChild(el); }
+  el.className = "cloudbar "+state;
+  el.textContent = msg || ({ok:"Үүлэнд холбогдсон", wait:"Холбож байна…", err:"Зөвхөн энэ төхөөрөмжид", off:"Холбогдоогүй"}[state]||"");
+}
+function toast(msg){
+  let t=document.getElementById("toast");
+  if(!t){ t=document.createElement("div"); t.id="toast"; document.body.appendChild(t); }
+  t.textContent=msg; t.className="toast show";
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.className="toast",2200);
+}
 function load(k, d){ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch{ return d; } }
 function save(k, v){
   localStorage.setItem(k, JSON.stringify(v));
   if(_fb && CLOUD_KEYS.includes(k)){
-    _fb.ref("eahs/"+k).set(v).catch(e=>console.warn("fb",e));
+    setCloud("wait","Хадгалж байна…");
+    _fb.ref("eahs/"+k).set(v).then(()=>setCloud("ok","Үүлэнд хадгаллаа")).catch(e=>{
+      console.warn("fb",e); setCloud("err","Үүлэнд алдаа — энэ төхөөрөмжид үлдсэн");
+    });
   }
 }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -64,7 +80,8 @@ function seedLocal(){
 
 async function initCloud(){
   seedLocal();
-  if(typeof firebase==="undefined") return;
+  setCloud("wait","Холбож байна…");
+  if(typeof firebase==="undefined"){ setCloud("err"); return; }
   try{
     if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     _fb = firebase.database();
@@ -87,8 +104,10 @@ async function initCloud(){
       CLOUD_KEYS.forEach(k=>{
         if(v[k]!=null) localStorage.setItem(k, JSON.stringify(v[k]));
       });
+      setCloud("ok");
     });
-  }catch(e){ console.warn("cloud", e); }
+    setCloud("ok");
+  }catch(e){ console.warn("cloud", e); setCloud("err"); }
 }
 
 let session = load("eahs_session", null);
@@ -165,6 +184,11 @@ function workerHome(){
   const needF = !lastF || daysBetween(lastF.date, today()) >= (set.fatigueDays||7);
   const roster = load("eahs_roster",[]).find(x=>x.sap===session.sap && x.arrive===today());
   const infect = load("eahs_infect",[]).find(x=>x.sap===session.sap && x.date===today());
+  let infTxt = "Өнөөдөр хуваарь байхгүй";
+  if(roster && !infect) infTxt = "Өнөөдөр талбарт ирэх хуваарьтай — бөглөнө";
+  if(infect && (!infect.verdict || infect.verdict==="huleegdej")) infTxt = "Бөглөсөн · эрүүл ахуйч шийдээгүй";
+  if(infect && infect.verdict==="orjbolno") infTxt = "Шийдвэр: орж болно";
+  if(infect && infect.verdict==="ersdel") infTxt = "Шийдвэр: ажилд оруулахгүй";
   $("#app").innerHTML = `
     <div class="fhead"><h2>ЭАХС · Ажилтан</h2><span>${session.name}</span></div>
     <div class="page">
@@ -175,7 +199,7 @@ function workerHome(){
     <button class="home-btn" id="fat"><b>Ядаргаа</b>
       <span class="muted">${needF?"Бөглөх хугацаа болсон":"Дараагийн бөглөлт хүлээгдэж байна"}</span></button>
     <button class="home-btn" id="inf"><b>Халдварын асуумж</b>
-      <span class="muted">${roster?(infect?"Бөглөсөн":"Өнөөдөр талбарт ирэх хуваарьтай"):"Өнөөдөр хуваарь байхгүй"}</span></button>
+      <span class="muted">${infTxt}</span></button>
     <div class="card"><b>Миний баримт</b>
       <p>Цагаан дэвтэр: ${session.bookExp||"—"} ${expBadge(session.bookExp)}</p>
       <p>Жилийн шинжилгээ: ${session.exam||"—"} ${expBadge(session.exam)}</p>
@@ -347,7 +371,7 @@ function infectForm(){
     const all=load("eahs_infect",[]);
     all.unshift({id:uid(), sap:session.sap, name:session.name, alba:session.alba, date:$("#arrive").value||today(), ans, verdict:"huleegdej"});
     save("eahs_infect", all);
-    alert("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
+    toast("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
     workerHome();
   };
 }
