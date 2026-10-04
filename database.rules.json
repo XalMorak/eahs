@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "eahs": {
+      "v2": {
+        ".read": "auth != null",
+        "_meta": { ".write": "auth != null && !data.exists()" },
+        "users": {
+          "$sap": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/) && !newData.child('pin').exists())"
+          }
+        },
+        "settings": { ".write": "auth != null" },
+        "uhaan":    { "$id": { ".write": "auth != null" } },
+        "fatigue":  { "$id": { ".write": "auth != null" } },
+        "infect":   { "$id": { ".write": "auth != null" } },
+        "roster":   { "$id": { ".write": "auth != null" } },
+        "hygcheck": { "$id": { ".write": "auth != null" } },
+        "hazards": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || !newData.child('det').exists() || (newData.child('det').isString() && newData.child('det').val().length <= 1000)"
+          }
+        },
+        "photos": { "$id": { ".write": "auth != null" } },
+        "$other": { ".write": false }
+      }
+    }
+  }
+}
