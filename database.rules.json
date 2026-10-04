@@ -6,28 +6,122 @@
     },
     "eahs": {
       "v2": {
-        ".read": "auth != null",
-        "_meta": { ".write": "auth != null && !data.exists()" },
-        "users": {
-          "$sap": {
-            ".write": "auth != null",
-            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/) && !newData.child('pin').exists())"
+        ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+        "_meta": {
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') && !data.exists()"
+        },
+        "roles": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && auth.uid === $uid && !data.exists() && newData.child('sap').isString() && auth.token.email === newData.child('sap').val().toLowerCase() + '@eahs.local' && root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').exists() && newData.child('proof').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').val() && newData.child('role').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val())",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/))"
           }
         },
-        "settings": { ".write": "auth != null" },
-        "uhaan":    { "$id": { ".write": "auth != null" } },
-        "fatigue":  { "$id": { ".write": "auth != null" } },
-        "infect":   { "$id": { ".write": "auth != null" } },
-        "roster":   { "$id": { ".write": "auth != null" } },
-        "hygcheck": { "$id": { ".write": "auth != null" } },
-        "hazards": {
+        "authgen": {
+          "$sap": {
+            ".read": true,
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+            ".validate": "!newData.exists() || newData.isString() || newData.isNumber()"
+          }
+        },
+        "users": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          "$sap": {
+            ".read": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap",
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/) && !newData.child('pin').exists() && (!newData.child('uid').exists() || newData.child('uid').isString()))",
+            "uid": {
+              ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap && !data.exists() && newData.val() === auth.uid"
+            },
+            "pinHash": {
+              ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap && !newData.exists()"
+            },
+            "mustChange": {
+              ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap"
+            }
+          }
+        },
+        "settings": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')"
+        },
+        "uhaan": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".indexOn": [
+            "sap"
+          ],
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
-            ".write": "auth != null",
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && data.exists() && newData.exists() && data.child('alba').val() === root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val()) || ((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && !data.exists() && newData.child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())"
+          }
+        },
+        "fatigue": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".indexOn": [
+            "sap"
+          ],
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && !data.exists() && newData.child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())"
+          }
+        },
+        "infect": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".indexOn": [
+            "sap"
+          ],
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && !data.exists() && newData.child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())"
+          }
+        },
+        "roster": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')"
+        },
+        "hygcheck": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && newData.exists() && newData.child('alba').val() === root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val() && (!data.exists() || data.child('alba').val() === root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val())",
+            "rows": {
+              "$rk": {
+                "sign": {
+                  ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() !== null && newData.parent().child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val()"
+                },
+                "signAt": {
+                  ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() !== null && newData.parent().child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val()"
+                }
+              }
+            }
+          }
+        },
+        "hazards": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && data.exists() && newData.exists()) || (auth != null && !data.exists() && newData.child('status').val() === 'Шинэ')",
             ".validate": "!newData.exists() || !newData.child('det').exists() || (newData.child('det').isString() && newData.child('det').val().length <= 1000)"
           }
         },
-        "photos": { "$id": { ".write": "auth != null" } },
-        "$other": { ".write": false }
+        "photos": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "auth != null && !data.exists() && newData.parent().parent().child('hazards/'+$id).exists()"
+          }
+        },
+        "notifs": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')))))",
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+          }
+        },
+        "$other": {
+          ".write": false
+        }
       }
     }
   }

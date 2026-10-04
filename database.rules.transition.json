@@ -1,0 +1,93 @@
+{
+  "rules": {
+    "borluulalt": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "eahs": {
+      "v2": {
+        ".read": "auth != null",
+        "_meta": {
+          ".write": "auth != null && !data.exists()"
+        },
+        "roles": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && auth.uid === $uid && !data.exists() && newData.child('sap').isString() && auth.token.email === newData.child('sap').val().toLowerCase() + '@eahs.local' && root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').exists() && newData.child('proof').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').val() && newData.child('role').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val())",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/))"
+          }
+        },
+        "authgen": {
+          "$sap": {
+            ".read": true,
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+            ".validate": "!newData.exists() || newData.isString() || newData.isNumber()"
+          }
+        },
+        "users": {
+          "$sap": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/) && !newData.child('pin').exists() && (!newData.child('uid').exists() || newData.child('uid').isString()))"
+          }
+        },
+        "settings": {
+          ".write": "auth != null"
+        },
+        "uhaan": {
+          ".indexOn": [
+            "sap"
+          ],
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "fatigue": {
+          ".indexOn": [
+            "sap"
+          ],
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "infect": {
+          ".indexOn": [
+            "sap"
+          ],
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "roster": {
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "hygcheck": {
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "hazards": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || !newData.child('det').exists() || (newData.child('det').isString() && newData.child('det').val().length <= 1000)"
+          }
+        },
+        "photos": {
+          "$id": {
+            ".write": "auth != null"
+          }
+        },
+        "notifs": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+          }
+        },
+        "$other": {
+          ".write": false
+        }
+      }
+    }
+  }
+}

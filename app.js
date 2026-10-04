@@ -53,8 +53,19 @@ const firebaseConfig = {
   databaseURL:"https://borluulalt-f9d70-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:"borluulalt-f9d70"
 };
+/* Тест (Firebase emulator) — production-д window.EAHS_EMU байхгүй */
+const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
+const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
+const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs"];
+/* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
+const AUTH_DOMAIN = "eahs.local";
+const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
+const authEmail = (sap, gen) => String(sap).toLowerCase() + (gen ? "+"+gen : "") + "@" + AUTH_DOMAIN;
+const sapFromEmail = em => String(em||"").split("@")[0].split("+")[0];
+/* Хуучин 4 оронтой PIN-г Firebase-ийн «≥6 тэмдэгт» шаардлагад нийцүүлэх (шинэ нууц үг ≥6 тул давхцахгүй) */
+const fbPw = pw => String(pw).length>=6 ? String(pw) : "eahs#"+String(pw);
 const LS = "eahs2_";
 
 /* ---------- жижиг хэрэгслүүд ---------- */
@@ -84,10 +95,11 @@ function lsSet(k,v){
     return false;
   }
 }
-function toast(msg){
+function toast(msg, html){
   let t=document.getElementById("toast");
   if(!t){ t=document.createElement("div"); t.id="toast"; t.setAttribute("role","status"); document.body.appendChild(t); }
-  t.textContent=msg; t.className="toast show";
+  if(html) t.innerHTML = String(msg).replace(/^(<svg[\s\S]*?<\/svg>)?([\s\S]*)$/, (m,svg,txt)=>(svg||"")+esc(txt)); else t.textContent=msg;
+  t.className="toast show";
   clearTimeout(window._tt); window._tt=setTimeout(()=>t.className="toast",2600);
 }
 /* ---------- Дүрс тэмдэг (inline SVG, 24×24 stroke) ---------- */
@@ -122,7 +134,14 @@ const ICONS = {
   trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
-  map:'<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>'
+  map:'<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  chart:'<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="4" width="3" height="14" rx="1"/>',
+  qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
+  filter:'<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
+  history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
+  userCheck:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'
 };
 const ic = (n, cls="") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n]||""}</svg>`;
 const initials = name => String(name||"?").replace(/^[^\s.]+\.\s*/,"").trim().slice(0,1).toUpperCase() || "?";
@@ -144,7 +163,10 @@ const DB = {};
 COLS.forEach(c=> DB[c] = lsGet(LS+c, {}) || {});
 let PHOTOS = lsGet(LS+"photos", {}) || {};
 let PENDING = lsGet(LS+"pending", []) || [];
-let _fb = null, _cloudState = "off", _flushing = false;
+let REJECTED = lsGet(LS+"rejected", []) || [];
+let _fb = null, _auth = null, CLOUD_AUTH = false, _cloudState = "off", _flushing = false;
+/* Одоо Firebase-д нэвтэрсэн хэрэглэгч (нэргүй бол sap=null) */
+const AUTH = {uid:null, sap:null, role:null};
 
 function setPath(obj, path, v){
   const ks = path.split("/"); let o = obj;
@@ -180,7 +202,7 @@ function write(updates){
   Object.entries(updates).forEach(([p,v])=>{
     v = v===undefined? null : v;
     applyLocal(p, v); touched.add(p.split("/")[0]);
-    PENDING.push({p, v: clone(v)});
+    PENDING.push({p, v: clone(v), who: session ? session.sap : "anon"});
   });
   persist([...touched]);
   persistPending();
@@ -202,22 +224,43 @@ function coalesce(batch){
   }
   return upd;
 }
-function flush(){
+/* Бичлэг бүр хэн бичсэнийг (who) хадгална — тухайн хэрэглэгч нэвтэрсэн үед л илгээнэ.
+   "anon" (нэвтрээгүй үеийн аюулын мэдээлэл) болон хуучин (who-гүй) бичлэгийг ямар ч эрхээр илгээж үзнэ. */
+const flushable = e => !CLOUD_AUTH || !e.who || e.who==="anon" || (AUTH.sap && e.who===AUTH.sap);
+const isDenied = e => /permission/i.test(String((e && (e.code||e.message))||""));
+function dropEntries(done){ const d=new Set(done); PENDING = PENDING.filter(e=>!d.has(e)); persistPending(); }
+async function flush(){
   if(!_fb || _flushing || !PENDING.length) return;
-  const batch = PENDING.slice();
+  if(!PENDING.some(flushable)) return;
   _flushing = true;
-  setCloud("wait","Хадгалж байна…");
-  _fb.ref(ROOT).update(coalesce(batch)).then(()=>{
-    PENDING = PENDING.slice(batch.length);
-    persistPending();
-    setCloud("ok","Үүлэнд хадгаллаа");
-  }).catch(e=>{
-    console.warn("fb update", e);
-    setCloud("err","Үүлэнд хадгалж чадсангүй — энэ төхөөрөмжид үлдсэн");
-  }).finally(()=>{
+  try{
+    if(CLOUD_AUTH && !_auth.currentUser){
+      // нэвтрээгүй: зөвхөн нэргүй бичлэг (аюулын мэдээлэл + зураг + мэдэгдэл) илгээх эрхтэй
+      try{ await _auth.signInAnonymously(); }catch(e){ console.warn("anon auth", e && e.code); setCloud("err"); return; }
+    }
+    const batch = PENDING.filter(flushable);
+    if(!batch.length) return;
+    setCloud("wait","Хадгалж байна…");
+    try{
+      await _fb.ref(ROOT).update(coalesce(batch));
+      dropEntries(batch);
+      setCloud("ok","Үүлэнд хадгаллаа");
+    }catch(e){
+      if(!isDenied(e)){ console.warn("fb update", e); setCloud("err","Үүлэнд хадгалж чадсангүй — энэ төхөөрөмжид үлдсэн"); return; }
+      // Эрхгүй бичлэгийг ялгаж, бусдыг нь илгээнэ
+      const done = []; let rej = 0;
+      for(const en of batch){
+        try{ await _fb.ref(ROOT).update(coalesce([en])); done.push(en); }
+        catch(x){ if(isDenied(x)){ REJECTED.push({...en, at:Date.now()}); done.push(en); rej++; } else { console.warn("fb update", x); break; } }
+      }
+      dropEntries(done); lsSet(LS+"rejected", REJECTED.slice(-200));
+      if(rej){ console.warn("rejected writes", rej); toast(rej+" өөрчлөлт эрхгүй тул үүлэнд хадгалагдсангүй"); }
+      setCloud(PENDING.some(flushable)?"err":"ok");
+    }
+  } finally {
     _flushing = false;
-    if(PENDING.length && _cloudState!=="err") setTimeout(flush, 400);
-  });
+    if(PENDING.some(flushable) && _cloudState!=="err") setTimeout(flush, 400);
+  }
 }
 function overlayPending(col){
   PENDING.forEach(e=>{ if(e.p===col || e.p.startsWith(col+"/")) applyLocal(e.p, e.v); });
@@ -258,6 +301,7 @@ async function migrateLegacyLocal(){
   persist([...COLS, "photos"]);
 }
 async function migrateLegacyCloud(){
+  if(!_fb) return false;
   const meta = (await _fb.ref(ROOT+"/_meta").once("value")).val();
   if(meta && meta.migratedAt) return false;
   const old = {};
@@ -278,6 +322,7 @@ async function seedIfEmpty(localOnly){
   else write({"users/admin": admin, "settings/main": set});
 }
 async function migratePins(){
+  if(CLOUD_AUTH && AUTH.role!=="hygiene") return;
   const upd = {};
   for(const [k,u] of Object.entries(DB.users)){
     if(u && u.pin!=null){ upd["users/"+k+"/pinHash"] = await hashPin(u.sap||k, u.pin); upd["users/"+k+"/pin"] = null; }
@@ -296,34 +341,87 @@ function setCloud(state, msg){
   if(state!=="wait") window._cbT = setTimeout(()=>el.classList.add("mini"), state==="ok"?2500:6000);
 }
 
+/* ---------- Үүлний синк (үүрэг тус бүрийн уншиж болох замуудаар) ---------- */
+let SUBS = [];
+function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; }
+const OWN_COLS = ["uhaan","fatigue","infect"];
+function syncPlan(role){
+  if(role==="hygiene") return COLS;
+  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs"];
+  return ["users","settings","roster","hygcheck",...OWN_COLS];
+}
+function startSync(role, sap){
+  stopSync();
+  if(!_fb) return Promise.resolve();
+  const k = keyOf(sap);
+  let ready; const usersReady = new Promise(r=>ready=r);
+  syncPlan(role).forEach(c=>{
+    let q = _fb.ref(ROOT+"/"+c), map = v=>v||{};
+    if(role==="worker" && c==="users"){ q = _fb.ref(ROOT+"/users/"+k); map = v=> v? {[k]:v} : {}; }
+    else if(role==="worker" && OWN_COLS.includes(c)) q = q.orderByChild("sap").equalTo(k);
+    const cb = snap=>{ DB[c] = map(snap.val()); overlayPending(c); persist([c]); if(c==="notifs") onNotifs(); if(c==="users") ready(); scheduleRender(); };
+    q.on("value", cb, e=>{ console.warn("sync "+c, e && (e.code||e.message)); if(c==="users") ready(); });
+    SUBS.push(()=>q.off("value", cb));
+  });
+  return usersReady;
+}
+/* Өөр хэрэглэгч нэвтэрвэл өмнөх хэрэглэгчийн кэшийг цэвэрлэнэ (хүлээгдэж буй бичлэг үлдэнэ) */
+function claimCache(sap){
+  const owner = lsGet(LS+"owner", null);
+  if(owner && owner!==sap){ COLS.forEach(c=>{ DB[c] = {}; }); PHOTOS = {}; persist([...COLS, "photos"]); }
+  lsSet(LS+"owner", sap);
+}
+let _loggingIn = false;
+async function afterLogin(sap, role, uid){
+  AUTH.uid = uid; AUTH.sap = sap; AUTH.role = role;
+  claimCache(sap);
+  setSession({sap, role});
+  const ready = startSync(role, sap);
+  flush();
+  await Promise.race([ready, new Promise(r=>setTimeout(r, 5000))]);
+  if(role==="hygiene") migratePins().catch(e=>console.warn("pins", e && e.code));
+}
+async function onAuth(user){
+  if(_loggingIn) return;
+  if(user && !user.isAnonymous){
+    if(AUTH.uid===user.uid) return;
+    const em = sapFromEmail(user.email);              // email нь жижиг үсэгтэй
+    const sap = session ? keyOf(session.sap) : "";
+    if(session && sap.toLowerCase()===em){
+      await afterLogin(sap, session.role, user.uid);   // офлайнд ч ажиллана (кэшилсэн үүрэг)
+      try{
+        const r = (await _fb.ref(ROOT+"/roles/"+user.uid).once("value")).val();
+        if(!r || r.sap!==sap){ toast("Эрх олдсонгүй — дахин нэвтэрнэ үү"); landing(); return; }
+        if(r.role!==session.role){ await afterLogin(sap, r.role, user.uid); homeFor(me()); }
+      }catch(e){ console.warn("roles", e && e.code); }
+    } else { await _auth.signOut(); }
+  } else {
+    if(AUTH.uid) stopSync();
+    AUTH.uid = AUTH.sap = AUTH.role = null;
+    if(session && CLOUD_AUTH && !session.local){ setSession(null); landing(); }
+  }
+}
 async function initCloud(){
   await migrateLegacyLocal();
   setCloud("wait","Холбож байна…");
   if(typeof firebase==="undefined"){ await seedIfEmpty(true); await migratePins(); setCloud("err"); return; }
   try{
-    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
     _fb = firebase.database();
-    if(firebase.auth){ try{ await firebase.auth().signInAnonymously(); }catch(e){ console.warn("auth", e); } }
-    await migrateLegacyCloud();
-    // v1 локал түлхүүрүүд (нууц үг ил агуулсан) үүлэнд шилжсэн тул устгана
+    if(EMU) _fb.useEmulator(EMU.dbHost, EMU.dbPort);
+    if(firebase.auth){
+      _auth = firebase.auth(); CLOUD_AUTH = true;
+      if(EMU) _auth.useEmulator(EMU.authUrl);
+      await new Promise(res=>{ const off = _auth.onAuthStateChanged(()=>{ off(); res(); }); });
+      if(!_auth.currentUser){ try{ await _auth.signInAnonymously(); }catch(e){ console.warn("anon auth", e && e.code); } }
+    }
+    // v1 → v2 (хуучин өгөгдөл) — шинэ дүрэмд уншиж чадахгүй бол алгасна
+    try{ await migrateLegacyCloud(); }catch(e){ if(!isDenied(e)) console.warn("legacy migration skipped", e && (e.code||e.message)); }  // хатуу дүрэмд нэргүй уншиж чадахгүй — хэвийн
     ["users","settings","uhaan","fatigue","hazards","infect","roster"].forEach(c=>localStorage.removeItem("eahs_"+c));
-    // Эхний ачаалал: үүл + офлайн хүлээгдэж буй бичлэгүүд (локал давамгайлна)
-    await Promise.all(COLS.map(async c=>{
-      const v = (await _fb.ref(ROOT+"/"+c).once("value")).val();
-      DB[c] = v || {}; overlayPending(c);
-    }));
-    persist(COLS);
-    await seedIfEmpty(false);
-    await migratePins();
-    // Бодит цагийн шинэчлэл
-    COLS.forEach(c=>{
-      _fb.ref(ROOT+"/"+c).on("value", s=>{
-        DB[c] = s.val() || {}; overlayPending(c); persist([c]);
-        scheduleRender();
-      });
-    });
-    _fb.ref(".info/connected").on("value", s=>{
-      if(s.val()===true){ setCloud("ok"); flush(); }
+    if(_auth){ await new Promise(res=>{ let first=true; _auth.onAuthStateChanged(async u=>{ try{ await onAuth(u); }catch(e){ console.warn("auth state", e); } if(first){ first=false; res(); } }); }); }
+    else { COLS.forEach(c=>{ _fb.ref(ROOT+"/"+c).on("value", sn=>{ DB[c]=sn.val()||{}; overlayPending(c); persist([c]); scheduleRender(); }); }); }
+    _fb.ref(".info/connected").on("value", sn=>{
+      if(sn.val()===true){ setCloud("ok"); flush(); }
       else if(_cloudState==="ok") setCloud("wait","Холболт тасарсан — дахин холбогдож байна…");
     });
     setCloud("ok");
@@ -334,6 +432,81 @@ async function initCloud(){
     await seedIfEmpty(true); await migratePins();
     setCloud("err");
   }
+}
+
+/* ---------- Нэвтрэх (үүл) ---------- */
+const BAD_LOGIN = "SAP эсвэл нууц үг буруу байна";
+const isNetErr = e => /network|unavailable|offline/i.test(String(e && (e.code||e.message)));
+async function readOrNull(path){ try{ return {ok:true, v:(await _fb.ref(path).once("value")).val()}; }catch(e){ return {ok:false, v:null}; } }
+async function rememberOffline(sap, role, pw){
+  const lv = lsGet(LS+"lv", {}) || {}; lv[sap] = {role, h: await hashPin("lv:"+sap, pw)}; lsSet(LS+"lv", lv);
+}
+async function cloudLogin(role, sapIn, pw){
+  const k = keyOf(sapIn);
+  if(!authSapOk(k)) return {err:"Энэ SAP-аар нэвтрэх боломжгүй (зөвхөн латин үсэг, тоо). Эрүүл ахуйчид хандана уу"};
+  _loggingIn = true;
+  try{
+    const gen = (await readOrNull(ROOT+"/authgen/"+k)).v;
+    const email = authEmail(k, gen);
+    let migrated = false;
+    try{ await _auth.signInWithEmailAndPassword(email, fbPw(pw)); }
+    catch(e){
+      if(isNetErr(e)) throw e;
+      if(e.code==="auth/too-many-requests") return {err:"Олон удаа буруу оролдлоо. Түр хүлээгээд дахин оролдоно уу"};
+      if(e.code==="auth/operation-not-allowed") return {err:"Firebase-д Email/Password нэвтрэлт идэвхжээгүй байна"};
+      const m = await migrateAccount(role, k, String(sapIn).trim(), pw, email);
+      if(m.err) return m;
+      migrated = true;
+    }
+    const uid = _auth.currentUser.uid;
+    const r = (await readOrNull(ROOT+"/roles/"+uid)).v;
+    if(!r || r.sap!==k){ await _auth.signOut(); return {err:"Эрх олдсонгүй — эрүүл ахуйчид хандана уу"}; }
+    if(r.role!==role){ await _auth.signOut(); return {err:`Энэ SAP «${roleName(r.role)}» эрхтэй. Тухайн цэсээр нэвтэрнэ үү`}; }
+    await rememberOffline(k, r.role, pw);
+    await afterLogin(k, r.role, uid);
+    return {sap:k, role:r.role, migrated};
+  } finally { _loggingIn = false; }
+}
+/* Хуучин (PIN-ийн hash-тай) хэрэглэгчийг анх нэвтрэхэд нь Firebase Auth руу шилжүүлнэ.
+   Дүрэм: roles/{uid}.proof === users/{sap}/pinHash байж л үүрэг авна (PIN мэдэхгүй бол болохгүй). */
+async function migrateAccount(role, k, sapRaw, pw, email){
+  let cred;
+  try{ cred = await _auth.createUserWithEmailAndPassword(email, fbPw(pw)); }
+  catch(e){
+    if(e.code==="auth/email-already-in-use") return {err:BAD_LOGIN};
+    if(e.code==="auth/operation-not-allowed") return {err:"Firebase-д Email/Password нэвтрэлт идэвхжээгүй байна"};
+    throw e;
+  }
+  try{
+    const proof = await hashPin(sapRaw, pw);
+    const u = await readOrNull(ROOT+"/users/"+k);       // шилжилтийн дүрэмд уншиж болно → урьдчилж шалгана
+    if(u.ok && (!u.v || u.v.pinHash!==proof || u.v.role!==role)) throw new Error("bad pin");
+    await _fb.ref(ROOT).update({["roles/"+cred.user.uid]: {sap:k, role, proof, at:Date.now()}});
+    await _fb.ref(ROOT).update({["users/"+k+"/uid"]: cred.user.uid, ["users/"+k+"/pinHash"]: null, ...(String(pw).length<6?{["users/"+k+"/mustChange"]: true}:{})});
+    return {};
+  }catch(e){
+    try{ await cred.user.delete(); }catch(x){ console.warn("cleanup", x && x.code); }
+    return {err:BAD_LOGIN};
+  }
+}
+/* Эрүүл ахуйч шинэ хэрэглэгчийн Auth бүртгэл үүсгэнэ — 2 дахь Firebase app ашиглана (өөрөө нэвтэрсэн хэвээр) */
+async function createAuthAccount(k, pw){
+  let app2 = firebase.apps.find(a=>a.name==="eahs-admin");
+  if(!app2){ app2 = firebase.initializeApp(FB_CONFIG, "eahs-admin"); if(EMU) app2.auth().useEmulator(EMU.authUrl); }
+  const a2 = app2.auth();
+  try{ await a2.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+  let gen = (await readOrNull(ROOT+"/authgen/"+k)).v || null;
+  for(let i=0;i<6;i++){
+    try{
+      const c = await a2.createUserWithEmailAndPassword(authEmail(k, gen), pw);
+      const uid = c.user.uid; await a2.signOut();
+      return {uid, gen};
+    }catch(e){
+      if(e.code!=="auth/email-already-in-use") throw e;
+      gen = String((+gen||0)+1);           // хуучин бүртгэл байгаа (нууц үг шинэчлэх) → дараагийн хувилбар
+    }
+  }
+  throw new Error("Auth бүртгэл үүсгэж чадсангүй");
 }
 async function getPhotos(id){
   if(PHOTOS[id]) return arr(PHOTOS[id]);
@@ -377,15 +550,21 @@ function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", 
 let session = null;
 (function loadSession(){
   const s = lsGet("eahs_session", null);
-  if(s && s.sap && s.role) session = {sap:String(s.sap), role:s.role};
+  if(s && s.sap && s.role) session = {sap:String(s.sap), role:s.role, ...(s.local?{local:true}:{})};
   lsSet("eahs_session", session);   // хуучин (pin агуулсан) сессийг цэвэрлэнэ
 })();
 function me(){ return session ? DB.users[keyOf(session.sap)] || null : null; }
-function setSession(u){ session = u? {sap:u.sap, role:u.role} : null; lsSet("eahs_session", session); }
+function setSession(u){ session = u? {sap:u.sap, role:u.role, ...(u.local?{local:true}:{})} : null; lsSet("eahs_session", session); }
 
 /* ======================= НҮҮР / НЭВТРЭХ ======================= */
+function signOutCloud(){
+  if(CLOUD_AUTH && _auth && _auth.currentUser && !_auth.currentUser.isAnonymous){
+    stopSync(); AUTH.uid = AUTH.sap = AUTH.role = null;
+    _auth.signOut().catch(e=>console.warn("signout", e && e.code));
+  }
+}
 function landing(){
-  setSession(null); view(landing, false);
+  setSession(null); signOutCloud(); view(landing, false);
   const app = mount(`
     <div class="land">
       <div>
@@ -442,13 +621,37 @@ function loginForm(role){
   app.onsubmit = async e=>{
     e.preventDefault();
     const sap = $("#sap").value.trim(), pin = $("#pin").value.trim();
+    const btn = $("#lf button[type=submit]"); const err = m=>{ $("#lerr").textContent = m; };
+    if(!sap || !pin) return err("SAP болон нууц үгээ оруулна уу");
+    if(CLOUD_AUTH){
+      btn.disabled = true; err("");
+      try{
+        const r = await cloudLogin(role, sap, pin);
+        if(r.err) return err(r.err);
+        const u = me();
+        if(r.migrated) toast("Таны бүртгэл шинэ нэвтрэлт рүү шилжлээ");
+        if(u && u.mustChange) setTimeout(()=>toast(u.role==="worker"?"Нүүр хуудаснаас «Нууц үг солих» дарж солино уу (дор хаяж 6)":"Нууц үгээ Тохиргоо хэсэгт сольно уу (дор хаяж 6 тэмдэгт)"), r.migrated?2700:0);
+        return homeFor(u || {role:r.role});
+      }catch(ex){
+        if(!isNetErr(ex)){ console.warn("login", ex); return err("Нэвтрэхэд алдаа гарлаа ("+(ex.code||"алдаа")+")"); }
+        // интернэтгүй: энэ төхөөрөмж дээр өмнө нэвтэрч байсан бол офлайнаар
+        const lv = (lsGet(LS+"lv", {})||{})[keyOf(sap)];
+        if(lv && lv.role===role && lv.h===await hashPin("lv:"+keyOf(sap), pin)){ setSession({sap:keyOf(sap), role, local:true}); toast("Офлайн горим — холбогдмогц дахин нэвтэрнэ үү"); return homeFor(me()||{role}); }
+        return err("Интернэт холболтгүй байна. Энэ төхөөрөмж дээр өмнө нэвтэрч байгаагүй тул офлайнаар нэвтрэх боломжгүй");
+      } finally { const b=$("#lf button[type=submit]"); if(b) b.disabled=false; }
+    }
+    // Firebase ачаалагдаагүй (бүрэн офлайн) — локал горим
     const u = DB.users[keyOf(sap)];
     let ok = false;
     if(u && u.role===role){
       if(u.pinHash) ok = (await hashPin(u.sap, pin)) === u.pinHash;
       else if(u.pin!=null) ok = String(u.pin)===pin;   // хуучин бичлэг (migratePins хөрвүүлнэ)
     }
-    if(!ok){ $("#lerr").textContent = "SAP эсвэл нууц үг буруу байна"; return; }
+    if(!ok){
+      const lv = (lsGet(LS+"lv", {})||{})[keyOf(sap)];
+      if(lv && lv.role===role && u && lv.h===await hashPin("lv:"+keyOf(sap), pin)){ setSession({sap:u.sap, role, local:true}); return homeFor(u); }
+      return err(BAD_LOGIN);
+    }
     if(u.pin!=null) write({["users/"+keyOf(u.sap)+"/pinHash"]: await hashPin(u.sap,pin), ["users/"+keyOf(u.sap)+"/pin"]: null});
     setSession(u);
     if(u.mustChange) toast("Анхны нууц үгээ Тохиргоо хэсэгт сольно уу");
@@ -509,12 +712,14 @@ function workerHome(){
         <div class="doc"><span>Жилийн шинжилгээ</span><b>${esc(u.exam||"—")}</b>${expBadge(u.exam)}</div>
       </div>
     </div>
-    <button class="btn ghost" id="haz">${ic("alert")} Аюул мэдэгдэх</button></main>`);
+    ${u.mustChange?`<div class="warnbox">${ic("key","sm")} Анхны нууц үгээ солино уу (дор хаяж 6 тэмдэгт).</div>`:""}
+    <div class="row-gap"><button class="btn ghost" id="haz">${ic("alert")} Аюул мэдэгдэх</button><button class="btn ghost" id="wpw">${ic("key")} Нууц үг солих</button></div></main>`);
   $("#out").onclick = landing;
   $("#uhaan").onclick = uhaanForm;
   $("#fat").onclick = ()=> needF ? fatigueForm() : toast("Одоо бөглөх шаардлагагүй");
   $("#inf").onclick = ()=> roster && !infect ? infectForm() : toast(roster?"Өнөөдөр бөглөсөн":"Өнөөдөр хуваарь байхгүй");
-  $("#haz").onclick = hazardForm;
+  $("#haz").onclick = ()=>hazardForm();
+  $("#wpw").onclick = workerPwPage;
   const hb = $("#hsign");
   if(hb) hb.onclick = ()=>{
     write({[`hygcheck/${hb.dataset.id}/rows/${hb.dataset.rk}/sign`]: true, [`hygcheck/${hb.dataset.id}/rows/${hb.dataset.rk}/signAt`]: nowStr()});
@@ -705,12 +910,21 @@ function normHazard(x){
     types = types.map(t=> t==="Аюулгүй байдал" ? "Аюулгүй ажиллагаа" : t==="Хамгаалалт" ? "Аюулгүй байдал" : t);
   }
   const cls = arr(x.cls).map(c=> HZ_CLS_OLD[c] || c);
-  return {...x, types, cls};
+  const status = HZ_ST_OLD[x.status] || x.status || "Шинэ";
+  return {...x, types, cls, status, alba: x.alba || albaOf(x.area)};
 }
 const hzMark = on => on ? "☒" : "☐";
-function hazardForm(){
+/* Аюулын хяналт: төлөв, хариуцагч, хугацаа, түүх */
+const HZ_ST = ["Шинэ","Хийгдэж буй","Шийдсэн","Хаасан"];
+const HZ_ST_OLD = {"Шалгаж байна":"Хийгдэж буй","Шийдвэрлэсэн":"Шийдсэн"};
+const HZ_OPEN = s => s==="Шинэ" || s==="Хийгдэж буй";
+const HZ_HIGH = r => r==="Их" || r==="Маш их";
+const albaOf = area => ALBA.find(a=>String(area||"").includes(a)) || "";
+const hzOverdue = x => !!(x.due && x.due < today() && HZ_OPEN(x.status));
+function hazardForm(opts){
   hazardPics = [];
-  view(hazardForm, false);
+  const preArea = opts && typeof opts.area==="string" ? opts.area.slice(0,120) : null;
+  view(()=>hazardForm(opts), false);
   const u = me();
   const back = ()=> u? homeFor(u) : landing();
   const lbl = (mn,en,forId)=>`<label class="otl" ${forId?`for="${forId}"`:""}><b>${esc(mn)}</b>${en?`<i>${esc(en)}</i>`:""}</label>`;
@@ -722,7 +936,8 @@ function hazardForm(){
       <div class="otbar big"><b>ЕРӨНХИЙ МЭДЭЭЛЭЛ</b><span>HAZARD HEADER</span></div>
       <div class="otgrid">
         <div class="otrow full">${lbl("Аюулыг харсан газар, харъяа хэлтэс:","What work area was the hazard observed in?","area")}
-          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(u?.alba||"")}" placeholder="Жишээ: Оюут баар, гал тогоо"/>
+          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(preArea!=null&&preArea!==""?preArea:(u?.alba||""))}" placeholder="Жишээ: Оюут баар, гал тогоо"/>
+          ${preArea?`<small class="qrnote">${ic("qr","sm")} QR кодоор нээсэн — газар бөглөгдсөн</small>`:""}
           <datalist id="albaList">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div></div>
         <div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","","hdate")}<div class="otv"><input type="date" id="hdate" value="${today()}" max="${today()}" required/></div></div>
         <div class="otrow">${lbl("Аюулыг хянаж бууруулах ажлыг хариуцах хэлтэс:","What part of the organisation is accountable for the hazard?","acc")}<div class="otv"><input id="acc" maxlength="120"/></div></div>
@@ -777,19 +992,24 @@ function hazardForm(){
     if(hazardPics.length<2) errs.push("Багадаа 2 зураг");
     if(errs.length){ $("#hzerr").textContent = "Бөглөнө үү: "+errs.join(", "); $("#hzerr").scrollIntoView({block:"center"}); return; }
     const id=uid();
-    write({
-      ["hazards/"+id]: {id, form:"OT-03-v2", area:$("#area").value.trim(), date:$("#hdate").value||today(), acc:$("#acc").value.trim(), reporter:$("#rep").value.trim(), reviewer:$("#rev").value.trim(),
-        types:vals("type"), cls:vals("cls"), risk:vals("risk")[0], det:$("#det").value, act:$("#act").value,
-        photoCount: hazardPics.length, status:"Шинэ", created:nowStr()},
+    const area=$("#area").value.trim(), risk=vals("risk")[0];
+    const upd = {
+      ["hazards/"+id]: {id, form:"OT-03-v2", area, alba:albaOf(area), date:$("#hdate").value||today(), acc:$("#acc").value.trim(), reporter:$("#rep").value.trim(), reviewer:$("#rev").value.trim(),
+        types:vals("type"), cls:vals("cls"), risk, det:$("#det").value, act:$("#act").value,
+        photoCount: hazardPics.length, status:"Шинэ", created:nowStr(), ts:Date.now(), ...(preArea?{via:"qr"}:{})},
       ["photos/"+id]: hazardPics.slice(0,8)
-    });
+    };
+    if(HZ_HIGH(risk)) upd["notifs/hz_"+id] = {id:"hz_"+id, type:"hazard", level: risk==="Маш их"?"critical":"high", ts:Date.now(),
+      title: (risk==="Маш их"?"Маш их":"Их")+" эрсдэлтэй аюул: "+area.slice(0,80), body: $("#det").value.slice(0,160), alba: albaOf(area), ref:id,
+      by: (u?.name || $("#rep").value.trim() || "Нэргүй").slice(0,80), bySap: u?.sap || ""};
+    write(upd);
     alert("Мэдэгдэл хүлээн авлаа.");
     back();
   };
 }
 /* Цаасан маягттай ижил хэвлэх хуудас (A4 босоо, 2 хуудас) */
 async function hazardPrint(id){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","supervisor")) return;
   const raw = DB.hazards[id]; if(!raw){ toast("Олдсонгүй"); return; }
   const x = normHazard(raw);
   view(()=>hazardPrint(id), false);
@@ -855,10 +1075,10 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["ариун","Ариун цэвэр"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["ариун","Ариун цэвэр"],["тохиргоо","Тохиргоо"]]
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","ариун":"drop","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","ариун":"drop","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
   const title = role==="supervisor" ? `Ахлах · ${esc(u?.alba||"")}` : "Эрүүл ахуйчийн самбар";
@@ -866,7 +1086,8 @@ function shell(active, inner){
     <aside class="side">
       <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
       <nav class="navs" aria-label="Цэс">
-      ${NAV[role].map(([k,l])=>`<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span></button>`).join("")}
+      ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role==="hygiene" ? list("hazards").map(normHazard).filter(hzOverdue).length : 0;
+        return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
       <button class="navb out" data-nav="гарах">${ic("logout")}<span>Гарах</span></button>
       </nav>
       <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(u.alba):""}</span></div></div>
@@ -880,7 +1101,8 @@ function bindNav(app, extra){
     if(nav){
       const sup = me()?.role==="supervisor";
       ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "аюул":hazardListPage, "халдвар":infectListPage,
-        "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing}[nav]||(()=>{}))();
+        "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
+        "мэдэгдэл":notifPage, "тайлан":reportsPage, "qr":qrPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -937,9 +1159,11 @@ function viewUhaan(id){
 
 /* ======================= ЭРҮҮЛ АХУЙЧ ======================= */
 function stH(s){
+  s = HZ_ST_OLD[s] || s || "Шинэ";
   if(s==="Шинэ") return `<span class="badge b-new">Шинэ</span>`;
-  if(s==="Шалгаж байна") return `<span class="badge b-wait">Шалгаж байна</span>`;
-  return `<span class="badge b-ok">Шийдвэрлэсэн</span>`;
+  if(s==="Хийгдэж буй") return `<span class="badge b-wait">Хийгдэж буй</span>`;
+  if(s==="Хаасан") return `<span class="badge b-closed">Хаасан</span>`;
+  return `<span class="badge b-ok">Шийдсэн</span>`;
 }
 function hygieneHome(){
   const me_ = requireRole("hygiene"); if(!me_) return;
@@ -948,6 +1172,7 @@ function hygieneHome(){
   const ws=workers();
   const hi=f.filter(x=>x.level==="Өндөр" && x.date===today()).length;
   const neu=h.filter(x=>x.status==="Шинэ").length;
+  const hzN=h.map(normHazard), odz=hzN.filter(hzOverdue).length, hzOpen=hzN.filter(x=>HZ_OPEN(x.status)).length;
   const exp=ws.filter(w=>(w.bookExp && daysBetween(today(),w.bookExp)<=30) || (w.exam && daysBetween(today(),w.exam)<=30)).length;
   const infPend=inf.filter(x=>(!x.verdict||x.verdict==="huleegdej")).length;
   const infBlock=inf.filter(x=>x.verdict==="ersdel" && x.date===today()).length;
@@ -957,13 +1182,14 @@ function hygieneHome(){
         <div class="kpis">
           <div class="kpi k-red ${hi?"hot":""}"><i>${ic("battery")}</i><div>Өндөр ядаргаа<b>${hi}</b><span class="muted">өнөөдөр</span></div></div>
           <div class="kpi k-org"><i>${ic("alert")}</i><div>Шинэ аюул<b>${neu}</b><span class="muted">бүртгэл</span></div></div>
+          <div class="kpi k-red ${odz?"hot":""} click" data-nav="аюул" data-hzod><i>${ic("clock")}</i><div>Хугацаа хэтэрсэн<b>${odz}</b><span class="muted">нээлттэй аюул: ${hzOpen}</span></div></div>
           <div class="kpi k-blu"><i>${ic("file")}</i><div>Баримт ≤30 хоног<b>${exp}</b><span class="muted">ажилтан</span></div></div>
           <div class="kpi k-vio"><i>${ic("virus")}</i><div>Халдвар шийдээгүй<b>${infPend}</b><span class="muted">өнөөдөр оруулахгүй: ${infBlock}</span></div></div>
           <div class="kpi k-grn"><i>${ic("drop")}</i><div>Ариун цэвэр өнөөдөр<b>${due.done}/${due.total}</b><span class="muted">бүртгэсэн / бүртгэх</span></div></div>
         </div>
         ${hygDueCard(null)}
         <div class="card"><div class="ctitle">${ic("alert")}<h3>Сүүлийн аюулын мэдээлэл</h3><button class="btn ghost sm" data-nav="аюул" style="margin-left:auto">Бүгд ${ic("chev","sm")}</button></div>
-          ${h.slice(0,6).map(x=>`<div class="hzrow"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")}
+          ${hzN.slice(0,6).map(x=>`<div class="hzrow click" data-hzd="${esc(x.id)}"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")}
         </div>
         <div class="card"><div class="ctitle">${ic("users")}<h3>Ажилтнуудын тойм</h3></div>
           ${tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр"], ws.map(w=>{
@@ -974,7 +1200,9 @@ function hygieneHome(){
         <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН</h3></div>
           ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${stU(x)}</td></tr>`))}
         </div>`));
-  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg); });
+  app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
+  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
+    const z=e.target.closest("[data-hzd]"); if(z){ hazardDetail(z.dataset.hzd); window.scrollTo(0,0); } });
 }
 
 function fatigueListPage(){
@@ -985,37 +1213,160 @@ function fatigueListPage(){
     ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
   bindNav(app);
 }
+/* ---------- Аюулын хяналт: жагсаалт + шүүлтүүр ---------- */
+let HZF = {st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""};
+function hzVisible(u){
+  const all = list("hazards").map(normHazard);
+  if(u.role==="supervisor") return all.filter(x=>x.alba===u.alba || x.assignee===u.sap || !x.alba);
+  return all;
+}
+function hzLogEntry(id, u, kind, text){
+  const lid = uid();
+  return ["hazards/"+id+"/log/"+lid, {ts:Date.now(), at:nowStr(), by:u.name||"", bySap:u.sap||"", kind, text:String(text).slice(0,600)}];
+}
+function hzStatusUpd(x, st, u){
+  const upd = {["hazards/"+x.id+"/status"]: st};
+  if(!HZ_OPEN(st) && HZ_OPEN(x.status)) upd["hazards/"+x.id+"/closedAt"] = today();
+  if(HZ_OPEN(st)) upd["hazards/"+x.id+"/closedAt"] = null;
+  const [p,v] = hzLogEntry(x.id, u, "status", `Төлөв: ${x.status} → ${st}`); upd[p]=v;
+  return upd;
+}
+const staffList = ()=> users().filter(w=>w.role!=="worker").sort((a,b)=>a.name.localeCompare(b.name)).concat(workers().sort((a,b)=>a.name.localeCompare(b.name)));
+function dueTxt(x){
+  if(!x.due) return "";
+  const d = daysBetween(today(), x.due);
+  if(hzOverdue(x)) return `<span class="badge b-bad">${ic("clock","sm")} ${-d} хоног хэтэрсэн</span>`;
+  if(HZ_OPEN(x.status) && d<=2) return `<span class="badge b-wait">${d===0?"Өнөөдөр дуусна":d+" хоног үлдсэн"}</span>`;
+  return "";
+}
 function hazardListPage(){
-  if(!requireRole("hygiene")) return;
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(hazardListPage, true);
-  const h=list("hazards").map(normHazard).sort(byNew);
-  const app = mount(shell("аюул", `${phead("Аюулын мэдээлэл", "OT-03-FRM-0001-D маягтаар ирсэн бүртгэлүүд")}
-    ${h.map(x=>`<div class="card hzcard">
-      <div class="row-between"><b>${ic("map","sm")} ${esc(x.date)} · ${esc(x.area)}</b>${stH(x.status)}</div>
-      <div class="hzmeta">${x.risk?`<span class="tagp risk">Эрсдэл: ${esc(x.risk)}</span>`:""}<span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span></div>
+  const all = hzVisible(u).sort((a,b)=> (b.ts||0)-(a.ts||0) || byNew(a,b));
+  const hyg = u.role==="hygiene";
+  const cnt = {all:all.length, open:all.filter(x=>HZ_OPEN(x.status)).length, od:all.filter(hzOverdue).length};
+  HZ_ST.forEach(s=>cnt[s]=all.filter(x=>x.status===s).length);
+  const chip = (k,l)=>`<button type="button" class="fchip ${HZF.st===k?"on":""} ${k==="od"?"od":""}" data-fst="${esc(k)}" aria-pressed="${HZF.st===k}">${esc(l)} <b>${cnt[k]||0}</b></button>`;
+  const assignees = [...new Map(all.filter(x=>x.assignee).map(x=>[x.assignee, x.assigneeName||x.assignee])).entries()];
+  const app = mount(shell("аюул", `${phead("Аюулын мэдээлэл, хяналт", "OT-03-FRM-0001-D маягтаар ирсэн бүртгэл · хариуцагч, хугацаа, залруулах арга хэмжээ")}
+    <div class="card filters noprint">
+      <div class="fchips" role="group" aria-label="Төлөв">${chip("all","Бүгд")}${chip("open","Нээлттэй")}${HZ_ST.map(s=>chip(s,s)).join("")}${chip("od","Хугацаа хэтэрсэн")}</div>
+      <div class="frow">
+        <label class="fsearch">${ic("search","sm")}<input id="fq" type="search" placeholder="Хайх: газар, тайлбар, мэдээлэгч…" value="${esc(HZF.q)}" aria-label="Хайх"/></label>
+        <select id="frisk" aria-label="Эрсдэл"><option value="">Бүх эрсдэл</option>${HZ_RISK.map(r=>`<option ${HZF.risk===r[0]?"selected":""}>${esc(r[0])}</option>`).join("")}</select>
+        ${hyg?`<select id="falba" aria-label="Алба"><option value="">Бүх алба</option>${ALBA.map(a=>`<option ${HZF.alba===a?"selected":""}>${esc(a)}</option>`).join("")}</select>`:""}
+        <select id="fwho" aria-label="Хариуцагч"><option value="">Бүх хариуцагч</option><option value="-" ${HZF.who==="-"?"selected":""}>Хариуцагчгүй</option>${assignees.map(([k,n])=>`<option value="${esc(k)}" ${HZF.who===k?"selected":""}>${esc(n)}</option>`).join("")}</select>
+        <input type="date" id="ffrom" value="${esc(HZF.from)}" aria-label="Эхлэх огноо"/><input type="date" id="fto" value="${esc(HZF.to)}" aria-label="Дуусах огноо"/>
+        <button type="button" class="btn ghost sm" id="freset">${ic("filter","sm")} Цэвэрлэх</button>
+      </div>
+    </div>
+    <div id="hzl"></div>`));
+  const draw = ()=>{
+    const q = HZF.q.trim().toLowerCase();
+    const h = all.filter(x=>
+      (HZF.st==="all" || (HZF.st==="open" ? HZ_OPEN(x.status) : HZF.st==="od" ? hzOverdue(x) : x.status===HZF.st)) &&
+      (!HZF.risk || x.risk===HZF.risk) && (!HZF.alba || x.alba===HZF.alba) &&
+      (!HZF.who || (HZF.who==="-" ? !x.assignee : x.assignee===HZF.who)) &&
+      (!HZF.from || x.date>=HZF.from) && (!HZF.to || x.date<=HZF.to) &&
+      (!q || [x.area,x.det,x.act,x.reporter,x.reviewer,x.acc,x.assigneeName,x.corr].join(" ").toLowerCase().includes(q)));
+    $("#hzl").innerHTML = `<p class="muted">${h.length} / ${all.length} бүртгэл</p>` + (h.map(x=>`<div class="card hzcard ${hzOverdue(x)?"overdue":""}">
+      <div class="row-between"><b>${ic("map","sm")} ${esc(x.date)} · ${esc(x.area)}</b><span class="row-gap">${dueTxt(x)}${stH(x.status)}</span></div>
+      <div class="hzmeta">${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}<span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span>${x.via==="qr"?`<span class="tagp">${ic("qr","sm")} QR</span>`:""}</div>
       <p class="det">${esc(x.det||"")}</p>
       ${x.act?`<p class="muted"><b>Авсан арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
-      <div class="people"><span>Мэдээлэгч: <b>${esc(x.reporter||"—")}</b></span><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах: <b>${esc(x.acc||"—")}</b></span></div>
+      ${x.corr?`<p class="muted"><b>Залруулах арга хэмжээ:</b> ${esc(x.corr)}</p>`:""}
+      <div class="people"><span>Мэдээлэгч: <b>${esc(x.reporter||"—")}</b></span><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах: <b>${esc(x.acc||"—")}</b></span>
+        <span>${ic("userCheck","sm")} Хариуцагч: <b>${esc(x.assigneeName||"—")}</b></span><span>${ic("calendar","sm")} Хугацаа: <b>${esc(x.due||"—")}</b></span></div>
       <div class="thumbs" data-ph="${esc(x.id)}">${x.photoCount?`<span class="muted">Зураг ачаалж байна… (${esc(x.photoCount)})</span>`:""}</div>
       <div class="row-gap">
-        <select data-st="${esc(x.id)}" aria-label="Төлөв">${["Шинэ","Шалгаж байна","Шийдвэрлэсэн"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
+        <select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
+        <button class="btn sm" data-hzd="${esc(x.id)}">${ic("history","sm")} Хянах / түүх${x.log?` (${Object.keys(x.log).length})`:""}</button>
         <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("printer","sm")} Хэвлэх</button>
-        <button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>
+        ${hyg?`<button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>`:""}
       </div>
-    </div>`).join("")||`<div class="card">${emptyState("Аюулын мэдээлэл алга","Ажилтнууд «Аюулыг мэдээлэх» маягтаар илгээнэ","alert")}</div>`}`));
+    </div>`).join("") || `<div class="card">${emptyState(all.length?"Шүүлтүүрт тохирох бүртгэл алга":"Аюулын мэдээлэл алга", all.length?"Шүүлтүүрээ өөрчилж үзнэ үү":"Ажилтнууд «Аюулыг мэдээлэх» маягтаар илгээнэ","alert")}</div>`);
+    $$("[data-ph]").forEach(async el=>{
+      const ps = await getPhotos(el.dataset.ph);
+      el.innerHTML = ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt="Аюулын зураг" loading="lazy">`).join("") || "";
+    });
+  };
+  draw();
   bindNav(app, e=>{
+    const f=e.target.closest("[data-fst]"); if(f){ HZF.st=f.dataset.fst; $$("[data-fst]").forEach(b=>{ b.classList.toggle("on", b===f); b.setAttribute("aria-pressed", b===f); }); draw(); return; }
+    if(e.target.closest("#freset")){ HZF={st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""}; hazardListPage(); return; }
+    const dt=e.target.closest("[data-hzd]"); if(dt){ hazardDetail(dt.dataset.hzd); window.scrollTo(0,0); return; }
     const pr=e.target.closest("[data-prhz]"); if(pr){ hazardPrint(pr.dataset.prhz); return; }
     const d=e.target.closest("[data-delhz]");
     if(d && confirm("Энэ аюулын бүртгэлийг устгах уу?")){ write({["hazards/"+d.dataset.delhz]:null, ["photos/"+d.dataset.delhz]:null}); toast("Устгалаа"); }
   });
+  app.oninput = e=>{ if(e.target.id==="fq"){ HZF.q=e.target.value; draw(); } };
   app.onchange = e=>{
     const s=e.target.closest("[data-st]");
-    if(s) write({["hazards/"+s.dataset.st+"/status"]: s.value});
+    if(s){ const x=normHazard(DB.hazards[s.dataset.st]); if(x && x.status!==s.value) write(hzStatusUpd(x, s.value, u)); return; }
+    const m={frisk:"risk", falba:"alba", fwho:"who", ffrom:"from", fto:"to"}[e.target.id];
+    if(m){ HZF[m]=e.target.value; draw(); }
   };
-  $$("[data-ph]").forEach(async el=>{
-    const ps = await getPhotos(el.dataset.ph);
-    el.innerHTML = ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt="Аюулын зураг" loading="lazy">`).join("") || "";
+}
+/* ---------- Аюулын дэлгэрэнгүй: хариуцагч, хугацаа, залруулах арга хэмжээ, түүх ---------- */
+async function hazardDetail(id){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const raw = DB.hazards[id]; if(!raw){ toast("Олдсонгүй"); return hazardListPage(); }
+  const x = normHazard(raw);
+  view(()=>hazardDetail(id), false);
+  const logs = Object.values(x.log||{}).filter(Boolean).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const people = staffList();
+  const LOGIC = {status:"check", assign:"userCheck", due:"calendar", corr:"edit", note:"file"};
+  const app = mount(shell("аюул", `
+    <div class="row-between wrap"><div>${phead(esc(x.area||"Аюул"), `${esc(x.date)} · Мэдээлэгч: ${esc(x.reporter||"—")}${x.via==="qr"?" · QR кодоор":""}`)}</div>
+      <div class="row-gap noprint"><button class="btn ghost sm" id="hb">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" id="hp">${ic("printer","sm")} Маягт хэвлэх</button></div></div>
+    <div class="hzgrid">
+      <div class="card hzcard ${hzOverdue(x)?"overdue":""}">
+        <div class="row-between"><span class="row-gap">${stH(x.status)}${dueTxt(x)}</span>${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}</div>
+        <div class="hzmeta"><span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span></div>
+        <p class="det">${esc(x.det||"")}</p>
+        ${x.act?`<p class="muted"><b>Авсан шуурхай арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
+        <div class="people"><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах хэлтэс: <b>${esc(x.acc||"—")}</b></span>${x.closedAt?`<span>Хаасан/шийдсэн: <b>${esc(x.closedAt)}</b></span>`:""}</div>
+        <div class="thumbs" id="dph"></div>
+      </div>
+      <form class="card" id="hzt">
+        <div class="ctitle">${ic("userCheck")}<h3>Хяналт, залруулах арга хэмжээ</h3></div>
+        <div class="g2">
+          <div><label class="f" for="tst">Төлөв</label><select id="tst">${HZ_ST.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select></div>
+          <div><label class="f" for="tdue">Гүйцэтгэх хугацаа</label><input type="date" id="tdue" value="${esc(x.due||"")}"/></div>
+        </div>
+        <label class="f" for="tas">Хариуцагч</label>
+        <select id="tas"><option value="">— хариуцагчгүй —</option>${people.map(w=>`<option value="${esc(w.sap)}" ${w.sap===x.assignee?"selected":""}>${esc(w.name)} · ${esc(roleName(w.role))}${w.alba?" · "+esc(w.alba):""}</option>`).join("")}</select>
+        <label class="f" for="tcorr">Залруулах арга хэмжээ (төлөвлөгөө / гүйцэтгэл)</label>
+        <textarea id="tcorr" maxlength="1000" rows="4" placeholder="Юу хийх, хэрхэн арилгах, урьдчилан сэргийлэх…">${esc(x.corr||"")}</textarea>
+        <label class="f" for="tnote">Тэмдэглэл нэмэх (түүхэнд бичигдэнэ)</label>
+        <textarea id="tnote" maxlength="600" rows="2" placeholder="Жишээ: Засварын хүсэлт илгээсэн"></textarea>
+        <div class="actions"><button class="btn" type="submit">${ic("check")} Хадгалах</button></div>
+      </form>
+    </div>
+    <div class="card"><div class="ctitle">${ic("history")}<h3>Түүх</h3><span class="muted">${logs.length} бичлэг</span></div>
+      <ol class="timeline">${logs.map(l=>`<li><span class="tdot">${ic(LOGIC[l.kind]||"file","sm")}</span><div><b>${esc(l.text)}</b><span class="muted">${esc(l.by||"")} · ${esc(l.at||"")}</span></div></li>`).join("")}
+        <li><span class="tdot">${ic("send","sm")}</span><div><b>Мэдээлэл ирсэн</b><span class="muted">${esc(x.reporter||"Нэргүй")} · ${esc(x.created||x.date||"")}</span></div></li></ol>
+    </div>`));
+  bindNav(app, e=>{
+    if(e.target.closest("#hb")) hazardListPage();
+    if(e.target.closest("#hp")) hazardPrint(id);
   });
+  app.onsubmit = e=>{
+    e.preventDefault();
+    const cur = normHazard(DB.hazards[id]||{}); if(!cur.id){ toast("Олдсонгүй"); return; }
+    let upd = {};
+    const st=$("#tst").value, due=$("#tdue").value, as=$("#tas").value, corr=$("#tcorr").value.trim(), note=$("#tnote").value.trim();
+    const add = (k,t)=>{ const [p,v]=hzLogEntry(id,u,k,t); upd[p]=v; };
+    if(st!==cur.status) upd = {...upd, ...hzStatusUpd(cur, st, u)};
+    if(due!==(cur.due||"")){ upd["hazards/"+id+"/due"]=due||null; add("due", `Хугацаа: ${cur.due||"—"} → ${due||"—"}`); }
+    if(as!==(cur.assignee||"")){ const w=DB.users[keyOf(as)]; upd["hazards/"+id+"/assignee"]=as||null; upd["hazards/"+id+"/assigneeName"]=w?w.name:null; add("assign", `Хариуцагч: ${cur.assigneeName||"—"} → ${w?w.name:"—"}`); }
+    if(corr!==(cur.corr||"")){ upd["hazards/"+id+"/corr"]=corr||null; add("corr", "Залруулах арга хэмжээ: "+(corr||"(хоосолсон)")); }
+    if(note) add("note", note);
+    if(!Object.keys(upd).length){ toast("Өөрчлөлт алга"); return; }
+    write(upd); toast("Хадгаллаа"); hazardDetail(id);
+  };
+  const ps = await getPhotos(id); const el=$("#dph");
+  if(el) el.innerHTML = ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt="Аюулын зураг" loading="lazy">`).join("");
 }
 const VERDICT = {huleegdej:"Хүлээгдэж байна", orjbolno:"Орж болно", ersdel:"Ажилд оруулахгүй"};
 function infectListPage(){
@@ -1091,7 +1442,7 @@ function usersPage(editSap){
         <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), ed?.alba||ALBA[1])}</select></div>
         <div><label class="f" for="ugender">Хүйс</label><select id="ugender">${opt([["Эр","Эр"],["Эм","Эм"]], ed?.gender||"Эр")}</select></div>
         <div><label class="f" for="ujob">Албан тушаал / ажил</label><input id="ujob" value="${esc(ed?.job||"")}"/></div>
-        <div><label class="f" for="upin">Нууц үг ${ed?"(хоосон бол хэвээр)":"*"}</label><input id="upin" type="password" autocomplete="new-password" ${ed?"":"required"} minlength="4"/></div>
+        <div><label class="f" for="upin">${ed?"Нууц үг шинэчлэх (хоосон бол хэвээр)":"Нууц үг *"} ${CLOUD_AUTH?"· ≥6":""}</label><input id="upin" type="password" autocomplete="new-password" ${ed?"":"required"} minlength="${CLOUD_AUTH?6:4}"/></div>
         <div><label class="f" for="ubook">Цагаан дэвтэр дуусах</label><input type="date" id="ubook" value="${esc(ed?.bookExp||"")}"/></div>
         <div><label class="f" for="uexam">Жилийн шинжилгээ дуусах</label><input type="date" id="uexam" value="${esc(ed?.exam||"")}"/></div>
       </div>
@@ -1099,7 +1450,8 @@ function usersPage(editSap){
       <div class="row-gap"><button class="btn" type="submit">Хадгалах</button>${ed?'<button class="btn ghost" type="button" id="ucancel">Болих</button>':""}</div>
     </form>
     <div class="card"><div class="ctitle">${ic("users")}<h3>Бүх хэрэглэгч (${all.length})</h3></div>
-    ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",""], all.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(u.alba)}</td><td>${esc(u.job||"")}</td>
+    ${CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
+    ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(u.alba)}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
       <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
     </div>
     <div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
@@ -1113,7 +1465,7 @@ function usersPage(editSap){
   bindNav(app, e=>{
     const ebtn=e.target.closest("[data-edit]"); if(ebtn){ usersPage(ebtn.dataset.edit); window.scrollTo(0,0); return; }
     const d=e.target.closest("[data-delu]");
-    if(d && confirm("Хэрэглэгчийг устгах уу? ("+d.dataset.delu+")")){ write({["users/"+keyOf(d.dataset.delu)]: null}); toast("Устгалаа"); }
+    if(d && confirm("Хэрэглэгчийг устгах уу? ("+d.dataset.delu+")")){ const du=DB.users[keyOf(d.dataset.delu)]; write({["users/"+keyOf(d.dataset.delu)]: null, ...(du&&du.uid?{["roles/"+du.uid]: null}:{})}); toast("Устгалаа"); }
   });
   if($("#ucancel")) $("#ucancel").onclick = ()=>usersPage();
   app.onsubmit = async e=>{
@@ -1121,13 +1473,34 @@ function usersPage(editSap){
     const sap=$("#usap").value.trim(), pin=$("#upin").value.trim();
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
-    if(pin && pin.length<4){ toast("Нууц үг дор хаяж 4 тэмдэгт"); return; }
     const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:$("#ualba").value, gender:$("#ugender").value,
       job:$("#ujob").value.trim(), bookExp:$("#ubook").value, exam:$("#uexam").value};
     delete rec.pin;
-    if(pin){ rec.pinHash = await hashPin(sap, pin); delete rec.mustChange; }
-    write({["users/"+keyOf(sap)]: rec});
-    toast("Хадгаллаа"); usersPage();
+    if(!CLOUD_AUTH){
+      if(pin && pin.length<4){ toast("Нууц үг дор хаяж 4 тэмдэгт"); return; }
+      if(pin){ rec.pinHash = await hashPin(sap, pin); delete rec.mustChange; }
+      write({["users/"+keyOf(sap)]: rec});
+      toast("Хадгаллаа"); usersPage(); return;
+    }
+    // Firebase Auth горим
+    const k = keyOf(sap); const upd = {};
+    if(pin){
+      if(pin.length<6){ toast("Нууц үг дор хаяж 6 тэмдэгт"); return; }
+      if(!authSapOk(k)){ toast("SAP зөвхөн латин үсэг, тоо, - _ байна (нэвтрэлтэд)"); return; }
+      if(navigator.onLine===false){ toast("Хэрэглэгчийн нэвтрэлт үүсгэхэд интернэт шаардлагатай"); return; }
+      const btn = $("#uf button[type=submit]"); btn.disabled = true; btn.textContent = "Үүсгэж байна…";
+      try{
+        const a = await createAuthAccount(k, pin);
+        if(ed && ed.uid && ed.uid!==a.uid) upd["roles/"+ed.uid] = null;   // хуучин бүртгэл эрхгүй болно
+        upd["roles/"+a.uid] = {sap:k, role:rec.role, by:meU.sap, at:Date.now()};
+        if(a.gen) upd["authgen/"+k] = a.gen;
+        rec.uid = a.uid; rec.mustChange = true; delete rec.pinHash;
+      }catch(ex){ console.warn("create auth", ex); toast("Нэвтрэлт үүсгэж чадсангүй: "+(ex.code||ex.message)); btn.disabled=false; btn.textContent="Хадгалах"; return; }
+    } else if(!ed){ toast("Нууц үг оруулна уу"); return; }
+    else if(ed.uid && ed.role!==rec.role) upd["roles/"+ed.uid+"/role"] = rec.role;
+    upd["users/"+k] = rec;
+    write(upd);
+    toast(pin?"Хадгаллаа · нэвтрэх эрх үүслээ":"Хадгаллаа"); usersPage();
   };
   let pending=null;
   $("#tmpl").onclick=async ()=>{
@@ -1152,6 +1525,7 @@ function usersPage(editSap){
       if(!name) { errs.push(i+"-р мөр: Нэр хоосон"); return; }
       if(alba && !ALBA.includes(alba)) errs.push(i+"-р мөр: Алба танигдаагүй («"+alba+"»)");
       if(gender && gender!=="Эр" && gender!=="Эм") errs.push(i+"-р мөр: Хүйс Эр/Эм биш");
+      if(CLOUD_AUTH && (pin.length<6 || !authSapOk(sap))){ errs.push(i+"-р мөр: "+(!authSapOk(sap)?"SAP латин үсэг/тоо биш":"нууц үг 6-аас богино")+" — алгасна"); return; }
       if(!pin) errs.push(i+"-р мөр: Нууц үг хоосон — «1234» болно, солиулна уу");
       rows.push({sap,name,role:"worker",alba:ALBA.includes(alba)?alba:(alba||"Оффис"),gender:gender==="Эм"?"Эм":"Эр",job,pin:pin||"1234",
         bookExp:excelDate(row.getCell(7).value),exam:excelDate(row.getCell(8).value)});
@@ -1164,11 +1538,17 @@ function usersPage(editSap){
     const skip=[]; const upd={};
     for(const p of pending){
       if(DB.users[keyOf(p.sap)]) { skip.push(p.sap); continue; }
+      if(CLOUD_AUTH){
+        try{ const a = await createAuthAccount(keyOf(p.sap), p.pin); const rec={...p, uid:a.uid, mustChange:true}; delete rec.pin;
+          upd["users/"+keyOf(p.sap)] = rec; upd["roles/"+a.uid] = {sap:keyOf(p.sap), role:"worker", by:meU.sap, at:Date.now()}; if(a.gen) upd["authgen/"+keyOf(p.sap)] = a.gen; }
+        catch(ex){ console.warn("import auth", ex); skip.push(p.sap+" (нэвтрэлт үүсээгүй)"); }
+        continue;
+      }
       const rec={...p, pinHash: await hashPin(p.sap, p.pin)}; delete rec.pin;
       upd["users/"+keyOf(p.sap)] = rec;
     }
     if(Object.keys(upd).length) write(upd);
-    alert("Орлоо: "+Object.keys(upd).length + (skip.length?" · давхардсан SAP: "+skip.join(", "):""));
+    alert("Орлоо: "+Object.keys(upd).filter(k=>k.startsWith("users/")).length + (skip.length?" · алгассан SAP: "+skip.join(", "):""));
     usersPage();
   };
 }
@@ -1179,7 +1559,296 @@ function excelDate(v){
   return String(v).slice(0,10);
 }
 
+/* ======================= ТАЙЛАН, ГРАФИК (inline SVG) ======================= */
+const CH_COL = {blue:"#1747C8", blue2:"#7FA0EE", ok:"#157A3E", warn:"#E08A00", bad:"#C1272D", vio:"#5B3FD1", gray:"#A9B3C4", sun:"#FCC419"};
+const RISK_COL = {"Бага":CH_COL.ok, "Дунд зэрэг":CH_COL.sun, "Их":CH_COL.warn, "Маш их":CH_COL.bad};
+const ST_COL = {"Шинэ":CH_COL.blue, "Хийгдэж буй":CH_COL.warn, "Шийдсэн":CH_COL.ok, "Хаасан":CH_COL.gray};
+let REPF = null;
+function periodKey(d, g){ if(!d) return ""; const y=d.slice(0,4), m=+d.slice(5,7); return g==="q" ? `${y} Q${Math.ceil(m/3)}` : d.slice(0,7); }
+function periodList(from, to, g){
+  const out=[]; let y=+from.slice(0,4), m=+from.slice(5,7); const ey=+to.slice(0,4), em=+to.slice(5,7);
+  while(y<ey || (y===ey && m<=em)){ const k=periodKey(`${y}-${String(m).padStart(2,"0")}-01`, g); if(out[out.length-1]!==k) out.push(k); if(++m>12){m=1;y++;} if(out.length>60) break; }
+  return out;
+}
+const periodLabel = (k,g)=> g==="q" ? k : (["","1-р","2-р","3-р","4-р","5-р","6-р","7-р","8-р","9-р","10-р","11-р","12-р"][+k.slice(5,7)]+" сар"+(k.slice(5,7)==="01"?" "+k.slice(0,4):""));
+/* Багана график (stacked) */
+function svgBars(cats, series, opt={}){
+  const W=640, H=opt.h||220, pl=34, pr=10, pt=12, pb=34, iw=W-pl-pr, ih=H-pt-pb;
+  const tot = cats.map((_,i)=>series.reduce((s,se)=>s+(se.data[i]||0),0));
+  const max = Math.max(1, ...tot); const step = Math.max(1, Math.ceil(max/4));
+  const top = step*Math.ceil(max/step); const bw = Math.min(46, iw/cats.length*0.62);
+  let g=""; for(let v=0; v<=top; v+=step){ const y=pt+ih-ih*v/top; g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" class="gl"/><text x="${pl-6}" y="${y+4}" class="ax" text-anchor="end">${v}</text>`; }
+  let b=""; cats.forEach((c,i)=>{ const cx = pl + iw*(i+.5)/cats.length; let acc=0;
+    series.forEach(se=>{ const v=se.data[i]||0; if(!v) return; const h=ih*v/top; const y=pt+ih-ih*(acc+v)/top; acc+=v;
+      b+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${se.color}" rx="2"><title>${esc(c.l)} · ${esc(se.name)}: ${v}</title></rect>`; });
+    if(tot[i]) b+=`<text x="${cx}" y="${pt+ih-ih*tot[i]/top-4}" class="vl" text-anchor="middle">${tot[i]}</text>`;
+    b+=`<text x="${cx}" y="${H-pb+16}" class="ax" text-anchor="middle">${esc(c.l)}</text>`; });
+  return `<figure class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.title||"")}">${g}${b}</svg>${legend(series)}</figure>`;
+}
+/* Шугаман график (2 тэнхлэггүй, 0..max) */
+function svgLine(cats, series, opt={}){
+  const W=640, H=opt.h||200, pl=34, pr=10, pt=14, pb=34, iw=W-pl-pr, ih=H-pt-pb;
+  const vals = series.flatMap(s=>s.data.filter(v=>v!=null)); const max = opt.max || Math.max(1, ...vals);
+  let g=""; [0,.25,.5,.75,1].forEach(f=>{ const y=pt+ih-ih*f; g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" class="gl"/><text x="${pl-6}" y="${y+4}" class="ax" text-anchor="end">${+(max*f).toFixed(1)}</text>`; });
+  const X = i=> pl + iw*(cats.length===1?.5:i/(cats.length-1));
+  let l=""; series.forEach(se=>{ const pts = se.data.map((v,i)=>v==null?null:[X(i), pt+ih-ih*v/max]);
+    let d=""; pts.forEach((p,i)=>{ if(!p) return; d += (d && pts[i-1] ? "L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1); });
+    l+=`<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    pts.forEach((p,i)=>{ if(p) l+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="#fff" stroke="${se.color}" stroke-width="2"><title>${esc(cats[i].l)} · ${esc(se.name)}: ${se.data[i]}</title></circle>`; }); });
+  cats.forEach((c,i)=> l+=`<text x="${X(i)}" y="${H-pb+16}" class="ax" text-anchor="middle">${esc(c.l)}</text>`);
+  return `<figure class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.title||"")}">${g}${l}</svg>${legend(series)}</figure>`;
+}
+/* Хэвтээ багана */
+function hbars(items){
+  const max = Math.max(1, ...items.map(i=>i.v));
+  return `<div class="hbars">${items.map(i=>`<div class="hb"><span>${esc(i.k)}</span><i><b style="width:${(100*i.v/max).toFixed(1)}%;background:${i.color||CH_COL.blue}"></b></i><em>${i.v}</em></div>`).join("")}</div>`;
+}
+const legend = series => series.length>1 ? `<figcaption class="legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</figcaption>` : "";
+function reportsPage(){
+  const u = requireRole("hygiene"); if(!u) return;
+  view(reportsPage, true);
+  if(!REPF){ const d=new Date(); d.setMonth(d.getMonth()-5); REPF = {from: ymd(new Date(d.getFullYear(), d.getMonth(), 1)), to: today(), g:"m", alba:""}; }
+  const F = REPF; const inR = x=> x && x.date && x.date>=F.from && x.date<=F.to && (!F.alba || x.alba===F.alba);
+  const per = periodList(F.from, F.to, F.g); const cats = per.map(k=>({k, l:periodLabel(k,F.g)}));
+  const idx = k=> per.indexOf(k); const zero = ()=> per.map(()=>0);
+  // аюул
+  const hz = list("hazards").map(normHazard).filter(inR);
+  const riskSeries = HZ_RISK.map(([r])=>({name:r, color:RISK_COL[r], data:zero()}));
+  const noRisk = {name:"Тодорхойгүй", color:CH_COL.gray, data:zero()};
+  hz.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; const s=riskSeries.find(s=>s.name===x.risk)||noRisk; s.data[i]++; });
+  const typeCnt = HZ_TYPES.map(([t])=>({k:t, v:hz.filter(x=>(x.types||[]).includes(t)).length}));
+  const stCnt = HZ_ST.map(s=>({k:s, v:hz.filter(x=>x.status===s).length, color:ST_COL[s]}));
+  const clsCnt = HZ_CLS.map(([c])=>({k:c, v:hz.filter(x=>(x.cls||[]).includes(c)).length})).filter(x=>x.v).sort((a,b)=>b.v-a.v).slice(0,8);
+  const od = hz.filter(hzOverdue).length;
+  // ядаргаа
+  const fa = list("fatigue").filter(inR);
+  const fAvg = zero(), fN = zero(), fHi = zero();
+  fa.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; fN[i]++; fAvg[i]+= +x.score||0; if(x.level==="Өндөр") fHi[i]++; });
+  const avg = fAvg.map((s,i)=> fN[i]? +(s/fN[i]).toFixed(1) : null);
+  // ариун цэврийн зөрчил
+  const hc = list("hygcheck").filter(inR);
+  const hFail = zero(), hOk = zero(), hInc = zero(); const critFail = HYG_CRIT.map(()=>0);
+  hc.forEach(h=>{ const i=idx(periodKey(h.date,F.g)); if(i<0) return; rowsOf(h).forEach(r=>{ const st=rowStatus(r);
+    (st==="fail"?hFail:st==="ok"?hOk:hInc)[i]++; HYG_CRIT.forEach((_,ci)=>{ if(cellVal(r,ci)==="no") critFail[ci]++; }); }); });
+  // халдвар
+  const inf = list("infect").filter(inR);
+  const vS = [["orjbolno",CH_COL.ok],["ersdel",CH_COL.bad],["huleegdej",CH_COL.gray]].map(([k,c])=>({name:VERDICT[k], color:c, key:k, data:zero()}));
+  inf.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; (vS.find(s=>s.key===(x.verdict||"huleegdej"))||vS[2]).data[i]++; });
+  const sum = (a)=>a.reduce((s,v)=>s+v,0);
+  const rows = sum(hFail)+sum(hOk)+sum(hInc);
+  const kpi = (cls,icn,t,v,s)=>`<div class="kpi ${cls}"><i>${ic(icn)}</i><div>${t}<b>${v}</b><span class="muted">${s}</span></div></div>`;
+  const sec = (icn,t,body,extra="")=>`<section class="card rsec"><div class="ctitle">${ic(icn)}<h3>${t}</h3>${extra}</div>${body}</section>`;
+  const app = mount(shell("тайлан", `
+    <div class="rep">
+    <div class="rephead">${phead("Тайлан, график", `${esc(F.from)} — ${esc(F.to)} · ${F.g==="q"?"Улирлаар":"Сараар"} · ${esc(F.alba||"Бүх алба")}`)}
+      <img class="replogo" src="/logo.png" alt="Ерөө говь ХХК"/></div>
+    <form class="card filters noprint" id="rf">
+      <div class="frow">
+        <div><label class="f" for="rfrom">Эхлэх</label><input type="date" id="rfrom" value="${esc(F.from)}" required/></div>
+        <div><label class="f" for="rto">Дуусах</label><input type="date" id="rto" value="${esc(F.to)}" required/></div>
+        <div><label class="f" for="rg">Хугацааны нэгж</label><select id="rg"><option value="m" ${F.g==="m"?"selected":""}>Сараар</option><option value="q" ${F.g==="q"?"selected":""}>Улирлаар</option></select></div>
+        <div><label class="f" for="ralba">Алба</label><select id="ralba"><option value="">Бүх алба</option>${ALBA.map(a=>`<option ${F.alba===a?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
+        <div class="end row-gap"><button type="button" class="btn ghost sm" data-rq="3">3 сар</button><button type="button" class="btn ghost sm" data-rq="12">12 сар</button><button type="button" class="btn sm" id="rprint">${ic("printer","sm")} Хэвлэх</button></div>
+      </div>
+    </form>
+    <div class="kpis">
+      ${kpi("k-org","alert","Аюулын мэдээлэл",hz.length,`их/маш их: ${hz.filter(x=>HZ_HIGH(x.risk)).length}`)}
+      ${kpi("k-red "+(od?"hot":""),"clock","Хугацаа хэтэрсэн",od,`нээлттэй: ${hz.filter(x=>HZ_OPEN(x.status)).length}`)}
+      ${kpi("k-blu","battery","Ядаргааны асуумж",fa.length,`өндөр: ${sum(fHi)}`)}
+      ${kpi("k-grn","drop","Ариун цэврийн шалгалт",rows,`ажиллахгүй: ${sum(hFail)}${rows?` (${Math.round(100*sum(hFail)/rows)}%)`:""}`)}
+      ${kpi("k-vio","virus","Халдварын асуумж",inf.length,`оруулахгүй: ${sum(vS[1].data)}`)}
+    </div>
+    ${sec("alert","Аюулын мэдээлэл — эрсдлийн түвшингээр", hz.length? svgBars(cats, [...riskSeries, ...(sum(noRisk.data)?[noRisk]:[])], {title:"Аюул эрсдлээр"}) : emptyState("Энэ хугацаанд аюулын мэдээлэл алга","","alert"))}
+    <div class="rgrid">
+      ${sec("filter","Аюулын төрөл", hbars(typeCnt))}
+      ${sec("check","Төлөв", hbars(stCnt))}
+    </div>
+    ${clsCnt.length? sec("map","Аюулын ангилал (эхний 8)", hbars(clsCnt)) : ""}
+    ${sec("battery","Ядаргааны чиг хандлага", fa.length? svgLine(cats, [{name:"Дундаж оноо (0–12)", color:CH_COL.blue, data:avg}], {max:12, title:"Ядаргааны дундаж оноо"}) + svgBars(cats, [{name:"Өндөр ядаргаа", color:CH_COL.bad, data:fHi}, {name:"Бусад", color:CH_COL.blue2, data:fN.map((n,i)=>n-fHi[i])}], {h:170, title:"Ядаргааны асуумж"}) : emptyState("Ядаргааны асуумж алга","","battery"))}
+    ${sec("drop","Ариун цэврийн шалгалт — зөрчил", rows? svgBars(cats, [{name:"Ажиллахгүй", color:CH_COL.bad, data:hFail}, {name:"Хангасан", color:CH_COL.ok, data:hOk}, {name:"Бүрэн бус", color:CH_COL.gray, data:hInc}], {title:"Ариун цэврийн шалгалт"})
+        + `<h4 class="rsub">Үзүүлэлтээр хангаагүй тоо</h4>` + hbars(HYG_CRIT.map((c,i)=>({k:c, v:critFail[i], color:CH_COL.bad}))) : emptyState("Ариун цэврийн бүртгэл алга","","drop"))}
+    ${sec("virus","Халдварын асуумжийн дүгнэлт", inf.length? svgBars(cats, vS, {title:"Халдвар"}) : emptyState("Халдварын асуумж алга","","virus"))}
+    <p class="muted repfoot">Гаргасан: ${esc(u.name)} · ${esc(nowStr())} · ЭАХС — Ерөө говь ХХК</p>
+    </div>`));
+  bindNav(app, e=>{
+    const q=e.target.closest("[data-rq]"); if(q){ const d=new Date(); d.setMonth(d.getMonth()-(+q.dataset.rq-1)); REPF={...REPF, from: ymd(new Date(d.getFullYear(), d.getMonth(), 1)), to: today()}; reportsPage(); return; }
+    if(e.target.closest("#rprint")) window.print();
+  });
+  app.onchange = e=>{
+    if(!e.target.closest("#rf")) return;
+    const from=$("#rfrom").value, to=$("#rto").value;
+    if(!from || !to || from>to){ toast("Огнооны муж буруу"); return; }
+    REPF = {from, to, g:$("#rg").value, alba:$("#ralba").value}; reportsPage();
+  };
+}
+
+/* ======================= QR КОД ======================= */
+let _qrLib = null;
+function loadQr(){
+  if(window.qrcode) return Promise.resolve(window.qrcode);
+  return _qrLib ||= new Promise((res, rej)=>{ const s=document.createElement("script"); s.src="/vendor/qrcode.js"; s.onload=()=>res(window.qrcode); s.onerror=()=>{ _qrLib=null; rej(new Error("qr")); }; document.head.appendChild(s); });
+}
+const qrUrl = area => location.origin + "/?hazard&area=" + encodeURIComponent(area);
+function qrSvg(text, cls="qrsvg"){
+  const q = window.qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount(), m = 4; let d = "";
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(q.isDark(r,c)) d += `M${c+m} ${r+m}h1v1h-1z`;
+  return `<svg class="${cls}" viewBox="0 0 ${n+2*m} ${n+2*m}" shape-rendering="crispEdges" role="img" aria-label="QR: ${esc(text)}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+const qrAreas = ()=> { const s = DB.settings.qr; const extra = Array.isArray(s?.areas) ? s.areas : Object.values(s?.areas||{});
+  return [...new Set([...ALBA, ...extra.filter(a=>typeof a==="string" && a.trim())])]; };
+async function qrPage(){
+  const u = requireRole("hygiene"); if(!u) return;
+  view(qrPage, true);
+  const app = mount(shell("qr", `${phead("QR код — аюул мэдээлэх", "Талбай бүрт наах QR. Уншуулахад «Аюулыг мэдээлэх» маягт тухайн газар бөглөгдсөн нээгдэнэ.")}<div id="qrb"><p class="muted">Ачаалж байна…</p></div>`));
+  try{ await loadQr(); }catch{ $("#qrb").innerHTML = `<div class="card">${emptyState("QR сан ачаалагдсангүй","Сүлжээгээ шалгаад дахин оролдоно уу","qr")}</div>`; return; }
+  if(VIEW.fn!==qrPage || !$("#qrb")) return;
+  const areas = qrAreas(); const extra = areas.filter(a=>!ALBA.includes(a));
+  $("#qrb").innerHTML = `
+    <form class="card" id="qadd"><div class="ctitle">${ic("map")}<h3>Талбай нэмэх</h3></div>
+      <div class="frow"><input id="qnew" maxlength="60" placeholder="Жишээ: Агуулах №2, Гал тогоо" aria-label="Шинэ талбайн нэр"/><button class="btn" type="submit">${ic("plus","sm")} Нэмэх</button></div>
+      <p class="muted">Алба: ${ALBA.map(esc).join(", ")} үргэлж жагсаалтад байна.</p></form>
+    <form class="card" id="qsel"><div class="ctitle">${ic("qr")}<h3>Хэвлэх стикер сонгох</h3><span class="muted">A4 хуудсанд 8 стикер (2×4)</span></div>
+      <div class="qrgrid">${areas.map(a=>`<label class="qritem"><input type="checkbox" value="${esc(a)}" checked/>${qrSvg(qrUrl(a))}<b>${esc(a)}</b>
+        <span class="row-gap"><input type="number" min="1" max="24" value="1" data-copies="${esc(a)}" aria-label="${esc(a)} хувь"/> хувь
+        ${extra.includes(a)?`<button type="button" class="btn ghost sm" data-qdel="${esc(a)}" aria-label="${esc(a)} устгах">${ic("trash","sm")}</button>`:""}</span>
+        <a class="muted qrlink" href="${esc(qrUrl(a))}" target="_blank" rel="noopener">${esc(qrUrl(a))}</a></label>`).join("")}</div>
+      <div class="actions"><button class="btn" type="submit">${ic("printer")} A4 стикер хуудас</button></div></form>`;
+  const saveAreas = list=> write({"settings/qr": {areas: list}});
+  app.onsubmit = e=>{
+    e.preventDefault();
+    if(e.target.id==="qadd"){ const v=$("#qnew").value.trim().replace(/\s+/g," "); if(!v) return;
+      if(qrAreas().includes(v)){ toast("Аль хэдийн байна"); return; } saveAreas([...extra, v]); toast("Нэмлээ"); qrPage(); return; }
+    const pick = $$("#qsel input[type=checkbox]:checked").map(c=>c.value);
+    if(!pick.length){ toast("Талбай сонгоно уу"); return; }
+    const items = pick.flatMap(a=>{ const n=Math.min(24, Math.max(1, +($(`[data-copies="${CSS.escape(a)}"]`)?.value)||1)); return Array(n).fill(a); });
+    qrPrint(items);
+  };
+  bindNav(app, e=>{ const d=e.target.closest("[data-qdel]"); if(d){ e.preventDefault(); if(confirm(`«${d.dataset.qdel}» талбайг устгах уу?`)){ saveAreas(extra.filter(a=>a!==d.dataset.qdel)); qrPage(); } } });
+}
+async function qrPrint(items){
+  if(!requireRole("hygiene")) return;
+  await loadQr();
+  view(()=>qrPrint(items), false);
+  const pages = []; for(let i=0;i<items.length;i+=8) pages.push(items.slice(i,i+8));
+  const app = mount(`
+    <div class="printbar noprint"><button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} QR код</button><span class="muted">${items.length} стикер · ${pages.length} хуудас</span></div>
+    <div class="sheet-wrap"><div class="qrsheet">${pages.map(p=>`<section class="qrpage">${p.map(a=>`<div class="qrst">
+      <div class="qrst-h"><img src="/logo.png" alt="Ерөө говь ХХК"/><div><b>АЮУЛЫГ МЭДЭЭЛ</b><span>Report a hazard</span></div></div>
+      <div class="qrst-b">${qrSvg(qrUrl(a), "qrsvg big")}<div class="qrst-t"><small>Талбай / Area</small><b>${esc(a)}</b><p>Утасныхаа камераар уншуулж, харсан аюулаа шууд мэдээлнэ үү.</p><i>Нэвтрэх шаардлагагүй · OT-03</i></div></div>
+      </div>`).join("")}</section>`).join("")}</div></div>`);
+  $("#pp").onclick = ()=>window.print();
+  $("#pb").onclick = ()=>qrPage();
+}
+
+/* ======================= МЭДЭГДЭЛ ======================= */
+const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
+function notifList(){
+  const u = me(); if(!u || u.role==="worker") return [];
+  return list("notifs").filter(n=> n && n.id && (u.role==="hygiene" || !n.alba || n.alba===u.alba)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
+function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
+function unreadCount(){ const r=readSet(); return notifList().filter(n=>!r.has(n.id)).length; }
+/* Шинэ мэдэгдэл ирэхэд: апп доторх toast + хөтчийн мэдэгдэл (зөвшөөрсөн бол) */
+function onNotifs(){
+  const u = me(); if(!u || u.role==="worker") return;
+  const k = LS+"lastpush_"+keyOf(u.sap);
+  const ns = notifList(); const maxTs = ns.reduce((m,n)=>Math.max(m, n.ts||0), 0);
+  const last = lsGet(k, null);
+  if(last==null){ lsSet(k, maxTs); return; }          // анх ачаалахад хуучныг дуугаргахгүй
+  const fresh = ns.filter(n=>(n.ts||0)>last && n.bySap!==u.sap);
+  if(maxTs>last) lsSet(k, maxTs);
+  if(!fresh.length) return;
+  toast(ic("bell","sm")+" "+fresh[0].title, true);
+  fresh.slice(0,3).forEach(showBrowserNotif);
+}
+async function showBrowserNotif(n){
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  const opts = {body: n.body||"", icon:"/icon-192.png", badge:"/icon-192.png", tag:"eahs-"+n.id, data:{url:"/?n="+encodeURIComponent(n.id)}};
+  try{
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if(reg && reg.showNotification){ await reg.showNotification(n.title, opts); return; }
+  }catch(e){ console.warn("sw notif", e && e.message); }
+  try{ const nn = new Notification(n.title, opts); nn.onclick = ()=>{ window.focus(); openNotif(n.id); }; }catch(e){ console.warn("notif", e && e.message); }
+}
+function openNotif(id){
+  const n = (DB.notifs||{})[id]; if(!n) return notifPage();
+  markRead([id]);
+  if(n.type==="hazard" && DB.hazards[n.ref]) return hazardDetail(n.ref);
+  if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba); }
+  notifPage();
+}
+const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"]};
+function notifPage(){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  view(notifPage, true);
+  const ns = notifList(); const r = readSet();
+  const perm = !("Notification" in window) ? "none" : Notification.permission;
+  const permHtml = perm==="granted" ? `<span class="badge b-ok">Хөтчийн мэдэгдэл асаалттай</span>`
+    : perm==="denied" ? `<span class="badge b-bad">Хөтчийн мэдэгдлийг хориглосон — хөтчийн тохиргооноос зөвшөөрнө</span>`
+    : perm==="none" ? `<span class="badge b-wait">Энэ хөтөч мэдэгдэл дэмжихгүй</span>`
+    : `<button class="btn sm" id="nperm">${ic("bell","sm")} Хөтчийн мэдэгдэл асаах</button>`;
+  const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(u.alba)} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан")}
+    <div class="card row-between wrap nperm"><div class="row-gap">${permHtml}</div>
+      <button class="btn ghost sm" id="nall" ${ns.some(n=>!r.has(n.id))?"":"disabled"}>${ic("checks","sm")} Бүгдийг уншсан</button></div>
+    <p class="muted">Апп нээлттэй (эсвэл таб далд) үед мэдэгдэл ирнэ. Апп хаалттай үед ирэх «push» мэдэгдэлд сервер шаардлагатай.</p>
+    <div class="card nlist">${ns.map(n=>{ const L=NLEVEL[n.level]||["Мэдэгдэл","b-new","bell"]; const un=!r.has(n.id);
+      return `<button class="nitem ${un?"unread":""}" data-nid="${esc(n.id)}"><span class="nic ${esc(n.level||"")}">${ic(L[2])}</span>
+        <span class="nbody"><b>${esc(n.title||"")}</b><span>${esc(n.body||"")}</span><small>${esc(n.by||"")} · ${n.ts?esc(new Date(n.ts).toLocaleString("mn-MN")):""}${n.alba?" · "+esc(n.alba):""}</small></span>
+        <span class="badge ${L[1]}">${esc(L[0])}</span></button>`; }).join("") || emptyState("Мэдэгдэл алга","Их эрсдэлтэй аюул эсвэл «Ажиллахгүй» тэмдэглэгдэхэд энд гарна","bell")}</div>`));
+  bindNav(app, async e=>{
+    const it=e.target.closest("[data-nid]"); if(it){ openNotif(it.dataset.nid); return; }
+    if(e.target.closest("#nall")){ markRead(ns.map(n=>n.id)); notifPage(); return; }
+    if(e.target.closest("#nperm")){
+      try{ const p = await Notification.requestPermission(); if(p==="granted"){ toast("Мэдэгдэл асаалаа"); showBrowserNotif({id:"test", title:"ЭАХС мэдэгдэл асаалттай", body:"Их эрсдэлтэй аюул, «Ажиллахгүй» ажилтны мэдээлэл энд ирнэ."}); } }
+      catch(err){ console.warn("perm", err); }
+      notifPage();
+    }
+  });
+}
+
 /* ======================= ТОХИРГОО ======================= */
+/* Нууц үг солих — бүх үүрэгт (ажилтан ч мөн) */
+function pwFormHtml(u){
+  return `<form class="card" id="pf">
+      <div class="ctitle">${ic("key")}<h3>Нууц үг солих</h3></div>
+      ${u.mustChange?'<div class="warnbox">Анхны нууц үгээ заавал солино уу.</div>':""}
+      <input type="text" name="username" value="${esc(u.sap)}" autocomplete="username" hidden/>
+      <label class="f" for="op">Одоогийн нууц үг</label><input type="password" id="op" autocomplete="current-password" required/>
+      <label class="f" for="np">Шинэ нууц үг (дор хаяж 6)</label><input type="password" id="np" autocomplete="new-password" minlength="6" required/>
+      <label class="f" for="np2">Шинэ нууц үг давтах</label><input type="password" id="np2" autocomplete="new-password" minlength="6" required/>
+      <div class="gap"></div><button class="btn" type="submit">Солих</button>
+    </form>`;
+}
+async function changePassword(form){
+  const cur = me(); if(!cur) return false;
+  const op = $("#op").value.trim(), np = $("#np").value.trim();
+  if(np!==$("#np2").value.trim()){ toast("Шинэ нууц үг таарахгүй байна"); return false; }
+  if(np.length<6){ toast("Шинэ нууц үг дор хаяж 6 тэмдэгт"); return false; }
+  if(CLOUD_AUTH && session && session.local){ toast("Нууц үг солиход интернэт шаардлагатай"); return false; }
+  if(CLOUD_AUTH && _auth.currentUser && !_auth.currentUser.isAnonymous){
+    const cu = _auth.currentUser;
+    try{
+      await cu.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(cu.email, fbPw(op)));
+      await cu.updatePassword(np);
+    }catch(ex){ console.warn("pw", ex && ex.code); toast(/wrong-password|invalid-credential|invalid-login/.test(ex.code||"")?"Одоогийн нууц үг буруу":"Солиж чадсангүй: "+(ex.code||"")); return false; }
+    await rememberOffline(keyOf(cur.sap), cur.role, np);
+    if(cur.mustChange) write({["users/"+keyOf(cur.sap)+"/mustChange"]: null});
+    toast("Нууц үг солигдлоо"); form.reset(); return true;
+  }
+  if((await hashPin(cur.sap,op))!==cur.pinHash){ toast("Одоогийн нууц үг буруу"); return false; }
+  write({["users/"+keyOf(cur.sap)+"/pinHash"]: await hashPin(cur.sap,np), ["users/"+keyOf(cur.sap)+"/mustChange"]: null});
+  toast("Нууц үг солигдлоо"); form.reset(); return true;
+}
+function workerPwPage(){
+  const u = me(); if(!u) return landing();
+  view(workerPwPage, false);
+  const app = mount(`${appbar("ЭАХС · Ажилтан", esc(u.alba||""))}
+    <main class="page"><button class="btn ghost sm" id="wb">${ic("back","sm")} Буцах</button><div class="gap"></div>${pwFormHtml(u)}</main>`);
+  $("#wb").onclick = workerHome;
+  app.onsubmit = async e=>{ e.preventDefault(); if(await changePassword(e.target)) setTimeout(workerHome, 900); };
+}
 function settingsPage(){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(settingsPage, false);
@@ -1192,26 +1861,12 @@ function settingsPage(){
       <select id="bl"><option value="0">Зөвхөн анхааруул</option><option value="1" ${s.blockExpired?"selected":""}>Хоригло</option></select>
       <div class="gap"></div><button class="btn" type="submit">Хадгалах</button>
     </form>`:""}
-    <form class="card" id="pf">
-      <div class="ctitle">${ic("key")}<h3>Нууц үг солих</h3></div>
-      ${u.mustChange?'<div class="warnbox">Анхны нууц үгээ заавал солино уу.</div>':""}
-      <input type="text" name="username" value="${esc(u.sap)}" autocomplete="username" hidden/>
-      <label class="f" for="op">Одоогийн нууц үг</label><input type="password" id="op" autocomplete="current-password" required/>
-      <label class="f" for="np">Шинэ нууц үг (дор хаяж 6)</label><input type="password" id="np" autocomplete="new-password" minlength="6" required/>
-      <label class="f" for="np2">Шинэ нууц үг давтах</label><input type="password" id="np2" autocomplete="new-password" minlength="6" required/>
-      <div class="gap"></div><button class="btn" type="submit">Солих</button>
-    </form>`));
+    ${pwFormHtml(u)}`));
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
     if(e.target.id==="sf"){ write({"settings/main": {fatigueDays:Math.max(1,+$("#fd").value||7), blockExpired:$("#bl").value==="1"}}); toast("Хадгаллаа"); return; }
-    if(e.target.id==="pf"){
-      const cur = me();
-      if((await hashPin(cur.sap,$("#op").value.trim()))!==cur.pinHash){ toast("Одоогийн нууц үг буруу"); return; }
-      if($("#np").value!==$("#np2").value){ toast("Шинэ нууц үг таарахгүй байна"); return; }
-      write({["users/"+keyOf(cur.sap)+"/pinHash"]: await hashPin(cur.sap,$("#np").value.trim()), ["users/"+keyOf(cur.sap)+"/mustChange"]: null});
-      toast("Нууц үг солигдлоо"); e.target.reset();
-    }
+    if(e.target.id==="pf") await changePassword(e.target);
   };
 }
 
@@ -1355,6 +2010,15 @@ function hygEdit(date, alba){
       if(dirtySign.has(r.rk)){ upd[rp+"/sign"]=!!r.sign; upd[rp+"/signAt"]=r.sign?(r.signAt||nowStr()):""; }
     });
     removed.forEach(rk=>upd[base+"/rows/"+rk]=null);
+    // Шинээр «Ажиллахгүй» болсон ажилтнууд → мэдэгдэл
+    const prev = DB.hygcheck[id]?.rows || {};
+    const newFail = W.rows.filter(r=>rowStatus(r)==="fail" && rowStatus(prev[r.rk])!=="fail" && (r.name||r.sap));
+    if(newFail.length){
+      const nid = keyOf("hf_"+id+"_"+Date.now().toString(36));
+      upd["notifs/"+nid] = {id:nid, type:"hygfail", level:"fail", ts:Date.now(), alba, ref:id, by:u.name, bySap:u.sap,
+        title: ("Ажиллахгүй: "+newFail.map(r=>r.name||r.sap).join(", ")).slice(0,180),
+        body: (alba+" · "+date+" — ариун цэврийн шаардлага хангаагүй: "+newFail.map(r=>HYG_CRIT.filter((c,i)=>r.c[i]==="no").join("; ")).join(" | ")).slice(0,280)};
+    }
     write(upd);
     dirty.clear(); dirtySign.clear(); removed.clear();
     if(!silent) toast("Хадгаллаа");
@@ -1533,8 +2197,10 @@ async function exportExcel(from,to,kinds){
   if(kinds.includes("ayul")){
     const hz=list("hazards").map(normHazard).filter(x=>inR(x.date)).sort(byNew);
     const s1=wb.addWorksheet("Аюул");
-    s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Хянасан","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв"]);
-    hz.forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,x.reviewer||"",(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,x.photoCount||0,x.status]));
+    s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Хянасан","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв","Алба","Хариуцагч","Гүйцэтгэх хугацаа","Хугацаа хэтэрсэн","Залруулах арга хэмжээ","Хаасан огноо","Түүх"]);
+    hz.map(normHazard).forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,x.reviewer||"",(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,x.photoCount||0,x.status,
+      x.alba||"",x.assigneeName||"",x.due||"",hzOverdue(x)?"Тийм":"",x.corr||"",x.closedAt||"",
+      Object.values(x.log||{}).filter(Boolean).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(l=>`${l.at} ${l.by}: ${l.text}`).join("\n")]));
     const sP=wb.addWorksheet("Аюул_зураг");
     sP.addRow(["Огноо","Газар","Мэдээлэгч","Зураг №"]);
     let r=2;
@@ -1565,12 +2231,28 @@ async function exportExcel(from,to,kinds){
 /* ======================= ЭХЛЭЛ ======================= */
 (function boot(){
   let started=false;
-  const start = ()=>{ started=true; homeFor(me()); };
+  // QR стикер: /?hazard&area=<газар> → аюулын маягт (газар бөглөгдсөн), мэдэгдэл: /?n=<id>
+  const QP = new URLSearchParams(location.search);
+  const qrArea = QP.has("hazard") ? (QP.get("area")||"") : null;
+  const openN = QP.get("n");
+  if(qrArea!=null || openN) history.replaceState(null, "", location.pathname);
+  const start = ()=>{
+    started=true;
+    if(qrArea!=null) return hazardForm({area: qrArea});
+    homeFor(me());
+    if(openN && me() && me().role!=="worker") openNotif(openN);
+  };
+  if("serviceWorker" in navigator && !EMU_NO_SW){
+    navigator.serviceWorker.register("/sw.js").catch(e=>console.warn("sw", e && e.message));
+    navigator.serviceWorker.addEventListener("message", e=>{
+      if(e.data && e.data.type==="eahs-open"){ const id = new URL(e.data.url, location.origin).searchParams.get("n"); if(id && me()) openNotif(id); }
+    });
+  }
   if(Object.keys(DB.users).length) start();       // локал өгөгдлөөр шууд харуулна
   else mount(`<div class="land"><div class="center"><img src="/logo.png" alt="" width="120" style="opacity:.9"/><p class="muted">Ачаалж байна…</p></div></div>`);
   initCloud().then(()=>{
     if(!started) start();
-    else if(session && !me()) landing();
+    else if(session && !me() && !CLOUD_AUTH) landing();
     else scheduleRender();
   });
 })();
