@@ -90,6 +90,49 @@ function toast(msg){
   t.textContent=msg; t.className="toast show";
   clearTimeout(window._tt); window._tt=setTimeout(()=>t.className="toast",2600);
 }
+/* ---------- Дүрс тэмдэг (inline SVG, 24×24 stroke) ---------- */
+const ICONS = {
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 16 0v1"/>',
+  alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v6M9 11h6"/>',
+  battery:'<rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 11v2"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  virus:'<circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  drop:'<path d="M12 2.7s6 6.3 6 11.3a6 6 0 0 1-12 0c0-5 6-11.3 6-11.3z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/>',
+  printer:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>',
+  back:'<path d="m15 18-6-6 6-6"/>',
+  grid:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  checks:'<path d="m3 7 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
+  inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
+  map:'<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>'
+};
+const ic = (n, cls="") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n]||""}</svg>`;
+const initials = name => String(name||"?").replace(/^[^\s.]+\.\s*/,"").trim().slice(0,1).toUpperCase() || "?";
+/* Хоосон төлөв */
+const emptyState = (title, sub="", icon="inbox") => `<div class="empty"><span class="eico">${ic(icon,"lg")}</span><b>${esc(title)}</b>${sub?`<span>${esc(sub)}</span>`:""}</div>`;
+/* Апп-ын толгой: лого + гарчиг (+ буцах товч) */
+const appbar = (title, sub="", back=false) => `<header class="fhead">${back?`<button class="hback" type="button" data-hback aria-label="Буцах">${ic("back")}</button>`:""}<img class="hlogo" src="/logo.png" alt="Ерөө говь ХХК"/><div class="ht"><h2>${title}</h2>${sub?`<span>${sub}</span>`:""}</div></header>`;
+/* Самбарын хуудасны гарчиг */
+const phead = (title, sub="", right="") => `<div class="phead"><div><h2 class="ptitle">${title}</h2>${sub?`<p class="muted">${sub}</p>`:""}</div>${right}</div>`;
+
 async function hashPin(sap, pin){
   const data = new TextEncoder().encode("eahs|"+String(sap).trim()+"|"+String(pin).trim());
   const buf = await crypto.subtle.digest("SHA-256", data);
@@ -348,17 +391,22 @@ function landing(){
       <div>
         <div class="land-in">
           <div class="brand">
-            <div class="logo" aria-hidden="true">🍃</div>
-            <div><h1>ЭАХС</h1><p>Эрүүл ахуйн хяналтын систем</p></div>
+            <img class="logo" src="/logo.png" alt="Ерөө говь ХХК" width="148" height="117"/>
+            <span class="kicker">${ic("shield","sm")} Ерөө говь ХХК</span>
+            <h1>ЭАХС<br><span>Эрүүл ахуйн хяналт</span></h1>
+            <p>Ажилтны эрүүл мэнд, ариун цэвэр, ядаргаа, аюулын мэдээллийг нэг дор — утас, компьютер дээр.</p>
+            <div class="sites" aria-label="Талбарууд">${ALBA.map(a=>`<span>${esc(a)}</span>`).join("")}</div>
           </div>
-          <nav class="menu">
-            <button class="menu-btn solid" data-g="worker">👤 Ажилтан нэвтрэх <span>›</span></button>
-            <button class="menu-btn line" data-g="hazard">⚠ Аюулыг мэдээлэх (нэвтрэхгүй) <span>›</span></button>
-            <button class="menu-btn solid" data-g="supervisor">📋 Ахлах нэвтрэх <span>›</span></button>
-            <button class="menu-btn solid" data-g="hygiene">✚ Эрүүл ахуйчийн самбар <span>›</span></button>
+          <nav class="menu" aria-label="Нэвтрэх сонголт">
+            <div class="menu-h">Нэвтрэх</div>
+            <button class="menu-btn" data-g="worker"><span class="mi">${ic("user")}</span><span><b>Ажилтан</b><small>УХААН, ядаргаа, халдварын асуумж</small></span>${ic("chev","chev")}</button>
+            <button class="menu-btn" data-g="supervisor"><span class="mi">${ic("clipboard")}</span><span><b>Ахлах</b><small>УХААН батлах, ариун цэврийн хяналт</small></span>${ic("chev","chev")}</button>
+            <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
+            <hr/>
+            <button class="menu-btn alt" data-g="hazard"><span class="mi">${ic("alert")}</span><span><b>Аюулыг мэдээлэх</b><small>Нэвтрэхгүйгээр шууд илгээнэ</small></span>${ic("chev","chev")}</button>
           </nav>
         </div>
-        <div class="foot-sites">Оюут · Манлай · Эрчим баар · Оффис</div>
+        <div class="foot-sites">© Ерөө говь ХХК · Эрүүл ахуйн хяналтын систем</div>
       </div>
     </div>`);
   app.onclick = e=>{
@@ -376,19 +424,21 @@ function homeFor(u){
 function loginForm(role){
   view(()=>loginForm(role), false);
   const app = mount(`
-    <header class="fhead"><h2>ЭАХС</h2><span>${esc(roleName(role))} нэвтрэх</span></header>
+    ${appbar("ЭАХС", esc(roleName(role))+" нэвтрэх", true)}
     <div class="loginbox">
       <form class="card" id="lf" autocomplete="on">
+        <div class="lhead"><span class="mi">${ic(role==="worker"?"user":role==="supervisor"?"clipboard":"shield","lg")}</span><div><h3>${esc(roleName(role))} нэвтрэх</h3><p>SAP дугаар болон нууц үгээ оруулна уу</p></div></div>
         <label class="f" for="sap">SAP / нэвтрэх нэр</label><input id="sap" name="username" autocomplete="username" required/>
         <label class="f" for="pin">Нууц үг</label><input id="pin" name="password" type="password" autocomplete="current-password" required/>
         <div id="lerr" class="errtxt" role="alert"></div>
-        <button class="btn" type="submit">Нэвтрэх</button>
+        <button class="btn" type="submit">${ic("key")} Нэвтрэх</button>
         <div class="gap"></div>
         <button class="btn ghost" type="button" id="back">Буцах</button>
       </form>
     </div>`);
   $("#sap").focus();
   $("#back").onclick = landing;
+  $("[data-hback]").onclick = landing;
   app.onsubmit = async e=>{
     e.preventDefault();
     const sap = $("#sap").value.trim(), pin = $("#pin").value.trim();
@@ -433,29 +483,33 @@ function workerHome(){
   let hygHtml = "";
   if(hs){
     const r = hs.h.rows[hs.rk]; const st = rowStatus(r);
-    hygHtml = `<div class="card"><b>Ариун цэврийн хяналт · ${esc(hs.h.date)}</b>
+    hygHtml = `<div class="card"><div class="ctitle">${ic("drop")}<h3>Ариун цэврийн хяналт</h3><span class="muted">${esc(hs.h.date)}</span></div>
       <p>${st==="fail"?'<span class="badge b-bad">Шаардлага хангаагүй — ажиллахгүй</span>':st==="ok"?'<span class="badge b-ok">Шаардлага хангасан</span>':'<span class="badge b-wait">Бүрэн шалгаагүй</span>'}</p>
       <div class="critmini">${HYG_CRIT.map((c,i)=>`<span class="${cellVal(r,i)==="no"?"bad":cellVal(r,i)==="ok"?"good":""}">${cellSym(cellVal(r,i))||"·"} ${esc(c)}</span>`).join("")}</div>
       ${r.sign?`<p class="muted">Танилцсан: ${esc(r.signAt||"")}</p>`:`<button class="btn" id="hsign" data-id="${esc(hs.h.id)}" data-rk="${esc(hs.rk)}">Танилцсан (гарын үсэг)</button>`}
     </div>`;
   }
+  const infTodo = roster && !infect;
+  const task = (id, icon, title, sub, state, stTxt) => `<button class="home-btn ${state}" id="${id}"><span class="mi">${ic(icon)}</span><span><b>${title}</b><span class="muted">${esc(sub)}</span></span><span class="st">${stTxt}</span></button>`;
   const app = mount(`
-    <header class="fhead"><h2>ЭАХС · Ажилтан</h2><span>${esc(u.name)}</span></header>
+    ${appbar("ЭАХС · Ажилтан", esc(u.alba||""))}
     <main class="page">
-    <div class="card row-between"><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(u.alba)}</div></div>
-      <button class="btn ghost sm" id="out">Гарах</button></div>
-    <button class="home-btn" id="uhaan"><b>УХААН</b>
-      <span class="muted">${uhaan.length?"Өнөөдөр бөглөсөн":"Өнөөдөр бөглөөгүй — ажил эхлэхийн өмнө"}</span></button>
-    <button class="home-btn" id="fat"><b>Ядаргаа</b>
-      <span class="muted">${needF?"Бөглөх хугацаа болсон":"Дараагийн бөглөлт хүлээгдэж байна"}</span></button>
-    <button class="home-btn" id="inf"><b>Халдварын асуумж</b>
-      <span class="muted">${esc(infTxt)}</span></button>
-    ${hygHtml}
-    <div class="card"><b>Миний баримт</b>
-      <p>Цагаан дэвтэр: ${esc(u.bookExp||"—")} ${expBadge(u.bookExp)}</p>
-      <p>Жилийн шинжилгээ: ${esc(u.exam||"—")} ${expBadge(u.exam)}</p>
+    <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(u.alba)}</div></div></div>
+      <button class="btn ghost sm" id="out">${ic("logout","sm")} Гарах</button></div>
+    <div class="sec-t">Өнөөдрийн ажил · ${today()}</div>
+    <div class="tasks">
+    ${task("uhaan","checks","УХААН", uhaan.length?"Өнөөдөр бөглөсөн":"Өнөөдөр бөглөөгүй — ажил эхлэхийн өмнө", uhaan.length?"done":"todo", uhaan.length?"Бөглөсөн":"Бөглөх")}
+    ${task("fat","battery","Ядаргаа", needF?"Бөглөх хугацаа болсон":"Дараагийн бөглөлт хүлээгдэж байна", needF?"todo":"done", needF?"Бөглөх":"Хийгдсэн")}
+    ${task("inf","virus","Халдварын асуумж", infTxt, infTodo?"todo":infect?"done":"idle", infTodo?"Бөглөх":infect?"Илгээсэн":"Шаардлагагүй")}
     </div>
-    <button class="btn ghost" id="haz">⚠ Аюул мэдэгдэх</button></main>`);
+    ${hygHtml}
+    <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
+      <div class="docs">
+        <div class="doc"><span>Цагаан дэвтэр</span><b>${esc(u.bookExp||"—")}</b>${expBadge(u.bookExp)}</div>
+        <div class="doc"><span>Жилийн шинжилгээ</span><b>${esc(u.exam||"—")}</b>${expBadge(u.exam)}</div>
+      </div>
+    </div>
+    <button class="btn ghost" id="haz">${ic("alert")} Аюул мэдэгдэх</button></main>`);
   $("#out").onclick = landing;
   $("#uhaan").onclick = uhaanForm;
   $("#fat").onclick = ()=> needF ? fatigueForm() : toast("Одоо бөглөх шаардлагагүй");
@@ -496,8 +550,8 @@ function uhaanForm(){
   const u = me(); if(!u) return landing();
   view(uhaanForm, false);
   const app = mount(`
-    <header class="fhead"><h2>УХААН</h2><span>${esc(u.name)}</span></header>
-    <div class="paper">
+    ${appbar("УХААН", esc(u.name), true)}
+    <div class="paper"><div class="formcard">
       <h3>Ямагт ажил эхлэхийн өмнө УХААН-ы тохирлыг шалгадаг байх</h3>
       <p class="muted">${esc(u.name)} · ${esc(u.sap)} · ${today()} · ${esc(u.alba)}</p>
       <label class="f" for="job">Миний ажил</label><input id="job" value="${esc(u.job||"")}"/>
@@ -506,19 +560,19 @@ function uhaanForm(){
       <p class="muted">Хэрэв БАЙГАА бол журмыг уншиж ойлгосон байх. Хэрэв ТИЙМ бол ойр ажилтнуудад анхааруулах.</p>
       <h4>Хор хөнөөл, аюул бүрийг тодорхойл</h4>
       ${U2.map((t,i)=>triRow("b"+i,t)).join("")}
-      <p class="warnbox">Агааржуулалт ✕ бол ажлаа зогсоож хяналтанд авна.</p>
+      <p class="warnbox">${ic("alert","sm")}<span>Агааржуулалт ✕ бол ажлаа зогсоож хяналтанд авна.</span></p>
       <h4>Миний хийх ажил надаас дараахыг шаардана</h4>
       ${U3.map((t,i)=>triRow("c"+i,t)).join("")}
-      <p class="warnbox">Аль нэг ✓ (шаардана) бол ажлаа зогсоож хяналтанд авна.</p>
+      <p class="warnbox">${ic("alert","sm")}<span>Аль нэг ✓ (шаардана) бол ажлаа зогсоож хяналтанд авна.</span></p>
       <label class="f" for="risk">Аюулыг удирдаагүйгээс юу тохиолдож болох вэ?</label><textarea id="risk" maxlength="1000"></textarea>
       <label class="f" for="ctrl">Ямар хяналтуудыг хэрэгжүүлж болох вэ?</label><textarea id="ctrl" maxlength="1000"></textarea>
-      <p>Нэн тэргүүнд аюулгүй бай. Хянах боломжгүй бол ажлаа зогсоож ахлагчид мэдэгд.</p>
-      <button class="btn" id="send">Илгээх</button>
-      <div class="gap"></div>
-      <button class="btn ghost" id="back">Буцах</button>
-    </div>`);
+      <p class="note">Нэн тэргүүнд аюулгүй бай. Хянах боломжгүй бол ажлаа зогсоож ахлагчид мэдэгд.</p>
+      <div class="actions">
+      <button class="btn" id="send">${ic("send")} Илгээх</button>
+      <button class="btn ghost" id="back">Буцах</button></div>
+    </div></div>`);
   bindTri(app);
-  $("#back").onclick = workerHome;
+  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#send").onclick = ()=>{
     const a=collectTri("a",U1.length), b=collectTri("b",U2.length), c=collectTri("c",U3.length);
     if(Object.values({...a,...b,...c}).some(v=>!v)){ toast("Бүх мөрийг ✓ / — / ✕-ээр тэмдэглэнэ үү"); return; }
@@ -548,13 +602,13 @@ function fatigueForm(){
   view(fatigueForm, false);
   const g = u.gender==="Эм";
   const app = mount(`
-    <header class="fhead"><h2>✚ Алжаал ядаргааны үнэлгээ</h2><span>Олон нийтийн эрүүл мэндийн үнэлгээний хэрэгсэл</span></header>
+    ${appbar("Алжаал ядаргааны үнэлгээ", "Олон нийтийн эрүүл мэндийн үнэлгээний хэрэгсэл", true)}
     <main class="fwrap">
       <div class="lockgrid">
-        <div class="cell">🔒 SAP<b>${esc(u.sap)}</b></div>
-        <div class="cell">🔒 Нэр<b>${esc(u.name)}</b></div>
-        <div class="cell">🔒 Огноо<b>${today()}</b></div>
-        <div class="cell">🔒 Тасаг / Нэгж<b>${esc(u.alba)}</b></div>
+        <div class="cell"><span>${ic("lock")}SAP</span><b>${esc(u.sap)}</b></div>
+        <div class="cell"><span>${ic("lock")}Нэр</span><b>${esc(u.name)}</b></div>
+        <div class="cell"><span>${ic("lock")}Огноо</span><b>${today()}</b></div>
+        <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b>${esc(u.alba)}</b></div>
       </div>
       ${qblock("q5","1. Сүүлийн 24 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 24 цагт нийт хэдэн цаг унтав?",["7 ба түүнээс их","6-7 цаг","6 цагаас бага"])}
       ${qblock("q6","2. Сүүлийн 48 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 48 цагт нийт хэдэн цаг унтав?",["14 цагаас их","12-14","12 цагаас бага"])}
@@ -562,11 +616,11 @@ function fatigueForm(){
       ${qblock("q8", "4. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — "+(g?"ЭМ":"ЭР"),"Та сүүлийн 24 цагт хэдэн стандарт нэгж архи хэрэглэсэн бэ?",["хэрэглээгүй","1-3","4-6"])}
       ${qblock("q10","5. Эмийн хэрэглээ (сүүлийн 24 цаг)","Та сүүлийн 24 цагт ямар нэг эм, нойрны эм, тайвшруулах эм хэрэглэсэн үү?",["Үгүй","Тийм"])}
       ${qblock("q11","6. Анхаарал төвлөрөл / Сэтгэцийн хурц байдал","Та өөрийгөө ямар түвшинд үнэлэх вэ?",["Маш сайн / Хурц","Дунд зэрэг / Хангалттай","Муу / Бүдэг"])}
-      <button class="btn" id="calc">Оноо тооцох →</button>
-      <div class="gap"></div><button class="btn ghost" id="back">Буцах</button>
+      <div class="actions"><button class="btn" id="calc">Оноо тооцох ${ic("chev")}</button>
+      <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
   bindOpts(app);
-  $("#back").onclick = workerHome;
+  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#calc").onclick = ()=>{
     const ids=["q5","q6","q7","q8","q10","q11"];
     if(ids.some(i=>!optVal(i))){ toast("Бүх асуултыг сонгоно уу"); return; }
@@ -600,7 +654,7 @@ function infectForm(){
   const u = me(); if(!u) return landing();
   view(infectForm, false);
   const app = mount(`
-    <header class="fhead"><h2>Гэдэсний халдварт өвчнийг тандах</h2></header>
+    ${appbar("Гэдэсний халдварт өвчнийг тандах", esc(u.name), true)}
     <main class="fwrap">
       <p class="muted">ГХӨ-г эрт илрүүлэх, халдвар дамжихаас сэргийлэх зорилготой.</p>
       <div class="lockgrid two">
@@ -611,12 +665,11 @@ function infectForm(){
       <input type="date" id="arrive" value="${today()}"/>
       ${INF_QS.map(q=>`<div class="qcard" id="${q.id}"><h3>${esc(q.t)}</h3>
         <div class="opts ${q.o.length===3?"":"two"}" role="radiogroup">${q.o.map(o=>`<button type="button" class="opt" role="radio">${esc(o)}</button>`).join("")}</div></div>`).join("")}
-      <button class="btn" id="send">Илгээх</button>
-      <div class="gap"></div>
-      <button class="btn ghost" id="back">Буцах</button>
+      <div class="actions"><button class="btn" id="send">${ic("send")} Илгээх</button>
+      <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
   bindOpts(app);
-  $("#back").onclick = workerHome;
+  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#send").onclick = ()=>{
     if(INF_QS.some(q=>!optVal(q.id))){ toast("Бүх асуултыг хариулна уу"); return; }
     const id=uid();
@@ -690,12 +743,12 @@ function hazardForm(){
           <div class="otv"><textarea id="act" maxlength="1000" rows="4" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?..."></textarea></div></div>
       </div>
       <div class="otbar"><b>НЭМЭЛТ: ЗУРАГ</b><span>PHOTOS (2–8)</span></div>
-      <label class="drop">📷 Зураг оруулах — багадаа 2, дээд тал нь 8 зураг (JPG/PNG)
+      <label class="drop">${ic("camera")}<span>Зураг оруулах — багадаа 2, дээд тал нь 8 зураг (JPG/PNG)</span>
         <input type="file" id="pics" accept="image/*" multiple/></label>
       <div class="thumbs" id="thumbs"></div>
       <div id="hzerr" class="errtxt" role="alert"></div>
-      <button class="btn" type="submit" id="send">✉ Илгээх / Submit</button>
-      <p class="muted center">🔒 Таны мэдээлэл нууцлагдана.</p>
+      <button class="btn" type="submit" id="send">${ic("send")} Илгээх / Submit</button>
+      <p class="muted center">${ic("lock","sm")} Таны мэдээлэл нууцлагдана.</p>
       <button class="btn ghost" type="button" id="back">Буцах</button>
       </form>
       <div class="otfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span></span></div>
@@ -746,7 +799,7 @@ async function hazardPrint(id){
   const band = `<div class="pband"><div><h1>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h1><h2>RECORD AN OBSERVED HAZARD</h2></div><img src="/logo.png" alt="Ерөө говь ХХК"/></div>`;
   const foot = n=>`<div class="pfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span>Page ${n} of 2</span></div>`;
   const app = mount(`
-    <div class="printbar noprint"><button class="btn sm" id="pp">🖨 Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">← Аюулын жагсаалт</button></div>
+    <div class="printbar noprint"><button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} Аюулын жагсаалт</button></div>
     <div class="sheet-wrap"><div class="hzsheet">
       <section class="ppage">${band}
         <table class="pt"><colgroup><col style="width:24%"/><col style="width:26%"/><col style="width:24%"/><col style="width:26%"/></colgroup>
@@ -805,16 +858,18 @@ const NAV = {
   hygiene: [["тойм","Тойм"],["ариун","Ариун цэвэр"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
   supervisor: [["тойм","УХААН шалгах"],["ариун","Ариун цэвэр"],["тохиргоо","Тохиргоо"]]
 };
+const NAV_IC = {"тойм":"grid","ариун":"drop","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
-  const title = role==="supervisor" ? `📋 Ахлах · ${esc(u?.alba||"")}` : "✚ Эрүүл ахуйчийн хяналтын самбар";
+  const title = role==="supervisor" ? `Ахлах · ${esc(u?.alba||"")}` : "Эрүүл ахуйчийн самбар";
   return `<div class="dash">
     <aside class="side">
-      <h1>${title}<small>${esc(u?.name||"")}</small></h1>
-      <nav class="navs">
-      ${NAV[role].map(([k,l])=>`<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${esc(l)}</button>`).join("")}
-      <button class="navb out" data-nav="гарах">Гарах</button>
+      <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
+      <nav class="navs" aria-label="Цэс">
+      ${NAV[role].map(([k,l])=>`<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span></button>`).join("")}
+      <button class="navb out" data-nav="гарах">${ic("logout")}<span>Гарах</span></button>
       </nav>
+      <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(u.alba):""}</span></div></div>
     </aside>
     <main class="main">${inner}</main>
   </div>`;
@@ -834,8 +889,8 @@ function bindNav(app, extra){
     if(extra) extra(e);
   };
 }
-const tbl = (head, rows, empty="Хоосон") =>
-  `<div class="tw"><table><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")||`<tr><td colspan="${head.length}" class="muted">${esc(empty)}</td></tr>`}</tbody></table></div>`;
+const tbl = (head, rows, empty="Одоогоор бүртгэл алга") =>
+  `<div class="tw"><table><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")||`<tr><td colspan="${head.length}" class="empty-td">${emptyState(empty, "Шинэ бүртгэл орж ирэхэд энд харагдана")}</td></tr>`}</tbody></table></div>`;
 function requireRole(...roles){ const u=me(); if(!u || !roles.includes(u.role)){ landing(); return null; } return u; }
 
 /* ======================= АХЛАХ ======================= */
@@ -850,10 +905,9 @@ function supervisorHome(){
   view(supervisorHome, true);
   const l = list("uhaan").filter(x=>x.alba===u.alba).sort(byNew);
   const app = mount(shell("тойм", `
-    <h2 class="pt">УХААН шалгах</h2>
-    <p class="muted">${esc(u.alba)} · Өнөөдөр: ${today()}</p>
+    ${phead("УХААН шалгах", `${esc(u.alba)} · Өнөөдөр: ${today()}`)}
     ${hygDueCard(u.alba)}
-    <div class="card"><h3>УХААН — ${esc(u.alba)}</h3>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`))}</div>`));
+    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(u.alba)}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`), "УХААН бүртгэл алга")}</div>`));
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba); });
 }
 function viewUhaan(id){
@@ -861,21 +915,21 @@ function viewUhaan(id){
   const u = me(); const who = u?.role;
   view(()=>viewUhaan(id), false);
   const sym = v => v==="ok"?"✓":v==="na"?"—":v==="no"?"✕":"?";
-  const show=(a,pref,src)=>a.map((t,i)=>`<div class="item"><p>${esc(t)}</p><b>${sym((src||{})[pref+i])}</b></div>`).join("");
-  const app = mount(`<header class="fhead"><h2>УХААН · ${esc(x.name)}</h2><span>${esc(x.date)}</span></header><div class="paper">
+  const show=(a,pref,src)=>a.map((t,i)=>`<div class="item inl"><p>${esc(t)}</p><b>${sym((src||{})[pref+i])}</b></div>`).join("");
+  const app = mount(`${appbar("УХААН · "+esc(x.name), esc(x.date), true)}<div class="paper"><div class="formcard">
     <p class="muted">${esc(x.date)} ${esc(x.time||"")} · ${esc(x.alba)} · ${esc(x.job||"")}</p>
-    ${x.stop?'<div class="warnbox">Зогсоох нөхцөл илэрсэн</div>':""}
+    ${x.stop?`<div class="warnbox bad">${ic("alert","sm")}<span>Зогсоох нөхцөл илэрсэн</span></div>`:""}
     <h4>Урьдаар тооц</h4>${show(U1,"a",x.a)}
     <h4>Хор хөнөөл</h4>${show(U2,"b",x.b)}
     <h4>Ажлын шаардлага</h4>${show(U3,"c",x.c)}
     <p><b>Эрсдэл:</b> ${esc(x.risk||"—")}</p>
     <p><b>Хяналт:</b> ${esc(x.ctrl||"—")}</p>
     <p>Ахлах: ${esc(x.supervisor||"хүлээгдэж")} ${x.note?"· "+esc(x.note):""}</p>
-    ${who==="supervisor" && x.status==="huleegdej"?`<button class="btn" id="ok">Батална</button><div class="gap"></div><button class="btn warn" id="no">Буцаа</button>`:""}
-    <div class="gap"></div><button class="btn ghost" id="back">Буцах</button>
-  </div>`);
+    <div class="actions">${who==="supervisor" && x.status==="huleegdej"?`<button class="btn" id="ok">${ic("check")} Батална</button><button class="btn warn" id="no">Буцаа</button>`:""}
+    <button class="btn ghost" id="back">Буцах</button></div>
+  </div></div>`);
   const back = ()=> who==="supervisor"?supervisorHome():hygieneHome();
-  $("#back").onclick=back;
+  $("#back").onclick=back; $("[data-hback]").onclick=back;
   const ok=$("#ok"), no=$("#no");
   if(ok) ok.onclick=()=>{ write({["uhaan/"+id+"/status"]:"batlagdsan", ["uhaan/"+id+"/supervisor"]:u.name+" "+nowStr()}); back(); };
   if(no) no.onclick=()=>{ const n=prompt("Шалтгаан")||""; write({["uhaan/"+id+"/status"]:"butsaasan", ["uhaan/"+id+"/supervisor"]:u.name+" "+nowStr(), ["uhaan/"+id+"/note"]:n}); back(); };
@@ -899,26 +953,25 @@ function hygieneHome(){
   const infBlock=inf.filter(x=>x.verdict==="ersdel" && x.date===today()).length;
   const due = hygDue(today());
   const app = mount(shell("тойм", `
-        <h2 class="pt">Эрүүл ахуйчийн хяналтын самбар</h2>
-        <p class="muted">Өнөөдөр: ${today()}</p>
+        ${phead("Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
         <div class="kpis">
-          <div class="kpi"><i style="background:#d92d20">🔋</i><div>Өндөр ядаргаа<b>${hi}</b><span class="muted">өнөөдөр</span></div></div>
-          <div class="kpi"><i style="background:#dc6803">⚠</i><div>Шинэ аюул<b>${neu}</b><span class="muted">бүртгэл</span></div></div>
-          <div class="kpi"><i style="background:#1570ef">📄</i><div>Баримт ≤30 хоног<b>${exp}</b><span class="muted">ажилтан</span></div></div>
-          <div class="kpi"><i style="background:#7a5af8">🦠</i><div>Халдвар шийдээгүй<b>${infPend}</b><span class="muted">өнөөдөр оруулахгүй: ${infBlock}</span></div></div>
-          <div class="kpi"><i style="background:#079455">🧼</i><div>Ариун цэвэр өнөөдөр<b>${due.done}/${due.total}</b><span class="muted">бүртгэсэн / бүртгэх</span></div></div>
+          <div class="kpi k-red ${hi?"hot":""}"><i>${ic("battery")}</i><div>Өндөр ядаргаа<b>${hi}</b><span class="muted">өнөөдөр</span></div></div>
+          <div class="kpi k-org"><i>${ic("alert")}</i><div>Шинэ аюул<b>${neu}</b><span class="muted">бүртгэл</span></div></div>
+          <div class="kpi k-blu"><i>${ic("file")}</i><div>Баримт ≤30 хоног<b>${exp}</b><span class="muted">ажилтан</span></div></div>
+          <div class="kpi k-vio"><i>${ic("virus")}</i><div>Халдвар шийдээгүй<b>${infPend}</b><span class="muted">өнөөдөр оруулахгүй: ${infBlock}</span></div></div>
+          <div class="kpi k-grn"><i>${ic("drop")}</i><div>Ариун цэвэр өнөөдөр<b>${due.done}/${due.total}</b><span class="muted">бүртгэсэн / бүртгэх</span></div></div>
         </div>
         ${hygDueCard(null)}
-        <div class="card"><h3>Аюулын жагсаалт</h3>
-          ${h.slice(0,6).map(x=>`<div class="item"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||'<p class="muted">Хоосон</p>'}
+        <div class="card"><div class="ctitle">${ic("alert")}<h3>Сүүлийн аюулын мэдээлэл</h3><button class="btn ghost sm" data-nav="аюул" style="margin-left:auto">Бүгд ${ic("chev","sm")}</button></div>
+          ${h.slice(0,6).map(x=>`<div class="hzrow"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")}
         </div>
-        <div class="card"><h3>Ажилтнуудын тойм</h3>
+        <div class="card"><div class="ctitle">${ic("users")}<h3>Ажилтнуудын тойм</h3></div>
           ${tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр"], ws.map(w=>{
             const last=f.find(x=>x.sap===w.sap);
             return `<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(w.alba)}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td>${expBadge(w.bookExp)}</td></tr>`;
           }))}
         </div>
-        <div class="card"><h3>УХААН</h3>
+        <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН</h3></div>
           ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${stU(x)}</td></tr>`))}
         </div>`));
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg); });
@@ -928,28 +981,28 @@ function fatigueListPage(){
   if(!requireRole("hygiene")) return;
   view(fatigueListPage, true);
   const f=list("fatigue").sort(byNew);
-  const app = mount(shell("ядаргаа", `<h2 class="pt">Ядаргаа</h2><div class="card">
-    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':esc(x.level)}</td></tr>`))}</div>`));
+  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Ажилтнуудын бөглөсөн үнэлгээ, шинээс нь")}<div class="card">
+    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
   bindNav(app);
 }
 function hazardListPage(){
   if(!requireRole("hygiene")) return;
   view(hazardListPage, true);
   const h=list("hazards").map(normHazard).sort(byNew);
-  const app = mount(shell("аюул", `<h2 class="pt">Аюул</h2>
-    ${h.map(x=>`<div class="card">
-      <div class="row-between"><b>${esc(x.date)} · ${esc(x.area)} · ${esc(x.risk)}</b>${stH(x.status)}</div>
-      <div class="muted">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</div>
-      <p>${esc(x.det||"")}</p>
+  const app = mount(shell("аюул", `${phead("Аюулын мэдээлэл", "OT-03-FRM-0001-D маягтаар ирсэн бүртгэлүүд")}
+    ${h.map(x=>`<div class="card hzcard">
+      <div class="row-between"><b>${ic("map","sm")} ${esc(x.date)} · ${esc(x.area)}</b>${stH(x.status)}</div>
+      <div class="hzmeta">${x.risk?`<span class="tagp risk">Эрсдэл: ${esc(x.risk)}</span>`:""}<span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span></div>
+      <p class="det">${esc(x.det||"")}</p>
       ${x.act?`<p class="muted"><b>Авсан арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
-      <p class="muted">Мэдээлэгч: ${esc(x.reporter||"—")} · Хянасан: ${esc(x.reviewer||"—")} · Хариуцах: ${esc(x.acc||"—")}</p>
+      <div class="people"><span>Мэдээлэгч: <b>${esc(x.reporter||"—")}</b></span><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах: <b>${esc(x.acc||"—")}</b></span></div>
       <div class="thumbs" data-ph="${esc(x.id)}">${x.photoCount?`<span class="muted">Зураг ачаалж байна… (${esc(x.photoCount)})</span>`:""}</div>
       <div class="row-gap">
         <select data-st="${esc(x.id)}" aria-label="Төлөв">${["Шинэ","Шалгаж байна","Шийдвэрлэсэн"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
-        <button class="btn ghost sm" data-prhz="${esc(x.id)}">🖨 Хэвлэх</button>
-        <button class="btn warn sm" data-delhz="${esc(x.id)}">Устгах</button>
+        <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("printer","sm")} Хэвлэх</button>
+        <button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>
       </div>
-    </div>`).join("")||'<p class="muted">Хоосон</p>'}`));
+    </div>`).join("")||`<div class="card">${emptyState("Аюулын мэдээлэл алга","Ажилтнууд «Аюулыг мэдээлэх» маягтаар илгээнэ","alert")}</div>`}`));
   bindNav(app, e=>{
     const pr=e.target.closest("[data-prhz]"); if(pr){ hazardPrint(pr.dataset.prhz); return; }
     const d=e.target.closest("[data-delhz]");
@@ -969,14 +1022,13 @@ function infectListPage(){
   if(!requireRole("hygiene")) return;
   view(infectListPage, true);
   const inf=list("infect").sort(byNew);
-  const app = mount(shell("халдвар", `<h2 class="pt">Халдвар — үр дүн гаргах</h2>
-    <p class="muted">Ажилтан зөвхөн бөглөсөн. Орж болно / оруулахгүй-г эндээс та тогтооно.</p>
+  const app = mount(shell("халдвар", `${phead("Халдвар — үр дүн гаргах", "Ажилтан зөвхөн бөглөсөн. Орж болно / оруулахгүй-г эндээс та тогтооно.")}
     ${inf.map(x=>{ const v = x.verdict && VERDICT[x.verdict] ? x.verdict : "huleegdej"; return `<div class="card">
-      <b>${esc(x.date)} · ${esc(x.name)}</b> <span class="muted">${esc(x.sap)} · ${esc(x.alba)}</span>
-      <div class="qa">${arr(x.ans).map(a=>`<div class="item"><p>${esc(a.q)}</p><b>${esc(a.a)}</b></div>`).join("")}</div>
+      <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(x.alba)}</div></div></div>
+      <div class="qa">${arr(x.ans).map(a=>`<div class="item inl"><p>${esc(a.q)}</p><b>${esc(a.a)}</b></div>`).join("")}</div>
       <label class="f">Үр дүн</label>
       <select data-inf="${esc(x.id)}" class="v-${v}">${Object.entries(VERDICT).map(([k,l])=>`<option value="${k}" ${k===v?"selected":""}>${l}</option>`).join("")}</select>
-    </div>`;}).join("")||'<p class="muted">Хоосон</p>'}`));
+    </div>`;}).join("")||`<div class="card">${emptyState("Халдварын асуумж алга","Хуваарьтай ажилтан ирэх өдрөө бөглөнө","virus")}</div>`}`));
   bindNav(app);
   app.onchange = e=>{
     const s=e.target.closest("[data-inf]");
@@ -987,7 +1039,7 @@ function bookPage(){
   if(!requireRole("hygiene")) return;
   view(bookPage, true);
   const ws=workers().sort((a,b)=>String(a.bookExp||"9").localeCompare(String(b.bookExp||"9")));
-  const app = mount(shell("дэвтэр", `<h2 class="pt">Цагаан дэвтэр / жилийн шинжилгээ</h2><div class="card">
+  const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр / жилийн шинжилгээ", "Дуусах хугацаагаар эрэмбэлсэн")}<div class="card">
     ${tbl(["Нэр","SAP","Алба","Дэвтэр","Шинжилгээ"], ws.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(w.alba)}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`))}</div>`));
   bindNav(app);
 }
@@ -996,17 +1048,17 @@ function rosterPage(){
   view(rosterPage, true);
   const ws=workers().sort((a,b)=>a.name.localeCompare(b.name));
   const rs=list("roster").sort((a,b)=>String(b.arrive).localeCompare(String(a.arrive)));
-  const app = mount(shell("хуваарь", `<h2 class="pt">Талбарын хуваарь</h2>
+  const app = mount(shell("хуваарь", `${phead("Талбарын хуваарь", "Ажилтны ирэх / гарах өдөр")}
     <form class="card" id="rf">
       <div class="g3">
         <div><label class="f" for="rsap">Ажилтан</label><select id="rsap">${ws.map(u=>`<option value="${esc(u.sap)}">${esc(u.name)} (${esc(u.sap)}) · ${esc(u.alba)}</option>`).join("")}</select></div>
         <div><label class="f" for="arrive">Ирэх өдөр</label><input type="date" id="arrive" value="${today()}" required/></div>
         <div><label class="f" for="leave">Гарах өдөр</label><input type="date" id="leave"/></div>
       </div>
-      <div class="gap"></div><button class="btn" type="submit">Нэмэх</button>
+      <div class="gap"></div><button class="btn" type="submit">${ic("plus")} Нэмэх</button>
     </form>
     <div class="card">${tbl(["Ирэх","Нэр","Алба","Гарах",""], rs.map(x=>{ const w=DB.users[keyOf(x.sap)];
-      return `<tr><td>${esc(x.arrive)}</td><td>${esc(x.name)}</td><td>${esc(w?.alba||"")}</td><td>${esc(x.leave||"")}</td><td><button class="btn ghost sm" data-delr="${esc(x.id)}">Устгах</button></td></tr>`;}))}</div>`));
+      return `<tr><td>${esc(x.arrive)}</td><td>${esc(x.name)}</td><td>${esc(w?.alba||"")}</td><td>${esc(x.leave||"")}</td><td><button class="btn warn sm" data-delr="${esc(x.id)}">${ic("trash","sm")} Устгах</button></td></tr>`;}), "Хуваарь бүртгээгүй байна")}</div>`));
   bindNav(app, e=>{
     const d=e.target.closest("[data-delr]");
     if(d && confirm("Хуваарийг устгах уу?")) write({["roster/"+d.dataset.delr]: null});
@@ -1029,9 +1081,9 @@ function usersPage(editSap){
   const all = users().sort((a,b)=>(a.role+a.name).localeCompare(b.role+b.name));
   const ed = editSap ? DB.users[keyOf(editSap)] : null;
   const opt = (vals, cur) => vals.map(v=>`<option value="${esc(v[0])}" ${v[0]===cur?"selected":""}>${esc(v[1])}</option>`).join("");
-  const app = mount(shell("ажилтан", `<h2 class="pt">Ажилтнууд</h2>
+  const app = mount(shell("ажилтан", `${phead("Ажилтнууд", "Хэрэглэгч нэмэх, засах, Excel-ээр оруулах")}
     <form class="card" id="uf">
-      <h3>${ed?"Засах: "+esc(ed.name):"Шинэ ажилтан"}</h3>
+      <div class="ctitle">${ic(ed?"edit":"plus")}<h3>${ed?"Засах: "+esc(ed.name):"Шинэ ажилтан"}</h3></div>
       <div class="g3">
         <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
@@ -1046,13 +1098,13 @@ function usersPage(editSap){
       <div class="gap"></div>
       <div class="row-gap"><button class="btn" type="submit">Хадгалах</button>${ed?'<button class="btn ghost" type="button" id="ucancel">Болих</button>':""}</div>
     </form>
-    <div class="card"><h3>Бүх хэрэглэгч (${all.length})</h3>
+    <div class="card"><div class="ctitle">${ic("users")}<h3>Бүх хэрэглэгч (${all.length})</h3></div>
     ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",""], all.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(u.alba)}</td><td>${esc(u.job||"")}</td>
-      <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">Устгах</button>`}</td></tr>`))}
+      <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
     </div>
-    <div class="card"><h3>Excel-ээр оруулах</h3>
+    <div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
       <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр, Шинжилгээ</p>
-      <button class="btn ghost" id="tmpl" type="button">Загвар татах</button>
+      <button class="btn ghost" id="tmpl" type="button">${ic("download")} Загвар татах</button>
       <div class="gap"></div>
       <input type="file" id="ximp" accept=".xlsx"/>
       <div id="ximperr" class="muted"></div>
@@ -1132,16 +1184,16 @@ function settingsPage(){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(settingsPage, false);
   const s=settings(); const hyg = u.role==="hygiene";
-  const app = mount(shell("тохиргоо", `<h2 class="pt">Тохиргоо</h2>
+  const app = mount(shell("тохиргоо", `${phead("Тохиргоо")}
     ${hyg?`<form class="card" id="sf">
-      <h3>Ерөнхий</h3>
+      <div class="ctitle">${ic("sliders")}<h3>Ерөнхий</h3></div>
       <label class="f" for="fd">Ядаргаа хэд хоногт 1</label><input type="number" min="1" max="60" id="fd" value="${esc(s.fatigueDays)}"/>
       <label class="f" for="bl">Баримт дуусахад</label>
       <select id="bl"><option value="0">Зөвхөн анхааруул</option><option value="1" ${s.blockExpired?"selected":""}>Хоригло</option></select>
       <div class="gap"></div><button class="btn" type="submit">Хадгалах</button>
     </form>`:""}
     <form class="card" id="pf">
-      <h3>Нууц үг солих</h3>
+      <div class="ctitle">${ic("key")}<h3>Нууц үг солих</h3></div>
       ${u.mustChange?'<div class="warnbox">Анхны нууц үгээ заавал солино уу.</div>':""}
       <input type="text" name="username" value="${esc(u.sap)}" autocomplete="username" hidden/>
       <label class="f" for="op">Одоогийн нууц үг</label><input type="password" id="op" autocomplete="current-password" required/>
@@ -1194,7 +1246,7 @@ function hygDue(date, alba){
 function hygDueCard(alba){
   const d = hygDue(today(), alba);
   const albas = alba ? [alba] : ALBA;
-  return `<div class="card due"><div class="row-between"><h3>🧼 Ариун цэврийн хяналт — өнөөдөр</h3><span class="muted">2 өдөрт 1 удаа (ээлжийн 1-р өдрөөс)</span></div>
+  return `<div class="card due"><div class="ctitle">${ic("drop")}<h3>Ариун цэврийн хяналт — өнөөдөр</h3><span class="muted">2 өдөрт 1 удаа (ээлжийн 1-р өдрөөс)</span></div>
     <div class="duegrid">${albas.map(a=>{ const b=d.byAlba[a]||{total:0,done:0}; const left=b.total-b.done;
       return `<button class="duebox ${left>0?"warn":b.total?"ok":""}" data-open-hyg="${esc(a)}"><b>${esc(a)}</b>
         <span>${b.total?`${b.done}/${b.total} бүртгэсэн`:"Өнөөдөр бүртгэх хүнгүй"}</span>${left>0?`<em>${left} үлдсэн</em>`:""}</button>`;}).join("")}</div></div>`;
@@ -1204,7 +1256,7 @@ function hygListPage(){
   view(hygListPage, true);
   const sup = u.role==="supervisor";
   const sheets = list("hygcheck").filter(h=>!sup || h.alba===u.alba).sort(byNew);
-  const app = mount(shell("ариун", `<h2 class="pt">${esc(HYG_TITLE)}</h2>
+  const app = mount(shell("ариун", `${phead(esc(HYG_TITLE), "Огноо, албаа сонгоод хуудсаа нээнэ")}
     <form class="card" id="hf">
       <div class="g3">
         <div><label class="f" for="hd">Огноо</label><input type="date" id="hd" value="${today()}" required/></div>
@@ -1213,11 +1265,11 @@ function hygListPage(){
       </div>
     </form>
     ${hygDueCard(sup?u.alba:null)}
-    <div class="card"><h3>Бүртгэсэн хуудсууд</h3>
+    <div class="card"><div class="ctitle">${ic("file")}<h3>Бүртгэсэн хуудсууд</h3></div>
     ${tbl(["Огноо","Алба","Ажилтан","Хангаагүй","Шалгасан",""], sheets.map(h=>{ const rs=rowsOf(h); const bad=rs.filter(r=>rowStatus(r)==="fail").length;
       return `<tr><td>${esc(h.date)}</td><td>${esc(h.alba)}</td><td>${rs.length}</td><td>${bad?`<span class="badge b-bad">${bad}</span>`:'<span class="badge b-ok">0</span>'}</td>
       <td>${h.checkedBy?esc(h.checkedBy):'<span class="muted">—</span>'}</td>
-      <td class="nowrap"><button class="btn sm" data-he="${esc(h.id)}">Засах</button> <button class="btn ghost sm" data-hp="${esc(h.id)}">Хэвлэх</button>${sup?"":` <button class="btn warn sm" data-hdel="${esc(h.id)}">Устгах</button>`}</td></tr>`;}), "Одоогоор хуудас бүртгээгүй")}
+      <td class="nowrap"><button class="btn sm" data-he="${esc(h.id)}">Засах</button> <button class="btn ghost sm" data-hp="${esc(h.id)}">${ic("printer","sm")} Хэвлэх</button>${sup?"":` <button class="btn warn sm" data-hdel="${esc(h.id)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`;}), "Одоогоор хуудас бүртгээгүй")}
     </div>`));
   bindNav(app, e=>{
     const o=e.target.closest("[data-open-hyg]"); if(o){ hygEdit(today(), o.dataset.openHyg); return; }
@@ -1255,9 +1307,9 @@ function hygEdit(date, alba){
     const albaWorkers = users().filter(w=>w.alba===alba && w.role!=="hygiene" && !W.rows.some(r=>r.sap===w.sap)).sort((a,b)=>a.name.localeCompare(b.name));
     const failN = W.rows.filter(r=>rowStatus(r)==="fail").length;
     box.innerHTML = `
-      <div class="row-between wrap"><div><h2 class="pt">${esc(HYG_TITLE)}</h2>
+      <div class="row-between wrap"><div><h2 class="ptitle">${esc(HYG_TITLE)}</h2>
         <p class="muted">Огноо: <b>${esc(date)}</b> · Алба: <b>${esc(alba)}</b> · ${isNew?"Шинэ хуудас":"Хадгалсан хуудас"} · ${W.rows.length} ажилтан ${failN?`· <span class="badge b-bad">${failN} ажиллахгүй</span>`:""}</p></div>
-        <div class="row-gap"><button class="btn ghost sm" data-act="back">← Жагсаалт</button><button class="btn ghost sm" data-act="print">🖨 Хэвлэх</button></div></div>
+        <div class="row-gap"><button class="btn ghost sm" data-act="back">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" data-act="print">${ic("printer","sm")} Хэвлэх</button></div></div>
       <div class="legend"><span><i class="ck ck-ok">√</i> Шаардлага хангасан</span><span><i class="ck ck-no">X</i> Хангаагүй</span><span>Нүдийг дарж солино: хоосон → √ → X</span></div>
       <div class="tw hygtw"><table class="hyg">
         <thead><tr><th rowspan="2">№</th><th rowspan="2">Ажилтны нэр</th><th rowspan="2">Албан тушаал</th><th colspan="${HYG_CRIT.length}">Үзүүлэлт</th><th rowspan="2">Ажилтны гарын үсэг</th><th rowspan="2"></th></tr>
@@ -1284,12 +1336,12 @@ function hygEdit(date, alba){
       <div class="card">
         <div class="g3">
           <div><label class="f" for="chk">Шалгасан (Ахлах ажилтан)</label><input id="chk" value="${esc(W.checkedBy)}" placeholder="Нэр"/></div>
-          <div class="end"><button type="button" class="btn ghost" data-act="confirm">✔ Шалгасан гэж батлах</button></div>
+          <div class="end"><button type="button" class="btn ghost" data-act="confirm">${ic("check")} Шалгасан гэж батлах</button></div>
           <div class="end muted">${W.checkedAt?"Баталсан: "+esc(W.checkedAt):""}</div>
         </div>
         <div class="notes"><b>Анхаарах:</b><ul>${HYG_NOTES.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></div>
       </div>
-      <div class="savebar"><button type="button" class="btn" data-act="save">Хадгалах</button><button type="button" class="btn ghost" data-act="saveprint">Хадгалаад хэвлэх</button></div>`;
+      <div class="savebar"><button type="button" class="btn" data-act="save">${ic("check")} Хадгалах</button><button type="button" class="btn ghost" data-act="saveprint">${ic("printer")} Хадгалаад хэвлэх</button></div>`;
   }
   const rowOf = el => { const tr=el.closest("tr[data-rk]"); return tr ? W.rows.find(r=>r.rk===tr.dataset.rk) : null; };
   function save(silent){
@@ -1345,9 +1397,9 @@ function hygPrint(id){
     return `<tr><td class="c">${i+1}</td><td>${esc(r?.name||"")}</td><td>${esc(r?.pos||"")}</td>${HYG_CRIT.map((_,ci)=>`<td class="c mk ${cellVal(r,ci)==="no"?"x":""}">${cellSym(cellVal(r,ci))}</td>`).join("")}<td class="c sg">${r?.sign?"Танилцсан":""}</td></tr>`; }).join("");
   const app = mount(`
     <div class="printbar noprint">
-      <button class="btn sm" id="pp">🖨 Хэвлэх (A4 хэвтээ)</button>
-      <button class="btn ghost sm" id="pe">Засах</button>
-      <button class="btn ghost sm" id="pb">← Жагсаалт</button>
+      <button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4 хэвтээ)</button>
+      <button class="btn ghost sm" id="pe">${ic("edit","sm")} Засах</button>
+      <button class="btn ghost sm" id="pb">${ic("back","sm")} Жагсаалт</button>
     </div>
     <div class="sheet-wrap"><div class="sheet">
       <div class="sh-top">
@@ -1380,20 +1432,20 @@ function hygPrint(id){
 function reportPage(){
   if(!requireRole("hygiene")) return;
   view(reportPage, false);
-  const app = mount(shell("excel", `<h2 class="pt">Excel татах</h2>
+  const app = mount(shell("excel", `${phead("Excel татах", "УХААН орохгүй. Хэрэгтэй тайлангаа сонгоно уу.")}
     <form class="card" id="xf">
-      <p class="muted">УХААН орохгүй. Хэрэгтэй тайлангаа сонгоно уу.</p>
+      <div class="ctitle">${ic("sheet")}<h3>Тайлан</h3></div>
       <div class="g3">
         <div><label class="f" for="from">Эхлэх</label><input type="date" id="from" value="${addDays(-13)}"/></div>
         <div><label class="f" for="to">Дуусах</label><input type="date" id="to" value="${today()}"/></div>
       </div>
-      <p><b>Аль тайлан</b></p>
+      <label class="f">Аль тайлан</label>
       <label class="chk"><input type="checkbox" id="x-hyg" checked/> Ариун цэврийн хяналт (хуудас бүр тусдаа)</label>
       <label class="chk"><input type="checkbox" id="x-ayul" checked/> Аюул (зурагтай)</label>
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
       <div class="gap"></div>
-      <button class="btn" type="submit" id="xl">Татах</button>
+      <button class="btn" type="submit" id="xl">${ic("download")} Татах</button>
     </form>`));
   bindNav(app);
   app.onsubmit = async e=>{
@@ -1515,7 +1567,7 @@ async function exportExcel(from,to,kinds){
   let started=false;
   const start = ()=>{ started=true; homeFor(me()); };
   if(Object.keys(DB.users).length) start();       // локал өгөгдлөөр шууд харуулна
-  else mount(`<div class="land"><p class="muted">Ачаалж байна…</p></div>`);
+  else mount(`<div class="land"><div class="center"><img src="/logo.png" alt="" width="120" style="opacity:.9"/><p class="muted">Ачаалж байна…</p></div></div>`);
   initCloud().then(()=>{
     if(!started) start();
     else if(session && !me()) landing();
