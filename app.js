@@ -628,49 +628,78 @@ function infectForm(){
 }
 
 let hazardPics = [];
-const HZ_CLS = ["Бодис","Биологийн","Цаг агаарын","Тээврийн хэрэгсэл","Цахилгаан","Байгалийн орчин","Эргономик","Гэрэлтүүлэг","Механик","Хувь хүний","Даралт","Дуу чимээ","Ажлын орчин","Дулаан","Гадаа аюул","Хог хаягдал"];
+/* OT-03-FRM-0001-D «Record an observed hazard checklist v2.0» — бүтэц */
+const HZ_FORM_CODE = "OT-03-FRM-0001-D-Record an observed hazard checklist_v2.0";
+const HZ_TYPES = [["Эрүүл мэнд","Health"],["Аюулгүй ажиллагаа","Safety"],["Байгаль орчин","Environment"],["Аюулгүй байдал","Security"]];
+/* Цаасан хуудсын 4 баганат сүлжээ (null = цаасан дээрх шошгогүй хоосон нүд) */
+const HZ_GRID = [
+  [["Бодисууд","Substances"],["Байгаль орчин Эко систем","Natural environment / Ecosystem"],["Хувийн/Зан чанарын","Personal / Behavioral"],["Дулаан/Гал/Тэсэлгээ","Thermal/ Fire/ Explosion"]],
+  [["Биологийн","Biological"],["Эргономик","Ergonomics"],["Даралт","Pressure"],["Гадны аюулууд","External Threats"]],
+  [["Цаг уур/Байгалийн үзэгдлүүд","Climatic / Natural Events"],null,null,["Бохир/Хаягдал","Waste"]],
+  [["Машин/Тээврийн хэрэгсэл","Vehicles / transportation"],["Гэрэл","Lighting"],["Дуу чимээ/Доргион, чичиргээ","Sound / Vibration"],["Ажлын орчин","Work Environment"]],
+  [["Цахилгаан / Соронзон орон","Electric / Magnetic"],["Механик","Mechanical"],["Нийгэм / Соёлын","Social / Cultural"],null]
+];
+const HZ_CLS = HZ_GRID.flat().filter(Boolean);
+const HZ_RISK = [["Бага","Low"],["Дунд зэрэг","Moderate"],["Их","High"],["Маш их","Critical"]];
+/* Хуучин (v1 маягт) утгуудыг шинэ шошго руу */
+const HZ_CLS_OLD = {"Бодис":"Бодисууд","Цаг агаарын":"Цаг уур/Байгалийн үзэгдлүүд","Тээврийн хэрэгсэл":"Машин/Тээврийн хэрэгсэл","Цахилгаан":"Цахилгаан / Соронзон орон",
+  "Байгалийн орчин":"Байгаль орчин Эко систем","Байгаль орчин / эко систем":"Байгаль орчин Эко систем","Гэрэлтүүлэг":"Гэрэл","Хувь хүний":"Хувийн/Зан чанарын","Дуу чимээ":"Дуу чимээ/Доргион, чичиргээ",
+  "Дулаан":"Дулаан/Гал/Тэсэлгээ","Гадаа аюул":"Гадны аюулууд","Хог хаягдал":"Бохир/Хаягдал"};
+function normHazard(x){
+  x = x || {};
+  let types = arr(x.types);
+  if(x.form!=="OT-03-v2"){   // хуучин маягт: "Аюулгүй байдал"=Safety, "Хамгаалалт"=Security байсан
+    types = types.map(t=> t==="Аюулгүй байдал" ? "Аюулгүй ажиллагаа" : t==="Хамгаалалт" ? "Аюулгүй байдал" : t);
+  }
+  const cls = arr(x.cls).map(c=> HZ_CLS_OLD[c] || c);
+  return {...x, types, cls};
+}
+const hzMark = on => on ? "☒" : "☐";
 function hazardForm(){
   hazardPics = [];
   view(hazardForm, false);
   const u = me();
   const back = ()=> u? homeFor(u) : landing();
+  const lbl = (mn,en,forId)=>`<label class="otl" ${forId?`for="${forId}"`:""}><b>${esc(mn)}</b>${en?`<i>${esc(en)}</i>`:""}</label>`;
+  const chk = (name,[mn,en],type="checkbox")=>`<label class="otc"><input type="${type}" name="${name}" value="${esc(mn)}"/><span><b>${esc(mn)}</b><i>${esc(en)}</i></span></label>`;
   const app = mount(`
-    <div class="hpage"><div class="hcard">
-      <div class="hhead">
-        <div><b class="teal">Oyu Tolgoi</b></div>
-        <div class="center"><h2>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h2><div class="muted">RECORD AN OBSERVED HAZARD</div></div>
-        <div aria-hidden="true">🛡</div>
+    <div class="otpage">
+      <div class="otband"><div><h1>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h1><h2>RECORD AN OBSERVED HAZARD</h2></div><img src="/logo.png" alt="Ерөө говь ХХК"/></div>
+      <form id="hzf" novalidate>
+      <div class="otbar big"><b>ЕРӨНХИЙ МЭДЭЭЛЭЛ</b><span>HAZARD HEADER</span></div>
+      <div class="otgrid">
+        <div class="otrow full">${lbl("Аюулыг харсан газар, харъяа хэлтэс:","What work area was the hazard observed in?","area")}
+          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(u?.alba||"")}" placeholder="Жишээ: Оюут баар, гал тогоо"/>
+          <datalist id="albaList">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div></div>
+        <div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","","hdate")}<div class="otv"><input type="date" id="hdate" value="${today()}" max="${today()}" required/></div></div>
+        <div class="otrow">${lbl("Аюулыг хянаж бууруулах ажлыг хариуцах хэлтэс:","What part of the organisation is accountable for the hazard?","acc")}<div class="otv"><input id="acc" maxlength="120"/></div></div>
+        <div class="otrow">${lbl("Аюулыг мэдээлсэн хүн:","Hazard Reporter:","rep")}<div class="otv"><input id="rep" maxlength="120" value="${esc(u?.name||"")}" placeholder="Нэр, албан тушаал"/></div></div>
+        <div class="otrow">${lbl("Аюулыг хянаж , судласан хүн (ахлах ажилтан):","Hazard Reviewer:","rev")}<div class="otv"><input id="rev" maxlength="120" placeholder="Нэр, албан тушаал"/></div></div>
       </div>
-      <div class="hbar">ЕРӨНХИЙ МЭДЭЭЛЭЛ  GENERAL INFORMATION</div>
-      <div class="hgrid">
-        <div><label for="area">Ажлын талбар</label><select id="area">${ALBA.map(a=>`<option>${esc(a)}</option>`).join("")}</select></div>
-        <div><label for="hdate">Огноо</label><input type="date" id="hdate" value="${today()}"/></div>
-        <div><label for="acc">Хариуцах хэлтэс</label><input id="acc" maxlength="100" placeholder="Сонгоно уу"/></div>
-        <div><label for="rep">Мэдээлэгч</label><input id="rep" maxlength="100" value="${esc(u?.name||"")}" placeholder="Нэр, албан тушаал"/></div>
-        <div><label for="rev">Шалгагч</label><input id="rev" maxlength="100" placeholder="Нэр, албан тушаал"/></div>
+      <div class="otbar"><b>АЮУЛЫН ТАЙЛБАР</b><span>HAZARD DESCRIPTION</span></div>
+      <div class="otgrid">
+        <div class="otrow full">${lbl("Аюулын төрөл","What type of hazard did you observe?")}
+          <div class="otv otchecks c3" id="types">${[HZ_TYPES[0],HZ_TYPES[1],HZ_TYPES[2],null,HZ_TYPES[3],null].map(t=>t?chk("type",t):'<div class="otc-empty"></div>').join("")}</div></div>
+        <div class="otrow full">${lbl("Тухайн аюулыг аль ангилалд хамааруулах вэ?","What hazard type would you classify the hazard as?")}
+          <div class="otv otchecks c4" id="cls">${HZ_GRID.flat().map(t=>t?chk("cls",t):'<div class="otc-empty"></div>').join("")}</div></div>
+        <div class="otrow full">${lbl("Эрсдлийн түвшинг өөрийн сэтгэгдлээр илэрхийлнэ үү?","What is your impression of the risk?")}
+          <div class="otv otchecks c4 risk" id="riskg">${HZ_RISK.map(t=>chk("risk",t,"radio")).join("")}</div></div>
+        <div class="otrow full">${lbl("Харсан аюулаа дэлгэрэнгүй дүрсэлж бичнэ үү?","Record details of the hazard","det")}
+          <div class="otv"><textarea id="det" maxlength="1000" rows="5" required placeholder="Аюулын байршил, нөхцөл, юу ажиглагдсаныг дэлгэрэнгүй бичнэ үү..."></textarea></div></div>
+        <div class="otrow full">${lbl("Авсан шуурхай арга хэмжээ","Were any immediate actions taken?","act")}
+          <div class="otv"><textarea id="act" maxlength="1000" rows="4" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?..."></textarea></div></div>
       </div>
-      <div class="hbar">АЮУЛЫН ТАЙЛБАР  HAZARD DESCRIPTION</div>
-      <p>Аюулын төрөл / Hazard type</p>
-      <div class="types" id="types">${["Эрүүл мэнд / Health","Аюулгүй байдал / Safety","Байгаль орчин / Environment","Хамгаалалт / Security"].map(t=>`<label><input type="checkbox" value="${esc(t.split(" / ")[0])}"/> ${esc(t)}</label>`).join("")}</div>
-      <p>Аюулын ангилал (нэгийг сонгоно)</p>
-      <div class="cls" id="cls">${HZ_CLS.map(t=>`<button type="button">${esc(t)}</button>`).join("")}</div>
-      <label class="f" for="det">Аюулын дэлгэрэнгүй тайлбар</label><textarea id="det" maxlength="1000" rows="3" placeholder="Аюулын байршил, нөхцөл, юу ажиглагдсаныг дэлгэрэнгүй бичнэ үү..."></textarea>
-      <label class="f" for="act">Шууд авсан арга хэмжээ</label><textarea id="act" maxlength="500" rows="2" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?..."></textarea>
-      <label class="f" for="risk">Эрсдэл</label>
-      <select id="risk"><option>Бага</option><option>Дунд зэрэг</option><option>Их</option><option>Маш их</option></select>
+      <div class="otbar"><b>НЭМЭЛТ: ЗУРАГ</b><span>PHOTOS (2–8)</span></div>
       <label class="drop">📷 Зураг оруулах — багадаа 2, дээд тал нь 8 зураг (JPG/PNG)
         <input type="file" id="pics" accept="image/*" multiple/></label>
       <div class="thumbs" id="thumbs"></div>
-      <button class="btn" id="send">✉ Илгээх / Submit</button>
+      <div id="hzerr" class="errtxt" role="alert"></div>
+      <button class="btn" type="submit" id="send">✉ Илгээх / Submit</button>
       <p class="muted center">🔒 Таны мэдээлэл нууцлагдана.</p>
-      <button class="btn ghost" id="back">Буцах</button>
-    </div></div>`);
-  let pickedCls="";
-  $("#cls").onclick=e=>{
-    const b=e.target.closest("button"); if(!b) return;
-    $$("#cls button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on"); pickedCls=b.textContent;
-  };
+      <button class="btn ghost" type="button" id="back">Буцах</button>
+      </form>
+      <div class="otfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span></span></div>
+    </div>`);
   const drawThumbs = ()=> $("#thumbs").innerHTML = hazardPics.map((s,i)=>`<div class="th"><img src="${s}" alt=""><button type="button" data-rm="${i}" aria-label="Устгах">×</button></div>`).join("");
   $("#thumbs").onclick = e=>{ const b=e.target.closest("[data-rm]"); if(b){ hazardPics.splice(+b.dataset.rm,1); drawThumbs(); } };
   $("#pics").onchange = async e=>{
@@ -682,20 +711,74 @@ function hazardForm(){
     e.target.value=""; drawThumbs();
   };
   $("#back").onclick = back;
-  $("#send").onclick = ()=>{
-    if(hazardPics.length<2){ toast("Багадаа 2 зураг оруулна уу"); return; }
-    if(!$("#det").value.trim()){ toast("Аюулын тайлбар бичнэ үү"); return; }
-    const types=$$("#types input:checked").map(x=>x.value);
+  app.onchange = app.oninput = ()=>{ const er=$("#hzerr"); if(er && er.textContent) er.textContent=""; };
+  app.onsubmit = e=>{
+    e.preventDefault();
+    const vals = n => $$(`#hzf input[name="${n}"]:checked`).map(x=>x.value);
+    const errs = [];
+    if(!$("#area").value.trim()) errs.push("Аюулыг харсан газар");
+    if(!vals("type").length) errs.push("Аюулын төрөл");
+    if(!vals("cls").length) errs.push("Аюулын ангилал");
+    if(!vals("risk").length) errs.push("Эрсдлийн түвшин");
+    if(!$("#det").value.trim()) errs.push("Аюулын дэлгэрэнгүй");
+    if(hazardPics.length<2) errs.push("Багадаа 2 зураг");
+    if(errs.length){ $("#hzerr").textContent = "Бөглөнө үү: "+errs.join(", "); $("#hzerr").scrollIntoView({block:"center"}); return; }
     const id=uid();
     write({
-      ["hazards/"+id]: {id, area:$("#area").value, date:$("#hdate").value||today(), acc:$("#acc").value, reporter:$("#rep").value, reviewer:$("#rev").value,
-        types, cls:pickedCls?[pickedCls]:[], risk:$("#risk").value, det:$("#det").value, act:$("#act").value,
+      ["hazards/"+id]: {id, form:"OT-03-v2", area:$("#area").value.trim(), date:$("#hdate").value||today(), acc:$("#acc").value.trim(), reporter:$("#rep").value.trim(), reviewer:$("#rev").value.trim(),
+        types:vals("type"), cls:vals("cls"), risk:vals("risk")[0], det:$("#det").value, act:$("#act").value,
         photoCount: hazardPics.length, status:"Шинэ", created:nowStr()},
       ["photos/"+id]: hazardPics.slice(0,8)
     });
     alert("Мэдэгдэл хүлээн авлаа.");
     back();
   };
+}
+/* Цаасан маягттай ижил хэвлэх хуудас (A4 босоо, 2 хуудас) */
+async function hazardPrint(id){
+  if(!requireRole("hygiene")) return;
+  const raw = DB.hazards[id]; if(!raw){ toast("Олдсонгүй"); return; }
+  const x = normHazard(raw);
+  view(()=>hazardPrint(id), false);
+  const has = (list,v)=>list.includes(v);
+  const L = (mn,en)=>`<td class="pl"><b>${esc(mn)}</b>${en?`<i>${esc(en)}</i>`:""}</td>`;
+  const opt = (on,[mn,en])=>`<div class="po"><span class="bx">${hzMark(on)}</span><div><b>${esc(mn)}</b><i>${esc(en)}</i></div></div>`;
+  const band = `<div class="pband"><div><h1>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h1><h2>RECORD AN OBSERVED HAZARD</h2></div><img src="/logo.png" alt="Ерөө говь ХХК"/></div>`;
+  const foot = n=>`<div class="pfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span>Page ${n} of 2</span></div>`;
+  const app = mount(`
+    <div class="printbar noprint"><button class="btn sm" id="pp">🖨 Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">← Аюулын жагсаалт</button></div>
+    <div class="sheet-wrap"><div class="hzsheet">
+      <section class="ppage">${band}
+        <table class="pt"><colgroup><col style="width:24%"/><col style="width:26%"/><col style="width:24%"/><col style="width:26%"/></colgroup>
+          <tr class="pbar big"><td colspan="4"><b>ЕРӨНХИЙ МЭДЭЭЛЭЛ</b><span>HAZARD HEADER</span></td></tr>
+          <tr>${L("Аюулыг харсан газар, харъяа хэлтэс:","What work area was the hazard observed in?")}<td colspan="3" class="pv">${esc(x.area||"")}</td></tr>
+          <tr>${L("Аюулыг олж ажигласан огноо:","")}<td class="pv">${esc(x.date||"")}</td>${L("Аюулыг хянаж бууруулах ажлыг хариуцах хэлтэс:","What part of the organisation is accountable for the hazard?")}<td class="pv">${esc(x.acc||"")}</td></tr>
+          <tr>${L("Аюулыг мэдээлсэн хүн:","Hazard Reporter:")}<td class="pv">${esc(x.reporter||"")}</td>${L("Аюулыг хянаж , судласан хүн (ахлах ажилтан):","Hazard Reviewer:")}<td class="pv">${esc(x.reviewer||"")}</td></tr>
+          <tr class="pbar"><td colspan="4"><b>АЮУЛЫН ТАЙЛБАР</b><span>HAZARD DESCRIPTION</span></td></tr>
+          <tr>${L("Аюулын төрөл","What type of hazard did you observe?")}<td colspan="3" class="pv"><div class="pg g3">
+            ${opt(has(x.types,HZ_TYPES[0][0]),HZ_TYPES[0])}${opt(has(x.types,HZ_TYPES[1][0]),HZ_TYPES[1])}${opt(has(x.types,HZ_TYPES[2][0]),HZ_TYPES[2])}<div></div>${opt(has(x.types,HZ_TYPES[3][0]),HZ_TYPES[3])}<div></div></div></td></tr>
+          <tr>${L("Тухайн аюулыг аль ангилалд хамааруулах вэ?","What hazard type would you classify the hazard as?")}<td colspan="3" class="pv"><div class="pg g4">
+            ${HZ_GRID.flat().map(c=> c? opt(has(x.cls,c[0]),c) : `<div class="po"><span class="bx">☐</span><div></div></div>`).join("")}</div></td></tr>
+          <tr>${L("Эрсдлийн түвшинг өөрийн сэтгэгдлээр илэрхийлнэ үү?","What is your impression of the risk?")}<td colspan="3" class="pv"><div class="pg g4 risk">
+            ${HZ_RISK.map(r=>`<div class="po"><span class="bx">${hzMark(x.risk===r[0])}</span><div>${esc(r[0])} / <i class="in">${esc(r[1])}</i></div></div>`).join("")}</div></td></tr>
+          <tr class="tall">${L("Харсан аюулаа дэлгэрэнгүй дүрсэлж бичнэ үү?","Record details of the hazard")}<td colspan="3" class="pv txt">${esc(x.det||"")}</td></tr>
+        </table>${foot(1)}
+      </section>
+      <section class="ppage">${band}
+        <table class="pt"><colgroup><col style="width:24%"/><col/></colgroup>
+          <tr class="tall2">${L("Авсан шуурхай арга хэмжээ","Were any immediate actions taken?")}<td class="pv txt">${esc(x.act||"")}</td></tr>
+        </table>
+        <div class="pphotos" id="pph"></div>
+        ${foot(2)}
+      </section>
+    </div></div>`);
+  const fit = ()=>{ const sh=$(".hzsheet"); if(!sh) return; const z=Math.min(1,(window.innerWidth-24)/794); sh.style.zoom = z<1? z.toFixed(3) : ""; };
+  fit(); window.onresize = fit;
+  $("#pp").onclick = ()=>window.print();
+  $("#pb").onclick = hazardListPage;
+  const ps = await getPhotos(id);
+  const el = $("#pph");
+  if(el && ps.length) el.innerHTML = `<div class="pphead">Хавсралт: зураг (${ps.length})</div><div class="ppgrid">${ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt=""/>`).join("")}</div>`;
 }
 function fileToData(f){
   return new Promise((res,rej)=>{
@@ -852,21 +935,23 @@ function fatigueListPage(){
 function hazardListPage(){
   if(!requireRole("hygiene")) return;
   view(hazardListPage, true);
-  const h=list("hazards").sort(byNew);
+  const h=list("hazards").map(normHazard).sort(byNew);
   const app = mount(shell("аюул", `<h2 class="pt">Аюул</h2>
     ${h.map(x=>`<div class="card">
       <div class="row-between"><b>${esc(x.date)} · ${esc(x.area)} · ${esc(x.risk)}</b>${stH(x.status)}</div>
       <div class="muted">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</div>
       <p>${esc(x.det||"")}</p>
       ${x.act?`<p class="muted"><b>Авсан арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
-      <p class="muted">Мэдээлэгч: ${esc(x.reporter||"—")} · Хариуцах: ${esc(x.acc||"—")}</p>
+      <p class="muted">Мэдээлэгч: ${esc(x.reporter||"—")} · Хянасан: ${esc(x.reviewer||"—")} · Хариуцах: ${esc(x.acc||"—")}</p>
       <div class="thumbs" data-ph="${esc(x.id)}">${x.photoCount?`<span class="muted">Зураг ачаалж байна… (${esc(x.photoCount)})</span>`:""}</div>
       <div class="row-gap">
         <select data-st="${esc(x.id)}" aria-label="Төлөв">${["Шинэ","Шалгаж байна","Шийдвэрлэсэн"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
+        <button class="btn ghost sm" data-prhz="${esc(x.id)}">🖨 Хэвлэх</button>
         <button class="btn warn sm" data-delhz="${esc(x.id)}">Устгах</button>
       </div>
     </div>`).join("")||'<p class="muted">Хоосон</p>'}`));
   bindNav(app, e=>{
+    const pr=e.target.closest("[data-prhz]"); if(pr){ hazardPrint(pr.dataset.prhz); return; }
     const d=e.target.closest("[data-delhz]");
     if(d && confirm("Энэ аюулын бүртгэлийг устгах уу?")){ write({["hazards/"+d.dataset.delhz]:null, ["photos/"+d.dataset.delhz]:null}); toast("Устгалаа"); }
   });
@@ -1394,10 +1479,10 @@ async function exportExcel(from,to,kinds){
     hs.forEach(h=>addHygSheet(wb, h, used));
   }
   if(kinds.includes("ayul")){
-    const hz=list("hazards").filter(x=>inR(x.date)).sort(byNew);
+    const hz=list("hazards").map(normHazard).filter(x=>inR(x.date)).sort(byNew);
     const s1=wb.addWorksheet("Аюул");
-    s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв"]);
-    hz.forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,x.photoCount||0,x.status]));
+    s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Хянасан","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв"]);
+    hz.forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,x.reviewer||"",(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,x.photoCount||0,x.status]));
     const sP=wb.addWorksheet("Аюул_зураг");
     sP.addRow(["Огноо","Газар","Мэдээлэгч","Зураг №"]);
     let r=2;
