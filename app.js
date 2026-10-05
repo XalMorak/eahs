@@ -1,5 +1,5 @@
 "use strict";
-/* ЭАХС — Эрүүл ахуйн хяналтын систем
+/* ЭАХС — Аюулгүй ажиллагаа, эрүүл ахуйн хяналтын систем
  * Өгөгдөл: Firebase RTDB "eahs/v2/<цуглуулга>/<id>" (бичлэг тус бүрээр update хийнэ),
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
@@ -607,7 +607,7 @@ function landing(){
           <div class="brand">
             <img class="logo" src="/logo.png" alt="Ерөө говь ХХК" width="148" height="117"/>
             <span class="kicker">${ic("shield","sm")} Ерөө говь ХХК</span>
-            <h1>ЭАХС<br><span>Эрүүл ахуйн хяналт</span></h1>
+            <h1>ЭАХС<br><span>Аюулгүй ажиллагаа,<br>эрүүл ахуйн хяналт</span></h1>
             <p>Ажилтны эрүүл мэнд, ариун цэвэр, ядаргаа, аюулын мэдээллийг нэг дор — утас, компьютер дээр.</p>
             <div class="sites" aria-label="Талбарууд">${ALBA.map(a=>`<span>${esc(a)}</span>`).join("")}</div>
           </div>
@@ -620,7 +620,7 @@ function landing(){
             <button class="menu-btn alt" data-g="hazard"><span class="mi">${ic("alert")}</span><span><b>Аюулыг мэдээлэх</b><small>Нэвтрэхгүйгээр шууд илгээнэ</small></span>${ic("chev","chev")}</button>
           </nav>
         </div>
-        <div class="foot-sites">© Ерөө говь ХХК · Эрүүл ахуйн хяналтын систем</div>
+        <div class="foot-sites">© Ерөө говь ХХК · Аюулгүй ажиллагаа, эрүүл ахуйн хяналтын систем</div>
       </div>
     </div>`);
   app.onclick = e=>{
