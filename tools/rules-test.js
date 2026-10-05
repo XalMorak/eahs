@@ -33,6 +33,15 @@ const seed={borluulalt:{users:{emp001:{name:"A",role:"employee"}}},
              svLeg:{id:'svLeg',tpl:'servis',start:'2026-09-28',heseg:'Оюут',alba:'Бар',cells:{sv1m:{d0:'ok'}}}},
     hazards:{hLow:{id:'hLow',risk:'Бага',status:'Шинэ',det:'x'},hHigh:{id:'hHigh',risk:'Их',status:'Шинэ',det:'y'}},
     roster:{r1:{id:'r1',sap:'1108650',arrive:T}},
+    advice:{advAll:{id:'advAll',title:'Гар угаах',text:'x',date:T,prio:'normal',target:{type:'all'},ts:1},
+            advBar:{id:'advBar',title:'Бар',text:'x',date:T,target:{type:'alba',alba:'Бар'},ts:1},
+            advOf:{id:'advOf',title:'Оффис',text:'x',date:T,target:{type:'alba',alba:'Оффис'},ts:1},
+            advW:{id:'advW',title:'Нэрээр',text:'x',date:T,target:{type:'workers',saps:{'2200':true}},ts:1}},
+    adviceIdx:{advAll:{t:'all',ts:1},advBar:{t:'alba',a:'Бар',ts:1},advOf:{t:'alba',a:'Оффис',ts:1},advW:{t:'workers',ts:1}},
+    adviceTo:{'2200':{advW:1}},
+    adviceAck:{'2200':{advW:{ts:1,at:'x',name:'Ө'}}},
+    wbfiles:{wb1:{id:'wb1',sap:'1108650',name:'a.jpg',type:'image/jpeg',size:1000,kind:'book'}},
+    wbdata:{wb1:'data:image/jpeg;base64,AAAA'},
     renew:{rn1:{id:'rn1',sap:'1108650',kind:'book',exp:'2027-01-01',date:T},rn2:{id:'rn2',sap:'2200',kind:'exam',exp:'2027-02-01',date:T}}}}};
 async function reset(rulesFile){
   const rules=fs.readFileSync(rulesFile,'utf8');
@@ -214,6 +223,57 @@ async function strict(){
   await expect('worker: read renewal photo', false, ()=>w.db.ref(V+'photos/rn_rn3').once('value'));
   await expect('anon: read renew', false, ()=>an.db.ref(RN).once('value'));
   await expect('anon: health notif', false, ()=>an.db.ref(V+'notifs/hb_a').set({id:'hb_a',type:'health',ts:1,title:'x',alba:'Бар',ref:'1'}));
+  console.log('--- v9: advice (зөвлөмж) + acknowledgements + white-book files');
+  const AD=V+'advice/';
+  await expect('worker: read all advice', false, ()=>w.db.ref(AD).once('value'));
+  await expect('worker: read advice target=all', true, ()=>w.db.ref(AD+'advAll').once('value'));
+  await expect('worker: read advice own alba (Бар, stored «Оюут баар»)', true, ()=>w.db.ref(AD+'advBar').once('value'));
+  await expect('worker: read advice other alba (Оффис)', false, ()=>w.db.ref(AD+'advOf').once('value'));
+  await expect('worker: read advice targeted to other worker', false, ()=>w.db.ref(AD+'advW').once('value'));
+  await expect('worker: read missing advice (deleted) is harmless', true, ()=>w.db.ref(AD+'nope').once('value'));
+  await expect('worker: read adviceIdx', true, ()=>w.db.ref(V+'adviceIdx').once('value'));
+  await expect('worker: read own adviceTo', true, ()=>w.db.ref(V+'adviceTo/1108650').once('value'));
+  await expect("worker: read other's adviceTo", false, ()=>w.db.ref(V+'adviceTo/2200').once('value'));
+  await expect('worker: read own adviceAck', true, ()=>w.db.ref(V+'adviceAck/1108650').once('value'));
+  await expect("worker: read other's adviceAck", false, ()=>w.db.ref(V+'adviceAck/2200').once('value'));
+  await expect('worker: acknowledge targeted advice', true, ()=>w.db.ref(V+'adviceAck/1108650/advAll').set({ts:5,at:'2026-10-05 10:00',name:'Б. Энхбаяр'}));
+  await expect('worker: re-acknowledge (overwrite) denied', false, ()=>w.db.ref(V+'adviceAck/1108650/advAll').set({ts:6,at:'y'}));
+  await expect('worker: acknowledge advice not targeted (Оффис)', false, ()=>w.db.ref(V+'adviceAck/1108650/advOf').set({ts:5,at:'x'}));
+  await expect('worker: acknowledge nonexistent advice', false, ()=>w.db.ref(V+'adviceAck/1108650/nope').set({ts:5,at:'x'}));
+  await expect('worker: acknowledge as another worker', false, ()=>w.db.ref(V+'adviceAck/2200/advAll').set({ts:5,at:'x'}));
+  await expect('worker: invalid ack (no ts)', false, ()=>w.db.ref(V+'adviceAck/1108650/advBar').set({at:'x'}));
+  await expect('worker: delete own ack', false, ()=>w.db.ref(V+'adviceAck/1108650/advAll').remove());
+  await expect('worker: write advice', false, ()=>w.db.ref(AD+'wx').set({id:'wx',title:'x',text:'x',date:T,target:{type:'all'}}));
+  await expect('worker: write adviceIdx / adviceTo', false, ()=>w.db.ref(V).update({'adviceIdx/wx':{t:'all',ts:1},'adviceTo/1108650/wx':1}));
+  await expect('worker: read wbfiles / wbdata', false, async()=>{ await w.db.ref(V+'wbfiles').once('value'); });
+  await expect('worker: read own wbdata item', false, ()=>w.db.ref(V+'wbdata/wb1').once('value'));
+  await expect('anon: read advice target=all', false, ()=>an.db.ref(AD+'advAll').once('value'));
+  await expect('anon: read adviceIdx', false, ()=>an.db.ref(V+'adviceIdx').once('value'));
+  await expect('anon: acknowledge', false, ()=>an.db.ref(V+'adviceAck/1108650/advBar').set({ts:1,at:'x'}));
+  await expect('sup: read advice list', true, ()=>s.db.ref(AD).once('value'));
+  await expect('sup: write advice', false, ()=>s.db.ref(AD+'sx').set({id:'sx',title:'x',text:'x',date:T,target:{type:'all'}}));
+  await expect("sup: read workers' acks", false, ()=>s.db.ref(V+'adviceAck').once('value'));
+  await expect('sup: read wbfiles + wbdata', true, async()=>{ await s.db.ref(V+'wbfiles').once('value'); await s.db.ref(V+'wbdata/wb1').once('value'); });
+  await expect('sup: write wbfiles', false, ()=>s.db.ref(V).update({'wbfiles/s1':{id:'s1',sap:'1108650',name:'a',type:'image/jpeg',size:1},'wbdata/s1':'data:x'}));
+  await expect('hyg: read acks (all workers)', true, ()=>h.db.ref(V+'adviceAck').once('value'));
+  await expect('hyg: create advice + idx + adviceTo (one update)', true, ()=>h.db.ref(V).update({'advice/a2':{id:'a2',title:'Шинэ',text:'Текст',date:T,prio:'urgent',target:{type:'workers',saps:{'1108650':true}},ts:9,log:{l1:{ts:9,kind:'created'}}},'adviceIdx/a2':{t:'workers',date:T,ts:9},'adviceTo/1108650/a2':9}));
+  await expect('worker: now reads advice targeted by name', true, ()=>w.db.ref(AD+'a2').once('value'));
+  await expect('hyg: edit advice per-path (+ log)', true, ()=>h.db.ref(V).update({'advice/a2/title':'Засварласан','advice/a2/log/l2':{ts:10,kind:'edited',prev:{title:'Шинэ'}}}));
+  await expect('hyg: advice empty title', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'',text:'x',date:T,target:{type:'all'}}));
+  await expect('hyg: advice text > 5000', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'a'.repeat(5001),date:T,target:{type:'all'}}));
+  await expect('hyg: advice bad date', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:'5/10',target:{type:'all'}}));
+  await expect('hyg: advice bad target', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,target:{type:'everyone'}}));
+  await expect('hyg: advice alba not Оффис/Бар', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,target:{type:'alba',alba:'Оюут баар'}}));
+  await expect('hyg: advice bad prio', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,prio:'max',target:{type:'all'}}));
+  await expect('hyg: delete advice + idx + adviceTo + acks', true, ()=>h.db.ref(V).update({'advice/advAll':null,'adviceIdx/advAll':null,'adviceAck/1108650/advAll':null,'advice/advW':null,'adviceIdx/advW':null,'adviceTo/2200/advW':null,'adviceAck/2200/advW':null}));
+  const WD='data:image/jpeg;base64,'+'A'.repeat(200000);
+  await expect('hyg: upload file (meta + data, separate nodes)', true, ()=>h.db.ref(V).update({'wbfiles/wb2':{id:'wb2',sap:'1108650',name:'дэвтэр.jpg',type:'image/jpeg',size:150000,kind:'book',by:'Эрүүл ахуйч',ts:1,date:T},'wbdata/wb2':WD}));
+  await expect('hyg: upload PDF ~1MB', true, ()=>h.db.ref(V).update({'wbfiles/wb3':{id:'wb3',sap:'1108650',name:'scan.pdf',type:'application/pdf',size:1040000},'wbdata/wb3':'data:application/pdf;base64,'+'A'.repeat(1386000)}));
+  await expect('hyg: file data too large (> 1.45M chars)', false, ()=>h.db.ref(V+'wbdata/wb4').set('data:application/pdf;base64,'+'A'.repeat(1460000)));
+  await expect('hyg: file data not a data URL', false, ()=>h.db.ref(V+'wbdata/wb4').set('<script>alert(1)</script>'));
+  await expect('hyg: file type text/html', false, ()=>h.db.ref(V+'wbfiles/wb4').set({id:'wb4',sap:'1108650',name:'x.html',type:'text/html',size:10}));
+  await expect('hyg: file size > 1.1MB', false, ()=>h.db.ref(V+'wbfiles/wb4').set({id:'wb4',sap:'1108650',name:'x.pdf',type:'application/pdf',size:2000000}));
+  await expect('hyg: delete file', true, ()=>h.db.ref(V).update({'wbfiles/wb3':null,'wbdata/wb3':null}));
   console.log('--- after migration');
   await expect('claim again after pinHash removed (new account, same PIN)', false, async()=>{ const x=await emailUser('1108650+9@eahs.local','eahs#4321'); await claim(x.db,x.auth.currentUser.uid,'1108650','worker','4321'); });
   const b=await owner('borluulalt','GET'); await expect('borluulalt data present', true, async()=>{ if(!b || !b.users) throw new Error('missing'); });
@@ -232,6 +292,11 @@ async function transition(){
   await expect('anon: unknown collection', false, ()=>an.db.ref(V+'foo').set(1));
   await expect('anon (old clients): svcheck valid write', true, ()=>an.db.ref(V+'svcheck/t1').set({id:'t1',tpl:'oyut',start:T,heseg:'Оюут',alba:'Бар',cells:{zg1:{d0:'ok'},zg2:{d0:'imp'}}}));
   await expect('anon: svcheck invalid cell', false, ()=>an.db.ref(V+'svcheck/t1/cells/zg1/d1').set(5));
+  await expect('anon (transition): advice valid', true, ()=>an.db.ref(V+'advice/t1').set({id:'t1',title:'x',text:'y',date:T,target:{type:'all'}}));
+  await expect('anon (transition): advice invalid target', false, ()=>an.db.ref(V+'advice/t2').set({id:'t2',title:'x',text:'y',date:T,target:{type:'x'}}));
+  await expect('anon (transition): adviceIdx + adviceTo + ack', true, ()=>an.db.ref(V).update({'adviceIdx/t1':{t:'all',ts:1},'adviceTo/1108650/t1':1,'adviceAck/1108650/t1':{ts:1,at:'x'}}));
+  await expect('anon (transition): wbfiles + wbdata valid', true, ()=>an.db.ref(V).update({'wbfiles/f1':{id:'f1',sap:'1108650',name:'a.jpg',type:'image/jpeg',size:10},'wbdata/f1':'data:image/jpeg;base64,AA'}));
+  await expect('anon (transition): wbdata not a data URL', false, ()=>an.db.ref(V+'wbdata/f2').set('hello'));
   await expect('anon (transition): renew valid', true, ()=>an.db.ref(V+'renew/t1').set({id:'t1',sap:'1108650',kind:'exam',iss:T,exp:'2027-10-05',date:T}));
   await expect('anon (transition): renew invalid kind', false, ()=>an.db.ref(V+'renew/t2').set({id:'t2',sap:'1108650',kind:'x',exp:'2027-10-05'}));
   await expect('anon (transition): health notif valid', true, ()=>an.db.ref(V+'notifs/hb_t').set({id:'hb_t',type:'health',level:'hsoon',ts:1,title:'x',alba:'Бар',ref:'1108650'}));

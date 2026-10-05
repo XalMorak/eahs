@@ -74,6 +74,30 @@ RENEW_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newD
                   " && (!newData.child('iss').exists() || (newData.child('iss').isString() && newData.child('iss').val().matches(" + DATE_RE + ")))"
                   " && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 300)))")
 
+# v9: Зөвлөмж — эрүүл ахуйч бичнэ; ажилтан зөвхөн өөрт хамаарахыг (бүгд / өөрийн алба / нэрээр) зөвлөмж бүрээр уншина
+def ADV_TARGETS(n):
+    return (f"({n}.child('target/type').val() === 'all'"
+            f" || ({n}.child('target/type').val() === 'alba' && " + NORM(n + ".child('target/alba')") + f" === {MYALBA})"
+            f" || {n}.child('target/saps/' + {MYSAP}).exists())")
+ADV_VALIDATE = ("!newData.exists() || (newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 200"
+                " && newData.child('text').isString() && newData.child('text').val().length <= 5000"
+                " && newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
+                " && newData.child('target/type').val().matches(/^(all|alba|workers)$/)"
+                " && (newData.child('target/type').val() !== 'alba' || newData.child('target/alba').val().matches(/^(Оффис|Бар)$/))"
+                " && (!newData.child('prio').exists() || newData.child('prio').val().matches(/^(normal|high|urgent)$/)))")
+ADV_IDX_VALIDATE = "!newData.exists() || (newData.child('t').val().matches(/^(all|alba|workers)$/) && newData.child('ts').isNumber())"
+ADV_TO_VALIDATE = "!newData.exists() || newData.isNumber() || newData.isBoolean()"
+ACK_VALIDATE = ("!newData.exists() || (newData.child('ts').isNumber() && newData.child('at').isString() && newData.child('at').val().length <= 40"
+                " && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 100)))")
+ADV_NODE = f"root.child('{V2}/advice/' + $id)"
+ACK_OWN = f"(auth != null && {MYSAP} === $sap && !data.exists() && newData.exists() && {ADV_NODE}.exists() && " + ADV_TARGETS(ADV_NODE) + ")"
+# v9: Цагаан дэвтрийн файл (Storage-гүй, base64) — мэдээлэл wbfiles, агуулга wbdata тусдаа
+WB_META_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('name').isString() && newData.child('name').val().length <= 200"
+                    " && newData.child('type').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/)"
+                    " && newData.child('size').isNumber() && newData.child('size').val() <= 1100000"
+                    " && (!newData.child('kind').exists() || newData.child('kind').val().matches(/^(book|exam)$/)))")
+WB_DATA_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
+
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
         ".read": HYG,
@@ -108,6 +132,15 @@ def strict():
         "notifs": {".read": STAFF, ".write": HYG, "$id": {".write": NOTIF_CREATE, ".validate": NOTIF_VALIDATE}},
         # Сунгалтын түүх: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрийнхөө (sap-аар query)
         "renew": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": RENEW_VALIDATE}},
+        # Зөвлөмж: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрт хамаарахыг (устсан бол хоосныг) уншина
+        "advice": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && (!data.exists() || " + ADV_TARGETS("data") + ")", ".validate": ADV_VALIDATE}},
+        "adviceIdx": {".read": MEMBER, ".write": HYG, "$id": {".validate": ADV_IDX_VALIDATE}},
+        "adviceTo": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".validate": ADV_TO_VALIDATE}}},
+        # Танилцсан: ажилтан зөвхөн өөрийн sap дор, өөрт хамаарах зөвлөмжид нэг удаа; эрүүл ахуйч уншина/устгана
+        "adviceAck": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".write": ACK_OWN, ".validate": ACK_VALIDATE}}},
+        # Цагаан дэвтрийн файл: эрүүл ахуйч бичнэ, эрүүл ахуйч + ахлах уншина (сунгалтын зурагтай адил)
+        "wbfiles": {".read": STAFF, ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": WB_META_VALIDATE}},
+        "wbdata": {".read": STAFF, ".write": HYG, "$id": {".validate": WB_DATA_VALIDATE}},
         # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
         "svcheck": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -130,6 +163,12 @@ def transition():
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},
         "renew": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": RENEW_VALIDATE}},
+        "advice": {"$id": {".write": ANY, ".validate": ADV_VALIDATE}},
+        "adviceIdx": {"$id": {".write": ANY, ".validate": ADV_IDX_VALIDATE}},
+        "adviceTo": {"$sap": {"$id": {".write": ANY, ".validate": ADV_TO_VALIDATE}}},
+        "adviceAck": {"$sap": {"$id": {".write": ANY, ".validate": ACK_VALIDATE}}},
+        "wbfiles": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": WB_META_VALIDATE}},
+        "wbdata": {"$id": {".write": ANY, ".validate": WB_DATA_VALIDATE}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 

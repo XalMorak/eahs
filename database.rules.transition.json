@@ -93,6 +93,49 @@
             ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('kind').val().matches(/^(book|exam)$/) && newData.child('exp').isString() && newData.child('exp').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('iss').exists() || (newData.child('iss').isString() && newData.child('iss').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/))) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 300)))"
           }
         },
+        "advice": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 200 && newData.child('text').isString() && newData.child('text').val().length <= 5000 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('target/type').val().matches(/^(all|alba|workers)$/) && (newData.child('target/type').val() !== 'alba' || newData.child('target/alba').val().matches(/^(Оффис|Бар)$/)) && (!newData.child('prio').exists() || newData.child('prio').val().matches(/^(normal|high|urgent)$/)))"
+          }
+        },
+        "adviceIdx": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('t').val().matches(/^(all|alba|workers)$/) && newData.child('ts').isNumber())"
+          }
+        },
+        "adviceTo": {
+          "$sap": {
+            "$id": {
+              ".write": "auth != null",
+              ".validate": "!newData.exists() || newData.isNumber() || newData.isBoolean()"
+            }
+          }
+        },
+        "adviceAck": {
+          "$sap": {
+            "$id": {
+              ".write": "auth != null",
+              ".validate": "!newData.exists() || (newData.child('ts').isNumber() && newData.child('at').isString() && newData.child('at').val().length <= 40 && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 100)))"
+            }
+          }
+        },
+        "wbfiles": {
+          ".indexOn": [
+            "sap"
+          ],
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('name').isString() && newData.child('name').val().length <= 200 && newData.child('type').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/) && newData.child('size').isNumber() && newData.child('size').val() <= 1100000 && (!newData.child('kind').exists() || newData.child('kind').val().matches(/^(book|exam)$/)))"
+          }
+        },
+        "wbdata": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
+          }
+        },
         "svcheck": {
           "$id": {
             ".write": "auth != null",
