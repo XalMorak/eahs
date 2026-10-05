@@ -3,7 +3,10 @@
  * Өгөгдөл: Firebase RTDB "eahs/v2/<цуглуулга>/<id>" (бичлэг тус бүрээр update хийнэ),
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
-const ALBA = ["Оффис", "Оюут баар", "Манлай баар", "Эрчим баар"];
+/* Алба: зөвхөн 2. Хуучин өгөгдлийг ХӨНДӨХГҮЙ — зөвхөн харуулах/харьцуулахдаа хөрвүүлнэ:
+   «Оффис» агуулсан → «Оффис», бусад бүх нэр (Оюут баар, Манлай баар, Эрчим баар…) → «Бар», хоосон → "" */
+const ALBA = ["Оффис", "Бар"];
+const albaN = a => { const s = String(a==null?"":a).trim(); if(!s) return ""; return /оффис/i.test(s) ? "Оффис" : "Бар"; };
 const U1 = [
   "Би хийх гэж буй ажлаа сайн мэднэ",
   "Надад энэ ажлыг хийх ур чадвар болон зөвшөөрөл бий",
@@ -58,7 +61,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -347,7 +350,7 @@ function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; }
 const OWN_COLS = ["uhaan","fatigue","infect"];
 function syncPlan(role){
   if(role==="hygiene") return COLS;
-  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs"];
+  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck"];
   return ["users","settings","roster","hygcheck",...OWN_COLS];
 }
 function startSync(role, sap){
@@ -695,9 +698,9 @@ function workerHome(){
   const infTodo = roster && !infect;
   const task = (id, icon, title, sub, state, stTxt) => `<button class="home-btn ${state}" id="${id}"><span class="mi">${ic(icon)}</span><span><b>${title}</b><span class="muted">${esc(sub)}</span></span><span class="st">${stTxt}</span></button>`;
   const app = mount(`
-    ${appbar("ЭАХС · Ажилтан", esc(u.alba||""))}
+    ${appbar("ЭАХС · Ажилтан", esc(albaN(u.alba)))}
     <main class="page">
-    <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(u.alba)}</div></div></div>
+    <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(albaN(u.alba))}</div></div></div>
       <button class="btn ghost sm" id="out">${ic("logout","sm")} Гарах</button></div>
     <div class="sec-t">Өнөөдрийн ажил · ${today()}</div>
     <div class="tasks">
@@ -758,7 +761,7 @@ function uhaanForm(){
     ${appbar("УХААН", esc(u.name), true)}
     <div class="paper"><div class="formcard">
       <h3>Ямагт ажил эхлэхийн өмнө УХААН-ы тохирлыг шалгадаг байх</h3>
-      <p class="muted">${esc(u.name)} · ${esc(u.sap)} · ${today()} · ${esc(u.alba)}</p>
+      <p class="muted">${esc(u.name)} · ${esc(u.sap)} · ${today()} · ${esc(albaN(u.alba))}</p>
       <label class="f" for="job">Миний ажил</label><input id="job" value="${esc(u.job||"")}"/>
       <h4>Урьдаар ажлаа нарийн тооц</h4>
       ${U1.map((t,i)=>triRow("a"+i,t)).join("")}
@@ -783,7 +786,7 @@ function uhaanForm(){
     if(Object.values({...a,...b,...c}).some(v=>!v)){ toast("Бүх мөрийг ✓ / — / ✕-ээр тэмдэглэнэ үү"); return; }
     const stop = b.b3==="no" || Object.values(c).some(v=>v==="ok");
     const id = uid();
-    write({["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:u.alba, job:$("#job").value, date:today(), time:nowStr(), a,b,c,
+    write({["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), job:$("#job").value, date:today(), time:nowStr(), a,b,c,
       risk:$("#risk").value, ctrl:$("#ctrl").value, stop, status: stop?"zogsooson":"huleegdej", supervisor:null}});
     alert(stop?"Ажлаа зогсоо. Ахлах болон эрүүл ахуйчид мэдэгдлээ.":"Илгээгдлээ. Ахлах болон эрүүл ахуйч харна.");
     workerHome();
@@ -813,7 +816,7 @@ function fatigueForm(){
         <div class="cell"><span>${ic("lock")}SAP</span><b>${esc(u.sap)}</b></div>
         <div class="cell"><span>${ic("lock")}Нэр</span><b>${esc(u.name)}</b></div>
         <div class="cell"><span>${ic("lock")}Огноо</span><b>${today()}</b></div>
-        <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b>${esc(u.alba)}</b></div>
+        <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b>${esc(albaN(u.alba))}</b></div>
       </div>
       ${qblock("q5","1. Сүүлийн 24 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 24 цагт нийт хэдэн цаг унтав?",["7 ба түүнээс их","6-7 цаг","6 цагаас бага"])}
       ${qblock("q6","2. Сүүлийн 48 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 48 цагт нийт хэдэн цаг унтав?",["14 цагаас их","12-14","12 цагаас бага"])}
@@ -841,7 +844,7 @@ function fatigueForm(){
     if(optVal("q10")==="Тийм" || s11===2) level = level==="Бага"?"Дунд":level;
     if(s8===2 && s5===2) level="Өндөр";
     const id=uid();
-    write({["fatigue/"+id]: {id, sap:u.sap, name:u.name, alba:u.alba, gender:u.gender, date:today(),
+    write({["fatigue/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), gender:u.gender, date:today(),
       q5:optVal("q5"),q6:optVal("q6"),q7:optVal("q7"),q8:optVal("q8"),q10:optVal("q10"),q11:optVal("q11"),score,level}});
     alert(`${level} оноо: ${score}/12`+(level==="Өндөр"?" — ахлах/эрүүл ахуйчид мэдэгдлээ":""));
     workerHome();
@@ -864,7 +867,7 @@ function infectForm(){
       <p class="muted">ГХӨ-г эрт илрүүлэх, халдвар дамжихаас сэргийлэх зорилготой.</p>
       <div class="lockgrid two">
         <div class="cell">Овог нэр<b>${esc(u.name)}</b></div>
-        <div class="cell">SAP / алба<b>${esc(u.sap)} · ${esc(u.alba)}</b></div>
+        <div class="cell">SAP / алба<b>${esc(u.sap)} · ${esc(albaN(u.alba))}</b></div>
       </div>
       <label class="f" for="arrive">Ээлжинд ирэх хугацаа *</label>
       <input type="date" id="arrive" value="${today()}"/>
@@ -878,7 +881,7 @@ function infectForm(){
   $("#send").onclick = ()=>{
     if(INF_QS.some(q=>!optVal(q.id))){ toast("Бүх асуултыг хариулна уу"); return; }
     const id=uid();
-    write({["infect/"+id]: {id, sap:u.sap, name:u.name, alba:u.alba, date:$("#arrive").value||today(),
+    write({["infect/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:$("#arrive").value||today(),
       ans: INF_QS.map(q=>({q:q.t, a:optVal(q.id)})), verdict:"huleegdej"}});
     toast("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
     workerHome();
@@ -911,7 +914,7 @@ function normHazard(x){
   }
   const cls = arr(x.cls).map(c=> HZ_CLS_OLD[c] || c);
   const status = HZ_ST_OLD[x.status] || x.status || "Шинэ";
-  return {...x, types, cls, status, alba: x.alba || albaOf(x.area)};
+  return {...x, types, cls, status, alba: x.alba ? albaN(x.alba) : albaOf(x.area)};
 }
 const hzMark = on => on ? "☒" : "☐";
 /* Аюулын хяналт: төлөв, хариуцагч, хугацаа, түүх */
@@ -919,7 +922,8 @@ const HZ_ST = ["Шинэ","Хийгдэж буй","Шийдсэн","Хаасан
 const HZ_ST_OLD = {"Шалгаж байна":"Хийгдэж буй","Шийдвэрлэсэн":"Шийдсэн"};
 const HZ_OPEN = s => s==="Шинэ" || s==="Хийгдэж буй";
 const HZ_HIGH = r => r==="Их" || r==="Маш их";
-const albaOf = area => ALBA.find(a=>String(area||"").includes(a)) || "";
+/* Газрын нэрнээс алба: «оффис» → Оффис, «баар»/«бар» гэсэн үг → Бар, бусад → "" (бүх ахлахад харагдана) */
+const albaOf = area => { const s = String(area||""); return /оффис/i.test(s) ? "Оффис" : /баар|(^|[\s,.;:\/()-])бар($|[\s,.;:\/()-])/i.test(s) ? "Бар" : ""; };
 const hzOverdue = x => !!(x.due && x.due < today() && HZ_OPEN(x.status));
 function hazardForm(opts){
   hazardPics = [];
@@ -936,7 +940,7 @@ function hazardForm(opts){
       <div class="otbar big"><b>ЕРӨНХИЙ МЭДЭЭЛЭЛ</b><span>HAZARD HEADER</span></div>
       <div class="otgrid">
         <div class="otrow full">${lbl("Аюулыг харсан газар, харъяа хэлтэс:","What work area was the hazard observed in?","area")}
-          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(preArea!=null&&preArea!==""?preArea:(u?.alba||""))}" placeholder="Жишээ: Оюут баар, гал тогоо"/>
+          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(preArea!=null&&preArea!==""?preArea:(albaN(u?.alba)||""))}" placeholder="Жишээ: Бар, гал тогоо"/>
           ${preArea?`<small class="qrnote">${ic("qr","sm")} QR кодоор нээсэн — газар бөглөгдсөн</small>`:""}
           <datalist id="albaList">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div></div>
         <div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","","hdate")}<div class="otv"><input type="date" id="hdate" value="${today()}" max="${today()}" required/></div></div>
@@ -1075,13 +1079,13 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","ариун":"drop","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
-  const title = role==="supervisor" ? `Ахлах · ${esc(u?.alba||"")}` : "Эрүүл ахуйчийн самбар";
+  const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Эрүүл ахуйчийн самбар";
   return `<div class="dash">
     <aside class="side">
       <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
@@ -1090,7 +1094,7 @@ function shell(active, inner){
         return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
       <button class="navb out" data-nav="гарах">${ic("logout")}<span>Гарах</span></button>
       </nav>
-      <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(u.alba):""}</span></div></div>
+      <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(albaN(u.alba)):""}</span></div></div>
     </aside>
     <main class="main">${inner}</main>
   </div>`;
@@ -1102,7 +1106,7 @@ function bindNav(app, extra){
       const sup = me()?.role==="supervisor";
       ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
-        "мэдэгдэл":notifPage, "тайлан":reportsPage, "qr":qrPage}[nav]||(()=>{}))();
+        "мэдэгдэл":notifPage, "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -1125,11 +1129,11 @@ function stU(x){
 function supervisorHome(){
   const u = requireRole("supervisor"); if(!u) return;
   view(supervisorHome, true);
-  const l = list("uhaan").filter(x=>x.alba===u.alba).sort(byNew);
+  const l = list("uhaan").filter(x=>albaN(x.alba)===albaN(u.alba)).sort(byNew);
   const app = mount(shell("тойм", `
-    ${phead("УХААН шалгах", `${esc(u.alba)} · Өнөөдөр: ${today()}`)}
+    ${phead("УХААН шалгах", `${esc(albaN(u.alba))} · Өнөөдөр: ${today()}`)}
     ${hygDueCard(u.alba)}
-    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(u.alba)}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`), "УХААН бүртгэл алга")}</div>`));
+    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`), "УХААН бүртгэл алга")}</div>`));
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba); });
 }
 function viewUhaan(id){
@@ -1139,7 +1143,7 @@ function viewUhaan(id){
   const sym = v => v==="ok"?"✓":v==="na"?"—":v==="no"?"✕":"?";
   const show=(a,pref,src)=>a.map((t,i)=>`<div class="item inl"><p>${esc(t)}</p><b>${sym((src||{})[pref+i])}</b></div>`).join("");
   const app = mount(`${appbar("УХААН · "+esc(x.name), esc(x.date), true)}<div class="paper"><div class="formcard">
-    <p class="muted">${esc(x.date)} ${esc(x.time||"")} · ${esc(x.alba)} · ${esc(x.job||"")}</p>
+    <p class="muted">${esc(x.date)} ${esc(x.time||"")} · ${esc(albaN(x.alba))} · ${esc(x.job||"")}</p>
     ${x.stop?`<div class="warnbox bad">${ic("alert","sm")}<span>Зогсоох нөхцөл илэрсэн</span></div>`:""}
     <h4>Урьдаар тооц</h4>${show(U1,"a",x.a)}
     <h4>Хор хөнөөл</h4>${show(U2,"b",x.b)}
@@ -1194,11 +1198,11 @@ function hygieneHome(){
         <div class="card"><div class="ctitle">${ic("users")}<h3>Ажилтнуудын тойм</h3></div>
           ${tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр"], ws.map(w=>{
             const last=f.find(x=>x.sap===w.sap);
-            return `<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(w.alba)}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td>${expBadge(w.bookExp)}</td></tr>`;
+            return `<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td>${expBadge(w.bookExp)}</td></tr>`;
           }))}
         </div>
         <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН</h3></div>
-          ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${stU(x)}</td></tr>`))}
+          ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}</td><td>${stU(x)}</td></tr>`))}
         </div>`));
   app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
@@ -1210,14 +1214,14 @@ function fatigueListPage(){
   view(fatigueListPage, true);
   const f=list("fatigue").sort(byNew);
   const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Ажилтнуудын бөглөсөн үнэлгээ, шинээс нь")}<div class="card">
-    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.alba)}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
+    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
   bindNav(app);
 }
 /* ---------- Аюулын хяналт: жагсаалт + шүүлтүүр ---------- */
 let HZF = {st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""};
 function hzVisible(u){
   const all = list("hazards").map(normHazard);
-  if(u.role==="supervisor") return all.filter(x=>x.alba===u.alba || x.assignee===u.sap || !x.alba);
+  if(u.role==="supervisor") return all.filter(x=>albaN(x.alba)===albaN(u.alba) || x.assignee===u.sap || !x.alba);
   return all;
 }
 function hzLogEntry(id, u, kind, text){
@@ -1265,7 +1269,7 @@ function hazardListPage(){
     const q = HZF.q.trim().toLowerCase();
     const h = all.filter(x=>
       (HZF.st==="all" || (HZF.st==="open" ? HZ_OPEN(x.status) : HZF.st==="od" ? hzOverdue(x) : x.status===HZF.st)) &&
-      (!HZF.risk || x.risk===HZF.risk) && (!HZF.alba || x.alba===HZF.alba) &&
+      (!HZF.risk || x.risk===HZF.risk) && (!HZF.alba || albaN(x.alba)===HZF.alba) &&
       (!HZF.who || (HZF.who==="-" ? !x.assignee : x.assignee===HZF.who)) &&
       (!HZF.from || x.date>=HZF.from) && (!HZF.to || x.date<=HZF.to) &&
       (!q || [x.area,x.det,x.act,x.reporter,x.reviewer,x.acc,x.assigneeName,x.corr].join(" ").toLowerCase().includes(q)));
@@ -1335,7 +1339,7 @@ async function hazardDetail(id){
           <div><label class="f" for="tdue">Гүйцэтгэх хугацаа</label><input type="date" id="tdue" value="${esc(x.due||"")}"/></div>
         </div>
         <label class="f" for="tas">Хариуцагч</label>
-        <select id="tas"><option value="">— хариуцагчгүй —</option>${people.map(w=>`<option value="${esc(w.sap)}" ${w.sap===x.assignee?"selected":""}>${esc(w.name)} · ${esc(roleName(w.role))}${w.alba?" · "+esc(w.alba):""}</option>`).join("")}</select>
+        <select id="tas"><option value="">— хариуцагчгүй —</option>${people.map(w=>`<option value="${esc(w.sap)}" ${w.sap===x.assignee?"selected":""}>${esc(w.name)} · ${esc(roleName(w.role))}${w.alba?" · "+esc(albaN(w.alba)):""}</option>`).join("")}</select>
         <label class="f" for="tcorr">Залруулах арга хэмжээ (төлөвлөгөө / гүйцэтгэл)</label>
         <textarea id="tcorr" maxlength="1000" rows="4" placeholder="Юу хийх, хэрхэн арилгах, урьдчилан сэргийлэх…">${esc(x.corr||"")}</textarea>
         <label class="f" for="tnote">Тэмдэглэл нэмэх (түүхэнд бичигдэнэ)</label>
@@ -1375,7 +1379,7 @@ function infectListPage(){
   const inf=list("infect").sort(byNew);
   const app = mount(shell("халдвар", `${phead("Халдвар — үр дүн гаргах", "Ажилтан зөвхөн бөглөсөн. Орж болно / оруулахгүй-г эндээс та тогтооно.")}
     ${inf.map(x=>{ const v = x.verdict && VERDICT[x.verdict] ? x.verdict : "huleegdej"; return `<div class="card">
-      <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(x.alba)}</div></div></div>
+      <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(albaN(x.alba))}</div></div></div>
       <div class="qa">${arr(x.ans).map(a=>`<div class="item inl"><p>${esc(a.q)}</p><b>${esc(a.a)}</b></div>`).join("")}</div>
       <label class="f">Үр дүн</label>
       <select data-inf="${esc(x.id)}" class="v-${v}">${Object.entries(VERDICT).map(([k,l])=>`<option value="${k}" ${k===v?"selected":""}>${l}</option>`).join("")}</select>
@@ -1391,7 +1395,7 @@ function bookPage(){
   view(bookPage, true);
   const ws=workers().sort((a,b)=>String(a.bookExp||"9").localeCompare(String(b.bookExp||"9")));
   const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр / жилийн шинжилгээ", "Дуусах хугацаагаар эрэмбэлсэн")}<div class="card">
-    ${tbl(["Нэр","SAP","Алба","Дэвтэр","Шинжилгээ"], ws.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(w.alba)}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`))}</div>`));
+    ${tbl(["Нэр","SAP","Алба","Дэвтэр","Шинжилгээ"], ws.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`))}</div>`));
   bindNav(app);
 }
 function rosterPage(){
@@ -1402,14 +1406,14 @@ function rosterPage(){
   const app = mount(shell("хуваарь", `${phead("Талбарын хуваарь", "Ажилтны ирэх / гарах өдөр")}
     <form class="card" id="rf">
       <div class="g3">
-        <div><label class="f" for="rsap">Ажилтан</label><select id="rsap">${ws.map(u=>`<option value="${esc(u.sap)}">${esc(u.name)} (${esc(u.sap)}) · ${esc(u.alba)}</option>`).join("")}</select></div>
+        <div><label class="f" for="rsap">Ажилтан</label><select id="rsap">${ws.map(u=>`<option value="${esc(u.sap)}">${esc(u.name)} (${esc(u.sap)}) · ${esc(albaN(u.alba))}</option>`).join("")}</select></div>
         <div><label class="f" for="arrive">Ирэх өдөр</label><input type="date" id="arrive" value="${today()}" required/></div>
         <div><label class="f" for="leave">Гарах өдөр</label><input type="date" id="leave"/></div>
       </div>
       <div class="gap"></div><button class="btn" type="submit">${ic("plus")} Нэмэх</button>
     </form>
     <div class="card">${tbl(["Ирэх","Нэр","Алба","Гарах",""], rs.map(x=>{ const w=DB.users[keyOf(x.sap)];
-      return `<tr><td>${esc(x.arrive)}</td><td>${esc(x.name)}</td><td>${esc(w?.alba||"")}</td><td>${esc(x.leave||"")}</td><td><button class="btn warn sm" data-delr="${esc(x.id)}">${ic("trash","sm")} Устгах</button></td></tr>`;}), "Хуваарь бүртгээгүй байна")}</div>`));
+      return `<tr><td>${esc(x.arrive)}</td><td>${esc(x.name)}</td><td>${esc(albaN(w?.alba))}</td><td>${esc(x.leave||"")}</td><td><button class="btn warn sm" data-delr="${esc(x.id)}">${ic("trash","sm")} Устгах</button></td></tr>`;}), "Хуваарь бүртгээгүй байна")}</div>`));
   bindNav(app, e=>{
     const d=e.target.closest("[data-delr]");
     if(d && confirm("Хуваарийг устгах уу?")) write({["roster/"+d.dataset.delr]: null});
@@ -1439,7 +1443,7 @@ function usersPage(editSap){
         <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
         <div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Эрүүл ахуйч"]], ed?.role||"worker")}</select></div>
-        <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), ed?.alba||ALBA[1])}</select></div>
+        <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>
         <div><label class="f" for="ugender">Хүйс</label><select id="ugender">${opt([["Эр","Эр"],["Эм","Эм"]], ed?.gender||"Эр")}</select></div>
         <div><label class="f" for="ujob">Албан тушаал / ажил</label><input id="ujob" value="${esc(ed?.job||"")}"/></div>
         <div><label class="f" for="upin">${ed?"Нууц үг шинэчлэх (хоосон бол хэвээр)":"Нууц үг *"} ${CLOUD_AUTH?"· ≥6":""}</label><input id="upin" type="password" autocomplete="new-password" ${ed?"":"required"} minlength="${CLOUD_AUTH?6:4}"/></div>
@@ -1451,7 +1455,7 @@ function usersPage(editSap){
     </form>
     <div class="card"><div class="ctitle">${ic("users")}<h3>Бүх хэрэглэгч (${all.length})</h3></div>
     ${CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
-    ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(u.alba)}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
+    ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
       <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
     </div>
     <div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
@@ -1473,7 +1477,7 @@ function usersPage(editSap){
     const sap=$("#usap").value.trim(), pin=$("#upin").value.trim();
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
-    const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:$("#ualba").value, gender:$("#ugender").value,
+    const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:(ed && albaN(ed.alba)===$("#ualba").value) ? ed.alba : $("#ualba").value, gender:$("#ugender").value,
       job:$("#ujob").value.trim(), bookExp:$("#ubook").value, exam:$("#uexam").value};
     delete rec.pin;
     if(!CLOUD_AUTH){
@@ -1507,7 +1511,7 @@ function usersPage(editSap){
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     const wb=new ExcelJS.Workbook(); const s=wb.addWorksheet("Ажилтан");
     s.addRow(["SAP","Нэр","Алба","Хүйс","Ажил","Нууц үг","Цагаан дэвтэр","Шинжилгээ"]);
-    s.addRow(["50019999","Жишээ Нэр","Оюут баар","Эр","Тогооч","","2026-12-31","2026-11-01"]);
+    s.addRow(["50019999","Жишээ Нэр","Бар","Эр","Тогооч","","2026-12-31","2026-11-01"]);
     downloadWb(wb, "EAHS_ajiltan_zagvar.xlsx");
   };
   $("#ximp").onchange=async e=>{
@@ -1523,11 +1527,11 @@ function usersPage(editSap){
       if(!sap) { errs.push(i+"-р мөр: SAP хоосон"); return; }
       if(!validKey(sap)) { errs.push(i+"-р мөр: SAP буруу тэмдэгттэй"); return; }
       if(!name) { errs.push(i+"-р мөр: Нэр хоосон"); return; }
-      if(alba && !ALBA.includes(alba)) errs.push(i+"-р мөр: Алба танигдаагүй («"+alba+"»)");
+      if(alba && !ALBA.includes(alba)) errs.push(i+"-р мөр: Алба «"+alba+"» → «"+albaN(alba)+"» болгож хадгална (Оффис / Бар)");
       if(gender && gender!=="Эр" && gender!=="Эм") errs.push(i+"-р мөр: Хүйс Эр/Эм биш");
       if(CLOUD_AUTH && (pin.length<6 || !authSapOk(sap))){ errs.push(i+"-р мөр: "+(!authSapOk(sap)?"SAP латин үсэг/тоо биш":"нууц үг 6-аас богино")+" — алгасна"); return; }
       if(!pin) errs.push(i+"-р мөр: Нууц үг хоосон — «1234» болно, солиулна уу");
-      rows.push({sap,name,role:"worker",alba:ALBA.includes(alba)?alba:(alba||"Оффис"),gender:gender==="Эм"?"Эм":"Эр",job,pin:pin||"1234",
+      rows.push({sap,name,role:"worker",alba:alba?albaN(alba):"Оффис",gender:gender==="Эм"?"Эм":"Эр",job,pin:pin||"1234",
         bookExp:excelDate(row.getCell(7).value),exam:excelDate(row.getCell(8).value)});
     });
     pending=rows;
@@ -1608,7 +1612,7 @@ function reportsPage(){
   const u = requireRole("hygiene"); if(!u) return;
   view(reportsPage, true);
   if(!REPF){ const d=new Date(); d.setMonth(d.getMonth()-5); REPF = {from: ymd(new Date(d.getFullYear(), d.getMonth(), 1)), to: today(), g:"m", alba:""}; }
-  const F = REPF; const inR = x=> x && x.date && x.date>=F.from && x.date<=F.to && (!F.alba || x.alba===F.alba);
+  const F = REPF; const inR = x=> x && x.date && x.date>=F.from && x.date<=F.to && (!F.alba || albaN(x.alba)===F.alba);
   const per = periodList(F.from, F.to, F.g); const cats = per.map(k=>({k, l:periodLabel(k,F.g)}));
   const idx = k=> per.indexOf(k); const zero = ()=> per.map(()=>0);
   // аюул
@@ -1707,7 +1711,7 @@ async function qrPage(){
   $("#qrb").innerHTML = `
     <form class="card" id="qadd"><div class="ctitle">${ic("map")}<h3>Талбай нэмэх</h3></div>
       <div class="frow"><input id="qnew" maxlength="60" placeholder="Жишээ: Агуулах №2, Гал тогоо" aria-label="Шинэ талбайн нэр"/><button class="btn" type="submit">${ic("plus","sm")} Нэмэх</button></div>
-      <p class="muted">Алба: ${ALBA.map(esc).join(", ")} үргэлж жагсаалтад байна.</p></form>
+      <p class="muted">Алба: ${ALBA.map(esc).join(", ")} үргэлж жагсаалтад байна (зөвхөн 2 алба).</p></form>
     <form class="card" id="qsel"><div class="ctitle">${ic("qr")}<h3>Хэвлэх стикер сонгох</h3><span class="muted">A4 хуудсанд 8 стикер (2×4)</span></div>
       <div class="qrgrid">${areas.map(a=>`<label class="qritem"><input type="checkbox" value="${esc(a)}" checked/>${qrSvg(qrUrl(a))}<b>${esc(a)}</b>
         <span class="row-gap"><input type="number" min="1" max="24" value="1" data-copies="${esc(a)}" aria-label="${esc(a)} хувь"/> хувь
@@ -1745,7 +1749,7 @@ async function qrPrint(items){
 const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
 function notifList(){
   const u = me(); if(!u || u.role==="worker") return [];
-  return list("notifs").filter(n=> n && n.id && (u.role==="hygiene" || !n.alba || n.alba===u.alba)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return list("notifs").filter(n=> n && n.id && (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba))).sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
 function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
@@ -1776,7 +1780,7 @@ function openNotif(id){
   const n = (DB.notifs||{})[id]; if(!n) return notifPage();
   markRead([id]);
   if(n.type==="hazard" && DB.hazards[n.ref]) return hazardDetail(n.ref);
-  if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba); }
+  if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
   notifPage();
 }
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"]};
@@ -1789,13 +1793,13 @@ function notifPage(){
     : perm==="denied" ? `<span class="badge b-bad">Хөтчийн мэдэгдлийг хориглосон — хөтчийн тохиргооноос зөвшөөрнө</span>`
     : perm==="none" ? `<span class="badge b-wait">Энэ хөтөч мэдэгдэл дэмжихгүй</span>`
     : `<button class="btn sm" id="nperm">${ic("bell","sm")} Хөтчийн мэдэгдэл асаах</button>`;
-  const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(u.alba)} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан")}
+  const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(albaN(u.alba))} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан")}
     <div class="card row-between wrap nperm"><div class="row-gap">${permHtml}</div>
       <button class="btn ghost sm" id="nall" ${ns.some(n=>!r.has(n.id))?"":"disabled"}>${ic("checks","sm")} Бүгдийг уншсан</button></div>
     <p class="muted">Апп нээлттэй (эсвэл таб далд) үед мэдэгдэл ирнэ. Апп хаалттай үед ирэх «push» мэдэгдэлд сервер шаардлагатай.</p>
     <div class="card nlist">${ns.map(n=>{ const L=NLEVEL[n.level]||["Мэдэгдэл","b-new","bell"]; const un=!r.has(n.id);
       return `<button class="nitem ${un?"unread":""}" data-nid="${esc(n.id)}"><span class="nic ${esc(n.level||"")}">${ic(L[2])}</span>
-        <span class="nbody"><b>${esc(n.title||"")}</b><span>${esc(n.body||"")}</span><small>${esc(n.by||"")} · ${n.ts?esc(new Date(n.ts).toLocaleString("mn-MN")):""}${n.alba?" · "+esc(n.alba):""}</small></span>
+        <span class="nbody"><b>${esc(n.title||"")}</b><span>${esc(n.body||"")}</span><small>${esc(n.by||"")} · ${n.ts?esc(new Date(n.ts).toLocaleString("mn-MN")):""}${n.alba?" · "+esc(albaN(n.alba)):""}</small></span>
         <span class="badge ${L[1]}">${esc(L[0])}</span></button>`; }).join("") || emptyState("Мэдэгдэл алга","Их эрсдэлтэй аюул эсвэл «Ажиллахгүй» тэмдэглэгдэхэд энд гарна","bell")}</div>`));
   bindNav(app, async e=>{
     const it=e.target.closest("[data-nid]"); if(it){ openNotif(it.dataset.nid); return; }
@@ -1844,7 +1848,7 @@ async function changePassword(form){
 function workerPwPage(){
   const u = me(); if(!u) return landing();
   view(workerPwPage, false);
-  const app = mount(`${appbar("ЭАХС · Ажилтан", esc(u.alba||""))}
+  const app = mount(`${appbar("ЭАХС · Ажилтан", esc(albaN(u.alba)))}
     <main class="page"><button class="btn ghost sm" id="wb">${ic("back","sm")} Буцах</button><div class="gap"></div>${pwFormHtml(u)}</main>`);
   $("#wb").onclick = workerHome;
   app.onsubmit = async e=>{ e.preventDefault(); if(await changePassword(e.target)) setTimeout(workerHome, 900); };
@@ -1884,23 +1888,23 @@ function rowsOf(h){ return Object.entries(h?.rows||{}).filter(([,r])=>r).map(([r
 /* Тухайн өдөр талбарт байгаа (хуваарьтай) ажилтнууд */
 function activeRoster(date, alba){
   return list("roster").filter(x=>x.arrive && x.arrive<=date && (!x.leave || date<=x.leave))
-    .map(x=>({x, u:DB.users[keyOf(x.sap)]})).filter(o=>o.u && (!alba || o.u.alba===alba));
+    .map(x=>({x, u:DB.users[keyOf(x.sap)]})).filter(o=>o.u && (!alba || albaN(o.u.alba)===albaN(alba)));
 }
 /* Уртын ээлжийн эхний өдрөөс эхлэн 2 өдөрт 1 удаа */
 const isDueDay = (rosterEntry, date) => daysBetween(rosterEntry.arrive, date) % 2 === 0;
 function hygDue(date, alba){
   const res = {total:0, done:0, byAlba:{}};
+  const daySheets = list("hygcheck").filter(h=>h.date===date);
   activeRoster(date, alba).filter(o=>isDueDay(o.x, date)).forEach(o=>{
-    const a = o.u.alba; const b = res.byAlba[a] = res.byAlba[a] || {total:0, done:0};
-    const h = DB.hygcheck[sheetId(date, a)];
-    const done = rowsOf(h).some(r=>r.sap===o.u.sap && rowStatus(r)!=="empty");
+    const a = albaN(o.u.alba); const b = res.byAlba[a] = res.byAlba[a] || {total:0, done:0};
+    const done = daySheets.filter(h=>albaN(h.alba)===a).some(h=>rowsOf(h).some(r=>r.sap===o.u.sap && rowStatus(r)!=="empty"));
     res.total++; b.total++; if(done){ res.done++; b.done++; }
   });
   return res;
 }
 function hygDueCard(alba){
   const d = hygDue(today(), alba);
-  const albas = alba ? [alba] : ALBA;
+  const albas = alba ? [albaN(alba)] : ALBA;
   return `<div class="card due"><div class="ctitle">${ic("drop")}<h3>Ариун цэврийн хяналт — өнөөдөр</h3><span class="muted">2 өдөрт 1 удаа (ээлжийн 1-р өдрөөс)</span></div>
     <div class="duegrid">${albas.map(a=>{ const b=d.byAlba[a]||{total:0,done:0}; const left=b.total-b.done;
       return `<button class="duebox ${left>0?"warn":b.total?"ok":""}" data-open-hyg="${esc(a)}"><b>${esc(a)}</b>
@@ -1910,25 +1914,25 @@ function hygListPage(){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(hygListPage, true);
   const sup = u.role==="supervisor";
-  const sheets = list("hygcheck").filter(h=>!sup || h.alba===u.alba).sort(byNew);
+  const sheets = list("hygcheck").filter(h=>!sup || albaN(h.alba)===albaN(u.alba)).sort(byNew);
   const app = mount(shell("ариун", `${phead(esc(HYG_TITLE), "Огноо, албаа сонгоод хуудсаа нээнэ")}
     <form class="card" id="hf">
       <div class="g3">
         <div><label class="f" for="hd">Огноо</label><input type="date" id="hd" value="${today()}" required/></div>
-        <div><label class="f" for="ha">Алба</label><select id="ha" ${sup?"disabled":""}>${ALBA.map(a=>`<option ${a===(sup?u.alba:ALBA[1])?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
+        <div><label class="f" for="ha">Алба</label><select id="ha" ${sup?"disabled":""}>${ALBA.map(a=>`<option ${a===(sup?albaN(u.alba):"Бар")?"selected":""}>${esc(a)}</option>`).join("")}</select></div>
         <div class="end"><button class="btn" type="submit">Хуудас нээх / бөглөх</button></div>
       </div>
     </form>
     ${hygDueCard(sup?u.alba:null)}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Бүртгэсэн хуудсууд</h3></div>
     ${tbl(["Огноо","Алба","Ажилтан","Хангаагүй","Шалгасан",""], sheets.map(h=>{ const rs=rowsOf(h); const bad=rs.filter(r=>rowStatus(r)==="fail").length;
-      return `<tr><td>${esc(h.date)}</td><td>${esc(h.alba)}</td><td>${rs.length}</td><td>${bad?`<span class="badge b-bad">${bad}</span>`:'<span class="badge b-ok">0</span>'}</td>
+      return `<tr><td>${esc(h.date)}</td><td>${esc(albaN(h.alba))}</td><td>${rs.length}</td><td>${bad?`<span class="badge b-bad">${bad}</span>`:'<span class="badge b-ok">0</span>'}</td>
       <td>${h.checkedBy?esc(h.checkedBy):'<span class="muted">—</span>'}</td>
       <td class="nowrap"><button class="btn sm" data-he="${esc(h.id)}">Засах</button> <button class="btn ghost sm" data-hp="${esc(h.id)}">${ic("printer","sm")} Хэвлэх</button>${sup?"":` <button class="btn warn sm" data-hdel="${esc(h.id)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`;}), "Одоогоор хуудас бүртгээгүй")}
     </div>`));
   bindNav(app, e=>{
     const o=e.target.closest("[data-open-hyg]"); if(o){ hygEdit(today(), o.dataset.openHyg); return; }
-    const he=e.target.closest("[data-he]"); if(he){ const h=DB.hygcheck[he.dataset.he]; if(h) hygEdit(h.date, h.alba); return; }
+    const he=e.target.closest("[data-he]"); if(he){ const h=DB.hygcheck[he.dataset.he]; if(h) hygEdit(h.date, h.alba, h.id); return; }
     const hp=e.target.closest("[data-hp]"); if(hp){ hygPrint(hp.dataset.hp); return; }
     const hd=e.target.closest("[data-hdel]");
     if(hd && confirm("Энэ хуудсыг устгах уу?")){ write({["hygcheck/"+hd.dataset.hdel]: null}); toast("Устгалаа"); }
@@ -1936,12 +1940,16 @@ function hygListPage(){
   app.onsubmit = e=>{ e.preventDefault(); hygEdit($("#hd").value||today(), sup?u.alba:$("#ha").value); };
 }
 
-function hygEdit(date, alba){
+function hygEdit(date, alba, sid){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
-  if(u.role==="supervisor") alba = u.alba;
-  view(()=>hygEdit(date, alba), false);
-  const id = sheetId(date, alba);
+  // Хуучин нэртэй (жишээ нь «Оюут баар») хадгалсан хуудсыг id-аар нь нээнэ; шинэ хуудас «Оффис»/«Бар»
+  const old = sid && DB.hygcheck[sid] ? DB.hygcheck[sid] : null;
+  alba = albaN(u.role==="supervisor" ? u.alba : (old ? old.alba : alba)) || "Бар";
+  if(old && u.role==="supervisor" && albaN(old.alba)!==alba){ toast("Энэ хуудас таны албанд хамаарахгүй"); return hygListPage(); }
+  view(()=>hygEdit(date, alba, sid), false);
+  const id = old ? sid : sheetId(date, alba);
   const orig = DB.hygcheck[id];
+  const storeAlba = orig?.alba || alba;  // хадгалсан албаны нэрийг дарж бичихгүй
   const isNew = !orig;
   const W = { id, date, alba, checkedBy: orig?.checkedBy || "", checkedAt: orig?.checkedAt || "", rows: rowsOf(orig).map(r=>({...r, c: HYG_CRIT.map((_,i)=>cellVal(r,i))})) };
   const dirty = new Set(), dirtySign = new Set(), removed = new Set();
@@ -1959,7 +1967,7 @@ function hygEdit(date, alba){
   const app = mount(shell("ариун", `<div id="hedit"></div>`));
   const box = $("#hedit");
   function draw(){
-    const albaWorkers = users().filter(w=>w.alba===alba && w.role!=="hygiene" && !W.rows.some(r=>r.sap===w.sap)).sort((a,b)=>a.name.localeCompare(b.name));
+    const albaWorkers = users().filter(w=>albaN(w.alba)===alba && w.role!=="hygiene" && !W.rows.some(r=>r.sap===w.sap)).sort((a,b)=>a.name.localeCompare(b.name));
     const failN = W.rows.filter(r=>rowStatus(r)==="fail").length;
     box.innerHTML = `
       <div class="row-between wrap"><div><h2 class="ptitle">${esc(HYG_TITLE)}</h2>
@@ -2001,7 +2009,7 @@ function hygEdit(date, alba){
   const rowOf = el => { const tr=el.closest("tr[data-rk]"); return tr ? W.rows.find(r=>r.rk===tr.dataset.rk) : null; };
   function save(silent){
     const base = "hygcheck/"+id;
-    const upd = { [base+"/id"]:id, [base+"/date"]:date, [base+"/alba"]:alba, [base+"/checkedBy"]:W.checkedBy||"", [base+"/checkedAt"]:W.checkedAt||"",
+    const upd = { [base+"/id"]:id, [base+"/date"]:date, [base+"/alba"]:storeAlba, [base+"/checkedBy"]:W.checkedBy||"", [base+"/checkedAt"]:W.checkedAt||"",
       [base+"/_u"]:Date.now(), [base+"/updatedBy"]:u.name };
     if(isNew && !DB.hygcheck[id]) upd[base+"/createdBy"] = u.name;
     W.rows.forEach(r=>{
@@ -2071,7 +2079,7 @@ function hygPrint(id){
         <h1>${esc(HYG_TITLE)}</h1>
         <div class="sh-logo-sp"></div>
       </div>
-      <div class="sh-meta"><span>Алба: ${esc(h.alba||"")}</span><span>Огноо: <b>${esc(h.date||"")}</b></span></div>
+      <div class="sh-meta"><span>Алба: ${esc(albaN(h.alba))}</span><span>Огноо: <b>${esc(h.date||"")}</b></span></div>
       <table class="sht">
         <colgroup><col class="w-no"/><col class="w-name"/><col class="w-pos"/>${HYG_CRIT.map(()=>'<col class="w-crit"/>').join("")}<col class="w-sign"/></colgroup>
         <thead>
@@ -2088,8 +2096,319 @@ function hygPrint(id){
   const fit = ()=>{ const sh=$(".sheet"); if(!sh) return; const z=Math.min(1,(window.innerWidth-24)/1060); sh.style.zoom = z<1? z.toFixed(3) : ""; };
   fit(); window.onresize = fit;
   $("#pp").onclick = ()=>window.print();
-  $("#pe").onclick = ()=>hygEdit(h.date, h.alba);
+  $("#pe").onclick = ()=>hygEdit(h.date, h.alba, h.id);
   $("#pb").onclick = hygListPage;
+}
+
+/* ======================= АХЛАХЫН ХЯНАЛТЫН ХУУДАС (xlsx маягт) =======================
+   Эх: «Ахлах ажилтны өдөр тутмын цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас» (8 хуудас/sheet).
+   Бичлэг: svcheck/{id} = {id,tpl,start,heseg,alba,inspector,createdBy,createdBySap,_u,updatedBy,
+     cells/{ik}/{d0..d6} = "ok"|"imp"|"no", notes/{ik}/{d0..d6} = "…", sign/{d0..d6} = {by,sap,at}}
+   Бичихдээ зөвхөн өөрчлөгдсөн замыг (per-path) бичнэ. */
+const SV_TPL = {"oyut":{"name":"Оюут (нэгдсэн, 2026)","sheet":"Оюут","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"zg","name":"Зөөгч","items":[["Текний цэвэрлэгээ","d"],["Тоглоомнуудын тоос","d"],["Эмийн сан цэвэрлэгээ","d"],["Зөөврийн депүзер цэвэрлэгээ","w"],["Задгай пивоны хөргүүр дотор гадна","w"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","w"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхны цэвэрлэгээ /гадна, дотор/","w"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханийн цэвэрлэгээ","2w"],["Ханын доод гарнез цэвэрлэгээ","2w"],["Өлгүүрнүүдийн цэвэрлэгээ","w"],["Диспенсерүүдийн цэвэрлэгээ","d"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Пьечны цэвэрлэгээ","d"],["Хурлын өрөөний бичиг цаас эмх цэгц","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","w"],["Унтраалганы цэвэрлэгээ","d"],["Буйдангийн цэвэрлэгээ","w"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Пос цэнэглэх, цэвэрлэх","d"],["Цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хөргүүрийн дотор цэвэрлэгээ","w"],["Хөгжимийн хэсэг","d"],["Дарсны тек цэвэрлэгээ","d"],["Ком дэлгэц арчих","d"],["Ахлахын өрөөний цэвэрлэгээ","d"],["ХАБ гүйдэг хаалга","w"],["Хувин цэвэрлэгээ","d"],["Алчуур дэлгэж хатаах","d"],["5s буюу эмх цэгц","d"]]},{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ /Ногоон/","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","w"],["Цонхны цэвэрлэгээ","d"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","d"],["Нойлын кабины никель хүрээний өнгөлгөө","w"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","d"],["Тольны цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","w"],["Хогийн савны цэвэрлэгээ","d"],["Ангор шал","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Такси цэвэрлэгээ","w"],["Тэмдэг тэмдэглэгээ арчих","w"],["Тавилагны арын хог","w"],["Хогын шүүр хутгуур цэвэрлэгээ","w"],["Хурлын өрөөний цэвэрлэгээ","d"],["Гар цаастай эсэх түүний тавиур","d"],["5s буюу эмх цэгц","d"]]},{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбайн тоос шороо","d"],["Гадаа талбайн хог түүх","d"],["BBQ хашаа хэсэг","d"],["Хогын цэг","d"],["Тамхины цэг","d"],["Гадаа хогын сав","d"]]},{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Зурагт болон удирдлага ажиллагаатай эсэх","d"],["Заал шал","d"],["Текний эмх цэгц","d"],["Кордор шал","d"],["Тооллого тооцоо","d"]]}]},"manlai":{"name":"Манлай (нэгдсэн)","sheet":"Манлай","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"zg","name":"Зөөгч","items":[["Дарс Текний цэвэрлэгээ","d"],["Ширээний цэвэрлэгээ /тавцан/","d"],["Ширээ тавцан /сойтогдож угаах/","w"],["Шалны хүрээ","w"],["Эмийн сан цэвэрлэгээ","d"],["Задгай пивоны хөргүүр дотор гадна","d"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","d"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхнй цэвэрлэгээ /гадна,дотор/","d"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханын цэвэрлэгээ","w"],["Ханын доод гарнез цэвэрлэгээ","w"],["Өлгүүрнүүдийн цэвэрлэгээ","d"],["Диспенсерүүдийн цэвэрлэгээ","d"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","d"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн темпратур бүртгэл","d"],["Пос цэнэглэх, арчиж цэвэрлэх","d"],["5S буюу эмх цэгц",""]]},{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","d"],["Цонхны цэвэрлэгээ","d"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","d"],["Нойлын кабины никель хүрээний өнгөлгөө","d"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","d"],["Тольны цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Хурлын өрөөний цэврэлгээ","d"],["Гар цаастай эсэх түүний тавиур",""]]},{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбай шүүрдэх","d"],["Гадна талбайн хог түүх","d"],["Тамхны цэгийн хог түүх","d"],["Тамхны цэгийн хог сав угаах","w"],["Хогоо ангилаж хаях","d"],["Хогын цэгийг эмх цэгцтэй байлгах","d"],["Гадаа талбай мөс хусаж цэвэрлэх / давс цацах/","d"]]},{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Шалны цэвэрлэгээ","d"],["Текны эмх цэгц","d"],["Хогоо ангилаж хаях","d"]]}]},"zoogch":{"name":"Зөөгч","sheet":"Зөөгч","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","title":"Ахлах ажилтны цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас","secs":[{"k":"zg","name":"Зөөгч","items":[["Текний цэвэрлэгээ","d"],["Тоглоомнуудын тоос","d"],["Эмийн сан цэвэрлэгээ","d"],["Зөөврийн депүзер цэвэрлэгээ","w"],["Задгай пивоны хөргүүр дотор гадна","w"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","w"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхны цэвэрлэгээ /гадна, дотор/","w"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханийн цэвэрлэгээ","2w"],["Ханын доод гарнез цэвэрлэгээ","2w"],["Өлгүүрнүүдийн цэвэрлэгээ","w"],["Диспенсерүүдийн цэвэрлэгээ","w"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Пьечны цэвэрлэгээ","d"],["Хурлын өрөөний цэвэрлэгээ","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","w"],["Унтраалганы цэвэрлэгээ","w"],["Буйдангийн цэвэрлэгээ","w"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Пос цэнэглэх, цэвэрлэх","d"],["Цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хөргүүр дотор цэвэрлгээ","w"],["Хөгжимийн хэсэг",""],["Дарсны тек цэврэлгээ","d"],["Ком арчих","d"],["Ахлахын өрөөний эмх цэгц","d"],["HUB-гүйдэг хаалга","w"],["Хувин цэврэлгээ","d"],["Арчуур дэлгэж хатаах","d"]]}]},"hk":{"name":"Үйлчилгээний ажилтан (HK)","sheet":"HK","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ /Ногоон/","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","w"],["Цонхны цэвэрлэгээ","w"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","w"],["Нойлын кабины никель хүрээний өнгөлгөө","w"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","w"],["Толины цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","w"],["Хогийн савны цэвэрлэгээ","d"],["Такси цэврэлгээ","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Гар цаастай эсэх түүний тавиур","d"],["Тэмдэг тэмдэглэгээ арчих","d"],["Тавилганы арын хог","w"],["Тосгуурны гаднах цагаан тавцан","d"],["Хогын шүүр хутгуур цэврэлгээ","d"],["Ханын цэвэрлэгээ","2w"],["Хурлын өрөө цэвэрлэгээ","d"]]}]},"tuslah":{"name":"Туслах ажилтан (гадаа талбай)","sheet":"Туслах","kind":"weekly","freq":["d","w","2w"],"orient":"portrait","secs":[{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбайн шороо шүүрдэх","d"],["Гадаа талбайн хог түүх","d"],["Гадаа хогын сав угаах","w"],["Гадаа талбайг угаах","w"],["Тамхины цэгийн хог түүх","d"],["Тамхины цэгийг угаах","w"],["Гадуур тамхины иш түүх","d"],["Ширээ сандал зөөх эмх цэгц","d"],["Ногоон шал угаах","d"],["Агуулах цэгцлэж янзлах","w"],["Дартс биллиард цэвэрлэгээ","d"],["Хогыг ангилаж цэгцлэж хаях","d"],["Гадаа талбайд давс цацах","d"],["Хогын цэгийг цэгцлэх","d"],["BBQ хашаа хэсэг цэвэрлэх","d"]]}]},"barmen":{"name":"Бармен","sheet":"Бармен","kind":"weekly","freq":["d"],"orient":"portrait","approve":"Батлав. Үйл ажиллагааны менежер","extra":1,"secs":[{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Зурагт болон удирдлага ажиллагаатай эсэх","d"],["Хог ангилж цэгцэлж хаях","d"],["Текний эмх цэгц","d"],["Хогын цэгийг цэгцлэх","d"],["Дартс биллиард цэвэрлэгээ","d"],["Ногоон шал угаах","d"],["Ширээ сандал зөөх эмх цэгц","d"],["Текний эмх цэгц","d"],["Хогын цэгийг цэгцлэх","d"],["Дартс биллиард цэвэрлэгээ","d"],["Коридор шал",""],["Тооллого тооцоо","d"]]}]},"servis":{"name":"Сервисийн өмнөх шалгалт (бармен)","sheet":"Сервис","kind":"service","freq":[],"orient":"landscape","extra":2,"title":"Ахлах ажилтан барменыг сервист гарахаас өмнөх хяналт шалгалт хийх хуудас","secs":[{"k":"sv","name":"","items":[["Хувцас жигдрэлт",""],["Үс засалт",""],["ХХХ-бүрэн байдал",""],["Пос цаас бэлдэх",""],["Пиво, Вино оруулах",""],["Пиво тоолох",""],["Ком шалгах",""],["Пос шалгах",""],["Касс мөнгө тулгах",""],["Биеэ бэлдэх",""],["Пиво, Вино задлагч",""],["Хогын уут бэлдэх",""],["Бээлий бэлдэх",""],["Тооцооны цаас бэлдэх",""],["Хутга бэлдэх",""],["Цаг баримтлах",""],["10-20мин өмнө тамхи татах",""],["QR-Тай stand бэлдэх",""],["Текний арын өрөлт",""],["АЭӨмнөх эмх цэгц",""],["Ай ди уншигч шалгах",""],["Зурагт асаасан эсэх",""]]}]},"abarmen":{"name":"Ахлах бармены ажил үүрэг","sheet":"А.Бармен","kind":"duty","freq":[],"orient":"portrait","title":"Ахлах бармены өдөр тутмын ажил үүрэгийн жагсаалт","inspector":"Ээлжийн ахлах ажилтан","itemHead":"Хийгдэх ажилууд","secs":[{"k":"ab","name":"","items":[["Тооллого хийх",""],["Цэвэрлэгээ үйлчилгээ шалгах",""],["Сервист гарах",""],["Ахлах ажилтантай өглөө ээлжилж ирэх",""],["Шаардлагатхай тохиолдолд тооцоо хийх",""],["Ахлах ажилтны өгсөн үүрэг даалгавар чиглэлийн дагуу ажиллах",""],["Аваарын хаалга онгойлгох",""]]}]}};
+const SV_TITLE = "Ахлах ажилтны өдөр тутмын цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас";
+const SV_FQ = {d:"Өдөр бүр", w:"7х1", "2w":"14х1"};
+const SV_FQ_L = {d:"Өдөр бүр", w:"7 хоногт 1", "2w":"14 хоногт 1", "":"Давтамж заагаагүй"};
+const SV_WD = ["Да","Мя","Лх","Пү","Ба","Бя","Ня"];
+const SV_DK = ["d0","d1","d2","d3","d4","d5","d6"];
+const svT = k => SV_TPL[k] || SV_TPL.oyut;
+const svDays = start => SV_DK.map((_,i)=>addDays(i, start));
+const svMon = d => { const x = new Date(d+"T00:00:00"); return addDays(-((x.getDay()+6)%7), d); };
+const svId = (tpl, start, heseg) => keyOf(tpl+"_"+start+"_"+String(heseg||"").trim().slice(0,60));
+const svItems = t => t.secs.flatMap(s=>s.items.map((it,i)=>({sk:s.k, sec:s.name, n:i+1, text:it[0], f:it[1], ik:s.k+(i+1)})));
+const svHeseg = h => { const s = String(h||"").trim(); return !s ? "" : /ба?ар$/i.test(s) ? s : s+" баар"; };
+const svCell = (r, ik, d) => (r && r.cells && r.cells[ik] && r.cells[ik][d]) || "";
+const svNote = (r, ik, d) => (r && r.notes && r.notes[ik] && r.notes[ik][d]) || "";
+const svWd = d => SV_WD[(new Date(d+"T00:00:00").getDay()+6)%7];
+const svMD = d => d ? d.slice(5).replace("-","/") : "";
+function svStats(r){
+  const t = svT(r.tpl), its = svItems(t); let ok=0, imp=0, no=0;
+  its.forEach(it=>SV_DK.forEach(d=>{
+    const vs = t.kind==="service" ? [svCell(r,it.ik+"m",d), svCell(r,it.ik+"e",d)] : [svCell(r,it.ik,d)];
+    vs.forEach(v=>{ if(v==="ok") ok++; else if(v==="imp") imp++; else if(v==="no") no++; });
+  }));
+  const signed = SV_DK.filter(d=>r.sign && r.sign[d]).length;
+  return {ok, imp, no, bad: imp+no, signed, items: its.length};
+}
+/* Давтамжтай мөр энэ 7 хоногт (14х1 бол өмнөх 7 хоногийн хуудсанд ч) хийгдсэн эсэх */
+function svDoneElsewhere(r, it, di){
+  const t = svT(r.tpl); if(t.kind!=="weekly" || !(it.f==="w" || it.f==="2w")) return "";
+  const days = svDays(r.start);
+  for(let i=0;i<7;i++){ if(i!==di && svCell(r,it.ik,SV_DK[i])==="ok") return days[i]; }
+  if(it.f==="2w"){ const p = DB.svcheck[svId(r.tpl, addDays(-7, r.start), r.heseg)];
+    if(p) for(let i=6;i>=0;i--){ if(svCell(p,it.ik,SV_DK[i])==="ok") return svDays(p.start)[i]; } }
+  return "";
+}
+function svCanEdit(u, r){ return u.role==="supervisor" && (!r || albaN(r.alba)===albaN(u.alba)); }
+
+function svListPage(){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  view(svListPage, true);
+  const sup = u.role==="supervisor";
+  const F = window.SVF = window.SVF || {tpl:"", alba:""};
+  const recs = list("svcheck").filter(r=>r && r.id && (!sup || albaN(r.alba)===albaN(u.alba)))
+    .filter(r=>(!F.tpl || r.tpl===F.tpl) && (sup || !F.alba || albaN(r.alba)===F.alba))
+    .sort((a,b)=>String(b.start||"").localeCompare(String(a.start||"")) || String(a.heseg||"").localeCompare(String(b.heseg||"")));
+  const hesegs = [...new Set(list("svcheck").map(r=>r.heseg).filter(Boolean))];
+  const tplOpts = sel => Object.entries(SV_TPL).map(([k,t])=>`<option value="${k}" ${k===sel?"selected":""}>${esc(t.name)}</option>`).join("");
+  const app = mount(shell("хяналт", `${phead("Ахлахын хяналтын хуудас", sup?`${esc(albaN(u.alba))} · Цэвэрлэгээ үйлчилгээний 7 хоногийн хяналт`:"Ахлах ажилтнуудын бөглөсөн хяналтын хуудас — харах, хэвлэх, Excel")}
+    ${sup?`<form class="card" id="svf"><div class="ctitle">${ic("clipboard")}<h3>Хуудас нээх / бөглөх</h3></div>
+      <div class="g3">
+        <div><label class="f" for="svtpl">Маягт</label><select id="svtpl">${tplOpts(F.last||"oyut")}</select></div>
+        <div><label class="f" for="svst">7 хоногийн эхний өдөр</label><input type="date" id="svst" value="${svMon(today())}" required/></div>
+        <div><label class="f" for="svh">Хэсэг (баар)</label><input id="svh" list="svhl" maxlength="60" required placeholder="Жишээ: Оюут" value="${esc(F.heseg||"")}"/><datalist id="svhl">${hesegs.map(h=>`<option value="${esc(h)}">`).join("")}</datalist></div>
+      </div>
+      <div class="svfoot"><button class="btn" type="submit">${ic("edit","sm")} Нээх / бөглөх</button></div></form>`:""}
+    <div class="card"><div class="ctitle">${ic("file")}<h3>Бүртгэсэн хуудсууд</h3><span class="muted">${recs.length}</span></div>
+      <div class="frow svfilt">
+        <select id="svft" aria-label="Маягт"><option value="">Бүх маягт</option>${tplOpts(F.tpl)}</select>
+        ${sup?"":`<select id="svfa" aria-label="Алба"><option value="">Бүх алба</option>${ALBA.map(a=>`<option ${F.alba===a?"selected":""}>${esc(a)}</option>`).join("")}</select>`}
+      </div>
+      ${tbl(["7 хоног","Маягт","Хэсэг","Алба","Бөглөсөн","Сайжруулах","Гарын үсэг",""], recs.map(r=>{ const s=svStats(r); const ds=svDays(r.start);
+        return `<tr><td class="nowrap">${esc(r.start)} — ${esc(svMD(ds[6]))}</td><td>${esc(svT(r.tpl).name)}</td><td>${esc(r.heseg||"")}</td><td>${esc(albaN(r.alba))}</td>
+          <td>${s.ok+s.bad}</td><td>${s.bad?`<span class="badge b-bad">${s.bad}</span>`:'<span class="badge b-ok">0</span>'}</td><td>${s.signed}/7</td>
+          <td class="nowrap"><button class="btn sm" data-svo="${esc(r.id)}">${svCanEdit(u,r)?"Бөглөх":"Харах"}</button> <button class="btn ghost sm" data-svp="${esc(r.id)}">${ic("printer","sm")} Хэвлэх</button> <button class="btn ghost sm" data-svx="${esc(r.id)}">${ic("sheet","sm")} Excel</button>${sup?"":` <button class="btn warn sm" data-svd="${esc(r.id)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`; }), "Одоогоор хяналтын хуудас бүртгээгүй")}
+    </div>`));
+  bindNav(app, async e=>{
+    const o=e.target.closest("[data-svo]"); if(o){ svEdit(o.dataset.svo); window.scrollTo(0,0); return; }
+    const p=e.target.closest("[data-svp]"); if(p){ svPrint(p.dataset.svp); return; }
+    const x=e.target.closest("[data-svx]"); if(x){ await svExcel([DB.svcheck[x.dataset.svx]]); return; }
+    const d=e.target.closest("[data-svd]");
+    if(d && confirm("Энэ хяналтын хуудсыг устгах уу?")){ write({["svcheck/"+d.dataset.svd]: null}); toast("Устгалаа"); }
+  });
+  app.onchange = e=>{
+    if(e.target.id==="svft"){ F.tpl=e.target.value; svListPage(); }
+    if(e.target.id==="svfa"){ F.alba=e.target.value; svListPage(); }
+  };
+  const f = $("#svf");
+  if(f) f.onsubmit = e=>{ e.preventDefault();
+    const tpl=$("#svtpl").value, start=$("#svst").value||svMon(today()), heseg=$("#svh").value.trim();
+    if(!heseg){ toast("Хэсгийн нэрээ бичнэ үү"); return; }
+    F.last=tpl; F.heseg=heseg;
+    svEdit(svId(tpl,start,heseg), {tpl, start, heseg}); window.scrollTo(0,0);
+  };
+}
+
+function svEdit(id, init){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const existing = DB.svcheck[id];
+  if(!existing && !(init && u.role==="supervisor")){ toast("Хуудас олдсонгүй"); return svListPage(); }
+  if(existing && u.role==="supervisor" && !svCanEdit(u, existing)){ toast("Энэ хуудас таны албанд хамаарахгүй"); return svListPage(); }
+  view(()=>svEdit(id, init), false);
+  const R = ()=> DB.svcheck[id] || {id, tpl:init.tpl, start:init.start, heseg:init.heseg, alba:albaN(u.alba), inspector:u.name};
+  const edit = svCanEdit(u, existing);
+  const t = svT(R().tpl), its = svItems(t), days = svDays(R().start);
+  let di = Math.max(0, days.indexOf(today()));
+  const base = "svcheck/"+id;
+  const app = mount(shell("хяналт", `<div id="sved"></div>`));
+  const box = $("#sved");
+  function put(upd){
+    if(!edit) return;
+    const all = {};
+    if(!DB.svcheck[id]){ const r=R(); Object.assign(all, {[base+"/id"]:id, [base+"/tpl"]:r.tpl, [base+"/start"]:r.start, [base+"/heseg"]:r.heseg,
+      [base+"/alba"]:r.alba, [base+"/inspector"]:r.inspector||"", [base+"/createdBy"]:u.name, [base+"/createdBySap"]:u.sap}); }
+    Object.assign(all, upd, {[base+"/_u"]:Date.now(), [base+"/updatedBy"]:u.name});
+    write(all);
+  }
+  function itemHtml(it){
+    const r = R(), d = SV_DK[di];
+    if(t.kind==="service"){
+      const seg = (sfx, lbl) => { const v=svCell(r,it.ik+sfx,d);
+        return `<div class="svseg" role="group" aria-label="${esc(lbl)}"><span>${esc(lbl)}</span>
+          <button type="button" class="svb ok ${v==="ok"?"on":""}" data-k="${it.ik+sfx}" data-v="ok" aria-pressed="${v==="ok"}" ${edit?"":"disabled"}>✓</button>
+          <button type="button" class="svb no ${v==="no"?"on":""}" data-k="${it.ik+sfx}" data-v="no" aria-pressed="${v==="no"}" ${edit?"":"disabled"}>✗</button></div>`; };
+      const st = [svCell(r,it.ik+"m",d), svCell(r,it.ik+"e",d)];
+      return `<div class="svi ${st.includes("no")?"imp":st.every(v=>v==="ok")?"ok":""}"><span class="svn">${it.n}</span><div class="svt">${esc(it.text)}</div>
+        <div class="svbs two">${seg("m","Өглөө")}${seg("e","Орой")}</div></div>`;
+    }
+    const v = svCell(r,it.ik,d), note = svNote(r,it.ik,d), el = svDoneElsewhere(r, it, di);
+    return `<div class="svi ${v} ${el&&!v?"done-el":""}"><span class="svn">${it.n}</span>
+      <div class="svt">${esc(it.text)}${t.freq.length?` <small class="fq fq-${it.f||"x"}">${esc(SV_FQ_L[it.f||""])}</small>`:""}${el&&!v?` <small class="fq fq-done">${esc(svMD(el))}-нд хийсэн</small>`:""}</div>
+      <div class="svbs"><button type="button" class="svb ok ${v==="ok"?"on":""}" data-k="${it.ik}" data-v="ok" aria-pressed="${v==="ok"}" ${edit?"":"disabled"}>✓ Бүрэн</button>
+        <button type="button" class="svb imp ${v==="imp"?"on":""}" data-k="${it.ik}" data-v="imp" aria-pressed="${v==="imp"}" ${edit?"":"disabled"}>! Сайжруулах</button></div>
+      ${v==="imp"?`<input class="svnote" data-nk="${it.ik}" maxlength="200" value="${esc(note)}" placeholder="Юуг сайжруулах вэ? (заавал биш)" aria-label="Сайжруулах тэмдэглэл" ${edit?"":"readonly"}/>`:""}
+    </div>`;
+  }
+  function dayProg(i){
+    const r = R(), d = SV_DK[i]; let need=0, done=0;
+    its.forEach(it=>{
+      if(t.kind==="service"){ need+=2; done += ["m","e"].filter(s=>svCell(r,it.ik+s,d)).length; return; }
+      const v = svCell(r,it.ik,d);
+      if(v){ need++; done++; return; }
+      if(!svDoneElsewhere(r, it, i)) need++;
+    });
+    return {need, done};
+  }
+  function draw(){
+    const r = R(), d = SV_DK[di], sg = r.sign && r.sign[d], p = dayProg(di);
+    box.innerHTML = `
+      <div class="phead"><div><h2 class="ptitle">${esc(t.title||SV_TITLE)}</h2>
+        <p class="muted">${esc(t.name)} · Хэсэг: <b>${esc(svHeseg(r.heseg))}</b> · ${esc(albaN(r.alba))} · ${esc(r.start)} — ${esc(svMD(days[6]))}${DB.svcheck[id]?"":" · Шинэ хуудас"}${edit?"":" · Зөвхөн харах"}</p></div>
+        <div class="row-gap noprint"><button class="btn ghost sm" data-act="back">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" data-act="print">${ic("printer","sm")} Хэвлэх</button>${u.role==="hygiene"?`<button class="btn ghost sm" data-act="xl">${ic("sheet","sm")} Excel</button>`:""}</div></div>
+      <div class="card svmeta">
+        <label class="f" for="svins">Шалгалт хийсэн: ${esc(t.inspector||"Ахлах ажилтан")}</label>
+        <input id="svins" maxlength="80" value="${esc(r.inspector||"")}" placeholder="Нэр" ${edit?"":"readonly"}/>
+      </div>
+      <div class="svdays" role="tablist" aria-label="Өдөр сонгох">${days.map((dd,i)=>{ const q=dayProg(i); const s=r.sign&&r.sign[SV_DK[i]];
+        return `<button type="button" role="tab" class="svday ${i===di?"on":""} ${dd===today()?"today":""}" data-di="${i}" aria-selected="${i===di}">
+          <span>${svWd(dd)}</span><b>${esc(svMD(dd))}</b><small>${s?"✓ гарын үсэг":q.done?`${q.done}/${q.need}`:"—"}</small></button>`; }).join("")}</div>
+      <div class="card svprog"><div class="row-between"><b>${esc(days[di])} (${svWd(days[di])})</b><span class="muted">${p.done}/${p.need} шалгасан</span></div>
+        <div class="bar"><i style="width:${p.need?Math.round(100*p.done/p.need):0}%"></i></div>
+        ${t.kind==="weekly"&&t.freq.length>1?`<p class="muted small">7х1 / 14х1 мөрийг 7 (14) хоногт нэг удаа шалгана — өөр өдөр «Бүрэн» болсон бол саарал харагдана.</p>`:""}</div>
+      ${t.secs.map(s=>{ const sits = its.filter(it=>it.sk===s.k);
+        return `<section class="card svsec"><div class="svsh"><h3>${esc(s.name||t.itemHead||"Шалгах зүйлс")}</h3>
+          ${edit?`<button type="button" class="btn ghost sm" data-allok="${s.k}">${ic("checks","sm")} Бүгд бүрэн</button>`:""}</div>
+          ${sits.map(itemHtml).join("")}</section>`; }).join("")}
+      <div class="savebar noprint">
+        ${edit?`<button type="button" class="btn ${sg?"ghost":""}" data-act="sign">${ic("check")} ${sg?`Батлагдсан · ${esc(sg.by)} (цуцлах)`:`Өдрийг батлах · ${esc(svMD(days[di]))}`}</button>`:""}
+        <button type="button" class="btn ghost" data-act="print">${ic("printer")} Хэвлэх</button>
+      </div>`;
+  }
+  bindNav(app, async e=>{
+    const a = e.target.closest("[data-act]")?.dataset.act;
+    if(a==="back"){ svListPage(); window.scrollTo(0,0); return; }
+    if(a==="print"){ if(!DB.svcheck[id]){ toast("Эхлээд нэг ч гэсэн мөр бөглөнө үү"); return; } svPrint(id); return; }
+    if(a==="xl"){ await svExcel([DB.svcheck[id]]); return; }
+    const dEl = e.target.closest("[data-di]"); if(dEl){ di = +dEl.dataset.di; draw(); return; }
+    if(!edit) return;
+    const d = SV_DK[di];
+    if(a==="sign"){ const s = R().sign && R().sign[d];
+      if(s && !confirm("Энэ өдрийн баталгаажуулалтыг цуцлах уу?")) return;
+      put({[base+"/sign/"+d]: s ? null : {by:u.name, sap:u.sap, at:nowStr()}}); toast(s?"Цуцаллаа":"Баталгаажууллаа"); draw(); return; }
+    const b = e.target.closest("[data-k]");
+    if(b){ const k=b.dataset.k, v=b.dataset.v, cur=svCell(R(),k,d);
+      const upd = {[base+"/cells/"+k+"/"+d]: cur===v ? null : v};
+      if(cur==="imp" && v!=="imp" && svNote(R(),k,d)) upd[base+"/notes/"+k+"/"+d] = null;
+      put(upd); draw(); return; }
+    const all = e.target.closest("[data-allok]");
+    if(all){ const upd = {};
+      its.filter(it=>it.sk===all.dataset.allok).forEach(it=>{
+        if(t.kind==="service"){ ["m","e"].forEach(s=>{ if(!svCell(R(),it.ik+s,d)) upd[base+"/cells/"+it.ik+s+"/"+d]="ok"; }); return; }
+        if(!svCell(R(),it.ik,d) && !svDoneElsewhere(R(), it, di)) upd[base+"/cells/"+it.ik+"/"+d]="ok"; });
+      if(Object.keys(upd).length){ put(upd); draw(); toast(Object.keys(upd).length+" мөр «Бүрэн»"); } else toast("Хоосон мөр алга");
+    }
+  });
+  app.onchange = e=>{
+    if(!edit) return;
+    if(e.target.id==="svins"){ put({[base+"/inspector"]: e.target.value.trim()}); return; }
+    const nk = e.target.dataset.nk;
+    if(nk){ put({[base+"/notes/"+nk+"/"+SV_DK[di]]: e.target.value.trim() || null}); }
+  };
+  draw();
+}
+
+/* ---- Цаасан маягттай ижил хэвлэх хувилбар ---- */
+function svSheetHtml(r){
+  const t = svT(r.tpl), its = svItems(t), days = svDays(r.start);
+  const FQ = t.kind==="weekly" ? t.freq : [];
+  const sub = t.kind==="service" ? ["Өглөө сервис","Орой сервис"] : ["Бүрэн эсэх","Сайжруулах шаардлагатай"];
+  const ncol = 2 + FQ.length + 14;
+  const yr = String(r.start||"").slice(0,4);
+  const cellsFor = it => SV_DK.map(d=>{
+    if(t.kind==="service"){ const m=svCell(r,it.ik+"m",d), e=svCell(r,it.ik+"e",d);
+      return `<td class="mk">${m==="ok"?"✓":m==="no"?"✗":""}</td><td class="mk">${e==="ok"?"✓":e==="no"?"✗":""}</td>`; }
+    const v=svCell(r,it.ik,d), n=svNote(r,it.ik,d);
+    return `<td class="mk">${v==="ok"?"✓":""}</td><td class="nt">${v==="imp"?(n?esc(n):'<span class="mk">✓</span>'):""}</td>`; }).join("");
+  const blank = () => `<tr><td></td><td class="it"></td>${FQ.map(()=>"<td></td>").join("")}${SV_DK.map(()=>"<td></td><td></td>").join("")}</tr>`;
+  const body = t.secs.map(s=>`${s.name?`<tr class="sec"><td colspan="${ncol}">${esc(s.name)}</td></tr>`:""}
+    ${its.filter(it=>it.sk===s.k).map(it=>`<tr><td class="no">${t.kind==="duty"?"":it.n}</td><td class="it">${esc(it.text)}</td>${FQ.map(f=>`<td class="fqc ${it.f===f?"on":""}">${it.f===f?"1":""}</td>`).join("")}${cellsFor(it)}</tr>`).join("")}`).join("")
+    + Array.from({length:t.extra||0}, blank).join("");
+  return `<div class="svsheet ${t.orient==="portrait"?"portrait":""}">
+    <div class="svs-top"><span>${esc(t.approve||"Баталсан:Үйл ажиллагааны менежер")}............................./...................../</span><span>${esc(yr)} он</span></div>
+    <div class="svs-title"><img src="/logo.png" alt="Лого"/><h1>${esc(t.title||SV_TITLE)}</h1><span></span></div>
+    <div class="svs-meta"><span>Хэсэг: <b class="dots">${esc(svHeseg(r.heseg)||".................................. баар")}</b></span>
+      <span>${esc(t.inspector||"Шалгалт хийсэн: Ахлах ажилтан")} / <b class="dots">${esc(r.inspector||"")}</b> / ..............................</span></div>
+    <table class="svt">
+      <colgroup><col class="c-no"/><col class="c-it"/>${FQ.map(()=>'<col class="c-fq"/>').join("")}${SV_DK.map(()=>t.kind==="service"?'<col class="c-sv"/><col class="c-sv"/>':'<col class="c-ok"/><col class="c-im"/>').join("")}</colgroup>
+      <thead>
+        <tr><th colspan="2" rowspan="2" class="hd">${esc(t.itemHead||"Шалгах зүйлс")}</th>${FQ.length?`<th colspan="${FQ.length}" class="hd">Давтамж</th>`:""}${days.map(d=>`<th colspan="2" class="dt">${esc(d.replace(/-/g,"/"))}</th>`).join("")}</tr>
+        <tr>${FQ.map(f=>`<th class="hd fqh">${esc(SV_FQ[f])}</th>`).join("")}${SV_DK.map(()=>`<th class="hd sb">${esc(sub[0])}</th><th class="hd sb">${esc(sub[1])}</th>`).join("")}</tr>
+      </thead>
+      <tbody>${body}
+        <tr class="sg"><td colspan="${2+FQ.length}">Шалгасан гарын үсэг</td>${SV_DK.map(d=>`<td colspan="2">${r.sign&&r.sign[d]?esc(r.sign[d].by):""}</td>`).join("")}</tr>
+      </tbody>
+    </table></div>`;
+}
+function svPrint(id){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const r = DB.svcheck[id]; if(!r){ toast("Хуудас олдсонгүй"); return; }
+  view(()=>svPrint(id), true);
+  const portrait = svT(r.tpl).orient==="portrait";
+  mount(`<div class="printbar noprint">
+      <button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4 ${portrait?"босоо":"хэвтээ"})</button>
+      ${u.role==="hygiene"?`<button class="btn ghost sm" id="px">${ic("sheet","sm")} Excel</button>`:""}
+      <button class="btn ghost sm" id="pe">${ic("edit","sm")} ${svCanEdit(u,r)?"Засах":"Харах"}</button>
+      <button class="btn ghost sm" id="pb">${ic("back","sm")} Жагсаалт</button>
+    </div>
+    <div class="sheet-wrap svwrap">${svSheetHtml(r)}</div>`);
+  const fit = ()=>{ const sh=$(".svsheet"); if(!sh) return; const w = portrait?740:1060; const z=Math.min(1,(window.innerWidth-24)/w); sh.style.zoom = z<1? z.toFixed(3) : ""; };
+  fit(); window.onresize = fit;
+  $("#pp").onclick = ()=>window.print();
+  if($("#px")) $("#px").onclick = ()=>svExcel([r]);
+  $("#pe").onclick = ()=>svEdit(id);
+  $("#pb").onclick = svListPage;
+}
+
+/* ---- Excel: эх xlsx-тэй ижил бүтэц (нэгтгэсэн нүд, өнгө, Times New Roman, лого) ---- */
+let SV_LOGO = null;
+async function svLogo(){ if(SV_LOGO) return SV_LOGO; try{ const r = await fetch("/logo.png"); SV_LOGO = new Uint8Array(await r.arrayBuffer()); }catch(e){ console.warn(e); } return SV_LOGO; }
+function addSvSheet(wb, r, used, logo){
+  const t = svT(r.tpl), its = svItems(t), days = svDays(r.start);
+  const FQ = t.kind==="weekly" ? t.freq : [];
+  let nm = (String(r.start||"").slice(5)+" "+(r.heseg||"")+" "+t.sheet).replace(/[\\\/\?\*\[\]:]/g," ").slice(0,31);
+  let k=2; while(used.has(nm)){ nm = nm.slice(0,28)+" "+(k++); } used.add(nm);
+  const s = wb.addWorksheet(nm, {pageSetup:{paperSize:9, orientation:t.orient||"landscape", fitToPage:true, fitToWidth:1, fitToHeight:0,
+    margins:{left:0.25,right:0.25,top:0.4,bottom:0.4,header:0.2,footer:0.2}, printTitlesRow:"4:5"}});
+  const D0 = 3 + FQ.length, NC = D0 - 1 + 14;
+  const sub = t.kind==="service" ? ["Өглөө сервис","Орой сервис"] : ["Бүрэн эсэх","Сайжруулах шаардлагатай"];
+  s.columns = [{width:3.2},{width:34}, ...FQ.map(()=>({width:4.6})), ...SV_DK.flatMap(()=> t.kind==="service" ? [{width:7.5},{width:7.5}] : [{width:4.9},{width:11.4}])];
+  const thin = {style:"thin", color:{argb:"FF000000"}}, border = {top:thin,left:thin,bottom:thin,right:thin};
+  const F = (o={}) => ({name:"Times New Roman", size:9, ...o});
+  const fill = argb => ({type:"pattern", pattern:"solid", fgColor:{argb}});
+  const C = (row,col) => s.getCell(row,col);
+  s.mergeCells(1,2,1,Math.min(NC-3, 12)); C(1,2).value = (t.approve||"Баталсан:Үйл ажиллагааны менежер")+"............................./...................../"; C(1,2).font=F({size:10});
+  s.mergeCells(1,NC-2,1,NC); C(1,NC-2).value = String(r.start||"").slice(0,4)+"он"; C(1,NC-2).font=F({size:10}); C(1,NC-2).alignment={horizontal:"right"};
+  s.mergeCells(2,1,2,NC); C(2,1).value = t.title||SV_TITLE; C(2,1).font=F({size:16, bold:true, italic:true}); C(2,1).alignment={horizontal:"center", vertical:"middle"}; s.getRow(2).height=34;
+  s.mergeCells(3,1,3,D0-1+2); C(3,1).value = "Хэсэг:  "+(svHeseg(r.heseg)||".................................. баар "); C(3,1).font=F({size:11});
+  s.mergeCells(3,D0+2,3,NC); C(3,D0+2).value = (t.inspector||"Шалгалт хийсэн: Ахлах ажилтан")+" / "+(r.inspector||"............................................")+"/ ..................................................."; C(3,D0+2).font=F({size:11});
+  s.getRow(3).height = 18.75;
+  // толгой
+  s.mergeCells(4,1,5,2); C(4,1).value = t.itemHead||"Шалгах зүйлс";
+  if(FQ.length){ if(FQ.length>1) s.mergeCells(4,3,4,2+FQ.length); C(4,3).value="Давтамж"; FQ.forEach((f,i)=>C(5,3+i).value = SV_FQ[f]); }
+  days.forEach((d,i)=>{ const c=D0+2*i; s.mergeCells(4,c,4,c+1); C(4,c).value = d.replace(/-/g,"/"); C(5,c).value=sub[0]; C(5,c+1).value=sub[1]; });
+  for(let rr=4; rr<=5; rr++) for(let c=1;c<=NC;c++){ const x=C(rr,c); x.border=border; x.font=F({size:rr===4?(c===1?14:10):8, bold:rr===4}); x.alignment={horizontal:"center",vertical:"middle",wrapText:true};
+    x.fill = fill(rr===4 && c>=D0 ? "FFFFFF00" : "FFA9D08E"); }
+  s.getRow(4).height = 17.25; s.getRow(5).height = 33;
+  let row = 6;
+  t.secs.forEach(sec=>{
+    if(sec.name){ s.mergeCells(row,1,row,NC); C(row,1).value = sec.name; C(row,1).font=F({size:10,bold:true}); C(row,1).fill=fill("FF92D050");
+      for(let c=1;c<=NC;c++) C(row,c).border=border; row++; }
+    its.filter(it=>it.sk===sec.k).forEach(it=>{
+      C(row,1).value = t.kind==="duty" ? "" : it.n; C(row,2).value = it.text;
+      FQ.forEach((f,i)=>{ if(it.f===f){ C(row,3+i).value=1; C(row,3+i).fill=fill("FFE2EFDA"); } });
+      SV_DK.forEach((d,i)=>{ const c=D0+2*i;
+        if(t.kind==="service"){ const m=svCell(r,it.ik+"m",d), e=svCell(r,it.ik+"e",d); C(row,c).value = m==="ok"?"✓":m==="no"?"✗":""; C(row,c+1).value = e==="ok"?"✓":e==="no"?"✗":""; }
+        else { const v=svCell(r,it.ik,d); C(row,c).value = v==="ok"?"✓":""; C(row,c+1).value = v==="imp" ? (svNote(r,it.ik,d)||"✓") : ""; } });
+      for(let c=1;c<=NC;c++){ const x=C(row,c); x.border=border; x.font=F(); x.alignment={vertical:"middle", horizontal: c===2?"left": (c>=D0 && (c-D0)%2===1 && t.kind!=="service")?"left":"center", wrapText: c>=D0}; }
+      s.getRow(row).height = SV_DK.some(d=>svNote(r,it.ik,d)) ? 24 : 13.5; row++;
+    });
+  });
+  for(let i=0;i<(t.extra||0);i++){ for(let c=1;c<=NC;c++) C(row,c).border=border; s.getRow(row).height=13.5; row++; }
+  s.mergeCells(row,1,row,D0-1); C(row,1).value = "Шалгасан гарын үсэг"; C(row,1).font=F({size:10,bold:true});
+  SV_DK.forEach((d,i)=>{ const c=D0+2*i; s.mergeCells(row,c,row,c+1); C(row,c).value = r.sign&&r.sign[d] ? r.sign[d].by : ""; C(row,c).alignment={horizontal:"center",vertical:"middle"}; C(row,c).font=F({size:8}); });
+  for(let c=1;c<=NC;c++) C(row,c).border=border; s.getRow(row).height = 24;
+  if(logo){ try{ const img = wb.addImage({buffer:logo, extension:"png"}); s.addImage(img, {tl:{col:0.15,row:1.05}, ext:{width:52,height:43}}); }catch(e){ console.warn(e); } }
+  s.pageSetup.printArea = `A1:${s.getColumn(NC).letter}${row}`;
+  return s;
+}
+async function svExcel(recs, wb0){
+  recs = (recs||[]).filter(Boolean);
+  if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
+  const wb = wb0 || new ExcelJS.Workbook(); if(!wb0) wb.creator = "EAHS";
+  const logo = await svLogo(); const used = new Set(wb.worksheets.map(w=>w.name));
+  recs.forEach(r=>addSvSheet(wb, r, used, logo));
+  if(!wb0){ const r=recs[0]; await downloadWb(wb, recs.length===1 ? `EAHS_ahlah_hyanalt_${r.start}_${keyOf(r.heseg||"")}.xlsx` : "EAHS_ahlah_hyanalt.xlsx"); }
+  return wb;
 }
 
 /* ======================= EXCEL ======================= */
@@ -2105,6 +2424,7 @@ function reportPage(){
       </div>
       <label class="f">Аль тайлан</label>
       <label class="chk"><input type="checkbox" id="x-hyg" checked/> Ариун цэврийн хяналт (хуудас бүр тусдаа)</label>
+      <label class="chk"><input type="checkbox" id="x-sv" checked/> Ахлахын хяналтын хуудас (маягтаар, хуудас бүр тусдаа)</label>
       <label class="chk"><input type="checkbox" id="x-ayul" checked/> Аюул (зурагтай)</label>
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
@@ -2114,7 +2434,7 @@ function reportPage(){
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
-    const kinds=[["x-hyg","hyg"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
+    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
     if(!kinds.length){ toast("Дор хаяж нэг тайлан сонгоно уу"); return; }
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     $("#xl").disabled=true; $("#xl").textContent="Бэлдэж байна…";
@@ -2137,7 +2457,7 @@ function downloadWb(wb, name){
   });
 }
 function addHygSheet(wb, h, usedNames){
-  let nm = (h.date+" "+(h.alba||"")).replace(/[\\\/\?\*\[\]:]/g," ").slice(0,31);
+  let nm = (h.date+" "+albaN(h.alba)).replace(/[\\\/\?\*\[\]:]/g," ").slice(0,31);
   let k=2; while(usedNames.has(nm)){ nm = nm.slice(0,28)+" "+(k++); } usedNames.add(nm);
   const s = wb.addWorksheet(nm, {pageSetup:{paperSize:9, orientation:"landscape", fitToPage:true, fitToWidth:1, fitToHeight:0, margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2}}});
   const NC = 3 + HYG_CRIT.length + 1;  // 11 багана
@@ -2150,7 +2470,7 @@ function addHygSheet(wb, h, usedNames){
   Object.assign(s.getCell("A1"), {value:HYG_TITLE});
   s.getCell("A1").font = {...font, size:14, bold:true}; s.getCell("A1").alignment={horizontal:"center", vertical:"middle"};
   s.getRow(1).height = 26;
-  s.getCell("A2").value = "Алба: "+(h.alba||""); s.getCell("A2").font=font;
+  s.getCell("A2").value = "Алба: "+albaN(h.alba); s.getCell("A2").font=font;
   s.mergeCells(`${String.fromCharCode(64+NC-2)}2:${last}2`);
   s.getCell(`${String.fromCharCode(64+NC-2)}2`).value = "Огноо: "+(h.date||"");
   s.getCell(`${String.fromCharCode(64+NC-2)}2`).font = font;
@@ -2185,21 +2505,25 @@ async function exportExcel(from,to,kinds){
   wb.creator="EAHS";
   const inR=d=>d>=from && d<=to;
   if(kinds.includes("hyg")){
-    const hs = list("hygcheck").filter(h=>inR(h.date)).sort((a,b)=>String(a.date+a.alba).localeCompare(String(b.date+b.alba)));
+    const hs = list("hygcheck").filter(h=>inR(h.date)).sort((a,b)=>String(a.date+albaN(a.alba)).localeCompare(String(b.date+albaN(b.alba))));
     const used = new Set();
     const sum = wb.addWorksheet("Ариун цэвэр (нэгтгэл)");
     sum.addRow(["Огноо","Алба","Ажилтны нэр","Албан тушаал",...HYG_CRIT,"Гарын үсэг","Дүгнэлт","Шалгасан"]);
     sum.getRow(1).font={bold:true}; sum.getRow(1).alignment={wrapText:true, vertical:"middle"};
-    hs.forEach(h=> rowsOf(h).forEach(r=> sum.addRow([h.date,h.alba,r.name,r.pos,...HYG_CRIT.map((_,i)=>cellSym(cellVal(r,i))), r.sign?"Танилцсан":"", rowStatus(r)==="fail"?"Ажиллахгүй":rowStatus(r)==="ok"?"Хангасан":"Бүрэн бус", h.checkedBy||""])));
+    hs.forEach(h=> rowsOf(h).forEach(r=> sum.addRow([h.date,albaN(h.alba),r.name,r.pos,...HYG_CRIT.map((_,i)=>cellSym(cellVal(r,i))), r.sign?"Танилцсан":"", rowStatus(r)==="fail"?"Ажиллахгүй":rowStatus(r)==="ok"?"Хангасан":"Бүрэн бус", h.checkedBy||""])));
     sum.columns.forEach((c,i)=> c.width = i<2?12: i<4?22: 14);
     hs.forEach(h=>addHygSheet(wb, h, used));
+  }
+  if(kinds.includes("sv")){
+    const rs = list("svcheck").filter(r=>r && r.start && r.start<=to && addDays(6, r.start)>=from).sort((a,b)=>String(a.start+a.heseg).localeCompare(String(b.start+b.heseg)));
+    if(rs.length) await svExcel(rs, wb);
   }
   if(kinds.includes("ayul")){
     const hz=list("hazards").map(normHazard).filter(x=>inR(x.date)).sort(byNew);
     const s1=wb.addWorksheet("Аюул");
     s1.addRow(["Огноо","Газар","Хариуцах","Мэдээлэгч","Хянасан","Төрөл","Ангилал","Эрсдэл","Дэлгэрэнгүй","Шуурхай арга","Зураг тоо","Төлөв","Алба","Хариуцагч","Гүйцэтгэх хугацаа","Хугацаа хэтэрсэн","Залруулах арга хэмжээ","Хаасан огноо","Түүх"]);
     hz.map(normHazard).forEach(x=>s1.addRow([x.date,x.area,x.acc,x.reporter,x.reviewer||"",(x.types||[]).join("; "),(x.cls||[]).join("; "),x.risk,x.det,x.act,x.photoCount||0,x.status,
-      x.alba||"",x.assigneeName||"",x.due||"",hzOverdue(x)?"Тийм":"",x.corr||"",x.closedAt||"",
+      albaN(x.alba),x.assigneeName||"",x.due||"",hzOverdue(x)?"Тийм":"",x.corr||"",x.closedAt||"",
       Object.values(x.log||{}).filter(Boolean).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(l=>`${l.at} ${l.by}: ${l.text}`).join("\n")]));
     const sP=wb.addWorksheet("Аюул_зураг");
     sP.addRow(["Огноо","Газар","Мэдээлэгч","Зураг №"]);
@@ -2218,12 +2542,12 @@ async function exportExcel(from,to,kinds){
   if(kinds.includes("inf")){
     const s2=wb.addWorksheet("Халдвар");
     s2.addRow(["Огноо","SAP","Нэр","Алба","Үр дүн","Хариу"]);
-    list("infect").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s2.addRow([x.date,x.sap,x.name,x.alba,VERDICT[x.verdict]||VERDICT.huleegdej,arr(x.ans).map(a=>a.q+": "+a.a).join("; ")]));
+    list("infect").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s2.addRow([x.date,x.sap,x.name,albaN(x.alba),VERDICT[x.verdict]||VERDICT.huleegdej,arr(x.ans).map(a=>a.q+": "+a.a).join("; ")]));
   }
   if(kinds.includes("fat")){
     const s3=wb.addWorksheet("Ядаргаа");
     s3.addRow(["Огноо","SAP","Нэр","Алба","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Төвлөрөл","Оноо","Түвшин"]);
-    list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,x.alba,x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q11,x.score,x.level]));
+    list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,albaN(x.alba),x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q11,x.score,x.level]));
   }
   await downloadWb(wb, `EAHS_${kinds.join("-")}_${from}_${to}.xlsx`);
 }

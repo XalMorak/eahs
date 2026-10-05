@@ -12,7 +12,23 @@ import json, os
 V2 = "eahs/v2"
 ROLE = f"root.child('{V2}/roles/'+auth.uid+'/role').val()"
 MYSAP = f"root.child('{V2}/roles/'+auth.uid+'/sap').val()"
-MYALBA = f"root.child('{V2}/users/'+{MYSAP}+'/alba').val()"
+# Алба зөвхөн 2: «Оффис» агуулсан нэр → 'Оффис', бусад бүх нэр (хуучин «Оюут баар», «Манлай баар» гэх мэт) → 'Бар'.
+# Хадгалсан өгөгдлийг өөрчлөхгүй — дүрэм харьцуулахдаа хөрвүүлнэ (апп-ын albaN()-тай ижил).
+def NORM(snap):
+    return (f"(({snap}.isString() && ({snap}.val().contains('Оффис') || {snap}.val().contains('оффис') || {snap}.val().contains('ОФФИС')))"
+            " ? 'Оффис' : 'Бар')")
+MYALBA = NORM(f"root.child('{V2}/users/'+{MYSAP}+'/alba')")
+SAME_ALBA_NEW = NORM("newData.child('alba')") + " === " + MYALBA
+SAME_ALBA_OLD = NORM("data.child('alba')") + " === " + MYALBA
+SV_TPLS = "/^(oyut|manlai|zoogch|hk|tuslah|barmen|servis|abarmen)$/"
+SV_VALIDATE = ("!newData.exists() || (newData.child('tpl').isString() && newData.child('tpl').val().matches(" + SV_TPLS + ")"
+               " && newData.child('start').isString() && newData.child('start').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+               " && newData.child('heseg').isString() && newData.child('heseg').val().length <= 80"
+               " && newData.child('alba').isString())")
+SVCHECK_KIDS = {
+    "cells": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().matches(/^(ok|imp|no)$/)"}}},
+    "notes": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().length <= 200"}}},
+    "sign": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"}}}
 HYG = f"(auth != null && {ROLE} === 'hygiene')"
 SUP = f"(auth != null && {ROLE} === 'supervisor')"
 STAFF = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'supervisor'))"
@@ -66,12 +82,12 @@ def strict():
                 "mustChange": {".write": f"auth != null && {MYSAP} === $sap"}}},
         "settings": {".read": MEMBER, ".write": HYG},
         "uhaan": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
-                  "$id": {".write": f"({SUP} && data.exists() && newData.exists() && data.child('alba').val() === {MYALBA}) || {OWN_CREATE}"}},
+                  "$id": {".write": f"({SUP} && data.exists() && newData.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},
         "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
-            "$id": {".write": f"{SUP} && newData.exists() && newData.child('alba').val() === {MYALBA} && (!data.exists() || data.child('alba').val() === {MYALBA})",
+            "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
                     "rows": {"$rk": {
                         "sign": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"},
                         "signAt": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"}}}}},
@@ -81,6 +97,10 @@ def strict():
         "photos": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{ANY} && !data.exists() && newData.parent().parent().child('hazards/'+$id).exists()"}},
         "notifs": {".read": STAFF, ".write": HYG, "$id": {".write": NOTIF_CREATE, ".validate": NOTIF_VALIDATE}},
+        # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
+        "svcheck": {".read": STAFF, ".write": HYG,
+            "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
+                    ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 
 def transition():
@@ -98,6 +118,7 @@ def transition():
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},
+        "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 
 if __name__ == "__main__":

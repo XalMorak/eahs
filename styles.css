@@ -708,3 +708,92 @@ table.hyg td.acts .btn{margin:2px}
 .nperm .badge::before{align-self:flex-start;margin-top:5px}
 .nitem.unread .nbody b{padding-right:14px;position:relative}
 .nitem.unread .nbody b::after{position:absolute;right:0;top:.45em;margin-left:0}
+
+/* ===== Ахлахын хяналтын хуудас (svcheck) — дэлгэц: mobile-first ===== */
+.svfoot{margin-top:var(--s3)}
+.svfilt{margin-bottom:var(--s3)}
+.svmeta input{width:100%}
+.svdays{display:grid;grid-template-columns:repeat(7,minmax(64px,1fr));gap:6px;overflow-x:auto;padding:2px 2px 6px;margin:var(--s3) 0 0;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.svday{scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:64px;padding:8px 4px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;cursor:pointer;box-shadow:var(--sh-1)}
+.svday span{font-size:12px;color:var(--mut);font-weight:600}
+.svday b{font-size:15px;color:var(--ink)}
+.svday small{font-size:11px;color:var(--mut);white-space:nowrap}
+.svday.today{border-color:var(--brand-200)}
+.svday.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.svday.on span,.svday.on b,.svday.on small{color:#fff}
+.svday:focus-visible,.svb:focus-visible{box-shadow:var(--ring);outline:2px solid transparent}
+.svprog .bar{height:8px;border-radius:99px;background:var(--brand-50);overflow:hidden;margin-top:8px}
+.svprog .bar i{display:block;height:100%;background:var(--brand);border-radius:99px;transition:width .2s var(--ease)}
+.svprog p.small{font-size:12.5px;margin:8px 0 0}
+.svsec{padding:0;overflow:hidden}
+.svsh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px var(--s4);background:var(--brand-50);border-bottom:1px solid var(--line)}
+.svsh h3{margin:0;font-size:15px;color:var(--brand-900)}
+.svi{display:grid;grid-template-columns:28px 1fr;gap:6px 10px;padding:12px var(--s4);border-bottom:1px solid var(--line);align-items:start}
+.svi:last-child{border-bottom:0}
+.svi.ok{background:linear-gradient(90deg,var(--ok-50),transparent 70%)}
+.svi.imp,.svi.no{background:linear-gradient(90deg,var(--warn-50),transparent 70%)}
+.svi.done-el{opacity:.62}
+.svn{grid-row:span 2;width:26px;height:26px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--mut)}
+.svt{font-size:14.5px;line-height:1.35;color:var(--ink)}
+.fq{display:inline-block;margin-left:4px;font-size:11px;font-weight:650;padding:1px 7px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--mut);vertical-align:1px;white-space:nowrap}
+.fq-w{background:var(--brand-50);border-color:var(--brand-200);color:var(--brand-800)}
+.fq-2w{background:var(--violet-50);border-color:#D6CCFB;color:var(--violet)}
+.fq-x{background:var(--sun-50);border-color:#F5E2A0;color:#7A5B00}
+.fq-done{background:var(--ok-50);border-color:var(--ok-200);color:var(--ok)}
+.svbs{grid-column:2;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.svbs.two{grid-template-columns:1fr}
+.svb{min-height:44px;border-radius:var(--r-sm);border:1.5px solid var(--line-2);background:var(--surface);font:inherit;font-weight:650;font-size:14px;color:var(--ink-2);cursor:pointer;transition:all .12s}
+.svb.ok.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.svb.imp.on,.svb.no.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.svb:disabled{cursor:default}
+.svb:disabled:not(.on){opacity:.55}
+.svseg{display:grid;grid-template-columns:56px 1fr 1fr;gap:8px;align-items:center}
+.svseg span{font-size:13px;color:var(--mut);font-weight:600}
+.svnote{grid-column:2;width:100%;min-height:42px}
+@media(min-width:821px){
+  .svdays{grid-template-columns:repeat(7,1fr)}
+  .svi{grid-template-columns:28px 1fr 300px;align-items:center}
+  .svn{grid-row:auto}
+  .svbs{grid-column:3}
+  .svbs.two{grid-template-columns:1fr 1fr}
+  .svnote{grid-column:2 / span 2}
+}
+
+/* ===== Хэвлэх: эх xlsx-ийн байршил (Times New Roman, ногоон/шар толгой) ===== */
+.svwrap{overflow:auto}
+.svsheet{width:1060px;margin:0 auto;background:#fff;color:#000;padding:18px 20px;box-shadow:var(--sh-2);font-family:"Times New Roman","Liberation Serif","Tinos",serif;font-size:12px}
+.svsheet.portrait{width:740px;font-size:9.5px}
+.svs-top{display:flex;justify-content:space-between;font-size:1.05em;margin-bottom:2px}
+.svs-title{display:grid;grid-template-columns:70px 1fr 70px;align-items:center}
+.svs-title img{width:58px;height:auto}
+.svs-title h1{margin:0;text-align:center;font-size:1.55em;font-weight:700;font-style:italic;line-height:1.2}
+.svsheet.portrait .svs-title{grid-template-columns:48px 1fr 48px}.svsheet.portrait .svs-title img{width:42px}
+.svs-meta{display:flex;justify-content:space-between;gap:16px;font-size:1.1em;margin:6px 0 4px}
+.svs-meta .dots{display:inline-block;min-width:150px;border-bottom:1px dotted #000;text-align:center;font-weight:400}
+table.svt{width:100%;border-collapse:collapse;table-layout:fixed}
+.svt th,.svt td{border:1px solid #000;padding:1px 2px;line-height:1.15;overflow:hidden}
+.svt th{font-weight:400;text-align:center;vertical-align:middle}
+.svt th.hd{background:#A9D08E;font-weight:700}
+.svt th.sb{font-size:.78em;font-weight:400}
+.svt th.fqh{font-size:.82em}
+.svt th.dt{background:#FFFF00;font-weight:700}
+.svt td{height:17px;font-size:.92em}
+.svt td.no{text-align:center}
+.svt td.fqc{text-align:center}
+.svt td.fqc.on{background:#E2EFDA}
+.svt td.mk,.svt .mk{text-align:center;font-weight:700}
+.svt td.nt{font-size:.78em;line-height:1.1}
+.svt tr.sec td{background:#92D050;font-weight:700;font-size:1em}
+.svt tr.sg td{height:26px;text-align:center;font-size:.8em}
+.svt tr.sg td:first-child{text-align:left;font-weight:700;font-size:.95em}
+.svt col.c-no{width:2.4%}.svt col.c-it{width:24%}.svt col.c-fq{width:2.9%}.svt col.c-ok{width:3%}.svt col.c-im{width:6%}.svt col.c-sv{width:4.6%}
+.svsheet.portrait .svt col.c-it{width:22%}.svsheet.portrait .svt col.c-ok{width:2.9%}.svsheet.portrait .svt col.c-im{width:6.2%}
+@page svl{size:A4 landscape;margin:8mm}
+@page svp{size:A4 portrait;margin:8mm}
+@media print{
+  .svwrap{padding:0;overflow:visible}
+  .svsheet{page:svl;width:auto;box-shadow:none;padding:0;margin:0;zoom:1 !important}
+  .svsheet.portrait{page:svp}
+  .svt th.hd,.svt th.dt,.svt td.fqc.on,.svt tr.sec td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .svt tr{break-inside:avoid}
+}

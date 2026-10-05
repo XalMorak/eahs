@@ -84,6 +84,31 @@
             ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
+        "svcheck": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('tpl').isString() && newData.child('tpl').val().matches(/^(oyut|manlai|zoogch|hk|tuslah|barmen|servis|abarmen)$/) && newData.child('start').isString() && newData.child('start').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('heseg').isString() && newData.child('heseg').val().length <= 80 && newData.child('alba').isString())",
+            "cells": {
+              "$ik": {
+                "$d": {
+                  ".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().matches(/^(ok|imp|no)$/)"
+                }
+              }
+            },
+            "notes": {
+              "$ik": {
+                "$d": {
+                  ".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().length <= 200"
+                }
+              }
+            },
+            "sign": {
+              "$d": {
+                ".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"
+              }
+            }
+          }
+        },
         "$other": {
           ".write": false
         }

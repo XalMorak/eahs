@@ -19,13 +19,17 @@ const seed={borluulalt:{users:{emp001:{name:"A",role:"employee"}}},
     users:{admin:{sap:'admin',name:'Эрүүл ахуйч',role:'hygiene',alba:'Оффис',pinHash:H('admin','1234')},
       '1108650':{sap:'1108650',name:'Б. Энхбаяр',role:'worker',alba:'Оюут баар',pinHash:H('1108650','4321')},
       '2200':{sap:'2200',name:'Өөр ажилтан',role:'worker',alba:'Манлай баар',pinHash:H('2200','5555')},
-      akhakh:{sap:'akhakh',name:'Д. Ганболд',role:'supervisor',alba:'Оюут баар',pinHash:H('akhakh','1234')}},
+      akhakh:{sap:'akhakh',name:'Д. Ганболд',role:'supervisor',alba:'Оюут баар',pinHash:H('akhakh','1234')},
+      ofsup:{sap:'ofsup',name:'Оффисын ахлах',role:'supervisor',alba:'Оффис',pinHash:H('ofsup','1234')}},
     settings:{main:{fatigueDays:7}},
-    uhaan:{u1:{id:'u1',sap:'1108650',alba:'Оюут баар',date:T,status:'huleegdej'},u2:{id:'u2',sap:'2200',alba:'Манлай баар',date:T,status:'huleegdej'}},
+    uhaan:{u1:{id:'u1',sap:'1108650',alba:'Оюут баар',date:T,status:'huleegdej'},u2:{id:'u2',sap:'2200',alba:'Манлай баар',date:T,status:'huleegdej'},u3:{id:'u3',sap:'2200',alba:'Оффис',date:T,status:'huleegdej'}},
     fatigue:{f1:{id:'f1',sap:'1108650',date:T,score:3},f2:{id:'f2',sap:'2200',date:T,score:9}},
     infect:{i1:{id:'i1',sap:'1108650',date:T,verdict:'huleegdej'}},
     hygcheck:{[T+'_Оюут баар']:{id:T+'_Оюут баар',date:T,alba:'Оюут баар',rows:{'1108650':{sap:'1108650',name:'Б',c:['ok']},'2200':{sap:'2200',name:'Ө',c:['ok']}}},
-              [T+'_Манлай баар']:{id:T+'_Манлай баар',date:T,alba:'Манлай баар',rows:{x:{sap:'2200',name:'Ө',c:['ok']}}}},
+              [T+'_Манлай баар']:{id:T+'_Манлай баар',date:T,alba:'Манлай баар',rows:{x:{sap:'2200',name:'Ө',c:['ok']}}},
+              [T+'_Оффис']:{id:T+'_Оффис',date:T,alba:'Оффис',rows:{x:{sap:'2200',name:'Ө',c:['ok']}}}},
+    svcheck:{svOld:{id:'svOld',tpl:'oyut',start:'2026-09-28',heseg:'Оюут',alba:'Оюут баар',cells:{zg1:{d0:'ok'}}},
+             svOf:{id:'svOf',tpl:'hk',start:'2026-09-28',heseg:'Оффис',alba:'Оффис'}},
     hazards:{hLow:{id:'hLow',risk:'Бага',status:'Шинэ',det:'x'},hHigh:{id:'hHigh',risk:'Их',status:'Шинэ',det:'y'}},
     roster:{r1:{id:'r1',sap:'1108650',arrive:T}}}}};
 async function reset(rulesFile){
@@ -131,17 +135,47 @@ async function strict(){
   await expect('sup: read fatigue', false, ()=>s.db.ref(V+'fatigue').once('value'));
   await expect('sup: read roles of others', false, ()=>s.db.ref(V+'roles').once('value'));
   await expect('sup: approve uhaan own alba', true, ()=>s.db.ref(V).update({'uhaan/u1/status':'batlagdsan','uhaan/u1/supervisor':'Д'}));
-  await expect('sup: approve uhaan other alba', false, ()=>s.db.ref(V+'uhaan/u2/status').set('batlagdsan'));
+  await expect('sup: approve uhaan old name «Манлай баар» → Бар (same alba)', true, ()=>s.db.ref(V+'uhaan/u2/status').set('batlagdsan'));
+  await expect('sup: approve uhaan other alba (Оффис)', false, ()=>s.db.ref(V+'uhaan/u3/status').set('batlagdsan'));
   await expect('sup: hazard status + log', true, ()=>s.db.ref(V).update({'hazards/hLow/status':'Шийдсэн','hazards/hLow/log/l2':{ts:2,text:'ok'}}));
   await expect('sup: delete hazard', false, ()=>s.db.ref(V+'hazards/hLow').remove());
   await expect('sup: hygcheck own alba edit', true, ()=>s.db.ref(V).update({[`hygcheck/${T}_Оюут баар/rows/2200/c`]:['ok','no'],[`hygcheck/${T}_Оюут баар/_u`]:1}));
-  await expect('sup: hygcheck other alba', false, ()=>s.db.ref(V+`hygcheck/${T}_Манлай баар/rows/x/c`).set(['no']));
-  await expect('sup: hygcheck move to other alba', false, ()=>s.db.ref(V+`hygcheck/${T}_Оюут баар/alba`).set('Манлай баар'));
+  await expect('sup: hygcheck old name «Манлай баар» → Бар (same alba)', true, ()=>s.db.ref(V+`hygcheck/${T}_Манлай баар/rows/x/c`).set(['no']));
+  await expect('sup: hygcheck other alba (Оффис)', false, ()=>s.db.ref(V+`hygcheck/${T}_Оффис/rows/x/c`).set(['no']));
+  await expect('sup: hygcheck move to Оффис', false, ()=>s.db.ref(V+`hygcheck/${T}_Оюут баар/alba`).set('Оффис'));
+  await expect('sup: create new hygcheck alba «Бар»', true, ()=>s.db.ref(V+`hygcheck/${T}_Бар`).set({id:T+'_Бар',date:T,alba:'Бар',rows:{r:{sap:'1108650',name:'Б',c:['ok']}}}));
   await expect('sup: hygfail notif', true, ()=>s.db.ref(V+'notifs/hf2').set({id:'hf2',type:'hygfail',level:'fail',ts:3,title:'Ажиллахгүй: Ө',alba:'Оюут баар',ref:T+'_Оюут баар'}));
   await expect('sup: delete notif', false, ()=>s.db.ref(V+'notifs/hf2').remove());
   await expect('sup: write users', false, ()=>s.db.ref(V+'users/2200/role').set('supervisor'));
   await expect('sup: grant roles', false, ()=>s.db.ref(V+'roles/x').set({sap:'2200',role:'hygiene'}));
   await expect('sup: settings write', false, ()=>s.db.ref(V+'settings/main/fatigueDays').set(1));
+  console.log('--- svcheck (ахлахын хяналтын хуудас)');
+  const SV=V+'svcheck/';
+  await expect('sup: read svcheck', true, ()=>s.db.ref(SV).once('value'));
+  await expect('sup: create svcheck own alba (per-path)', true, ()=>s.db.ref(V).update({'svcheck/sv1/id':'sv1','svcheck/sv1/tpl':'oyut','svcheck/sv1/start':T,'svcheck/sv1/heseg':'Оюут','svcheck/sv1/alba':'Бар','svcheck/sv1/cells/zg1/d0':'ok','svcheck/sv1/cells/zg2/d0':'imp','svcheck/sv1/notes/zg2/d0':'тоос үлдсэн'}));
+  await expect('sup: cell + sign per-path', true, ()=>s.db.ref(V).update({'svcheck/sv1/cells/hk3/d1':'ok','svcheck/sv1/sign/d0':{by:'Д. Ганболд',sap:'akhakh',at:'x'},'svcheck/sv1/_u':5}));
+  await expect('sup: edit stored old-name svcheck («Оюут баар»)', true, ()=>s.db.ref(SV+'svOld/cells/zg1/d1').set('ok'));
+  await expect('sup: edit Оффис svcheck', false, ()=>s.db.ref(SV+'svOf/cells/hk1/d0').set('ok'));
+  await expect('sup: create svcheck alba Оффис', false, ()=>s.db.ref(SV+'sv2').set({id:'sv2',tpl:'oyut',start:T,heseg:'x',alba:'Оффис'}));
+  await expect('sup: move svcheck to Оффис', false, ()=>s.db.ref(SV+'sv1/alba').set('Оффис'));
+  await expect('sup: invalid cell value', false, ()=>s.db.ref(SV+'sv1/cells/zg1/d2').set('yes'));
+  await expect('sup: invalid day key d9', false, ()=>s.db.ref(SV+'sv1/cells/zg1/d9').set('ok'));
+  await expect('sup: note > 200', false, ()=>s.db.ref(SV+'sv1/notes/zg1/d0').set('a'.repeat(201)));
+  await expect('sup: unknown template', false, ()=>s.db.ref(SV+'sv3').set({id:'sv3',tpl:'evil',start:T,heseg:'x',alba:'Бар'}));
+  await expect('sup: bad start date', false, ()=>s.db.ref(SV+'sv4').set({id:'sv4',tpl:'oyut',start:'10/05',heseg:'x',alba:'Бар'}));
+  await expect('sup: delete svcheck', false, ()=>s.db.ref(SV+'sv1').remove());
+  await expect('worker: read svcheck', false, ()=>w.db.ref(SV).once('value'));
+  await expect('worker: write svcheck', false, ()=>w.db.ref(SV+'sv1/cells/zg1/d3').set('ok'));
+  await expect('anon: read svcheck', false, ()=>an.db.ref(SV).once('value'));
+  const o=await emailUser('ofsup@eahs.local','eahs#1234');
+  await expect('office sup claim', true, ()=>claim(o.db,o.auth.currentUser.uid,'ofsup','supervisor','1234'));
+  await expect('office sup: edit Оффис svcheck', true, ()=>o.db.ref(SV+'svOf/cells/hk1/d0').set('ok'));
+  await expect('office sup: edit Бар svcheck', false, ()=>o.db.ref(SV+'sv1/cells/zg1/d4').set('ok'));
+  await expect('office sup: approve uhaan Оффис', true, ()=>o.db.ref(V+'uhaan/u3/status').set('batlagdsan'));
+  await expect('office sup: approve uhaan «Оюут баар»', false, ()=>o.db.ref(V+'uhaan/u1/supervisor').set('x'));
+  await expect('hyg: read svcheck', true, ()=>h.db.ref(SV).once('value'));
+  await expect('hyg: edit any svcheck', true, ()=>h.db.ref(SV+'svOf/cells/hk2/d0').set('imp'));
+  await expect('hyg: delete svcheck', true, ()=>h.db.ref(SV+'svOld').remove());
   console.log('--- after migration');
   await expect('claim again after pinHash removed (new account, same PIN)', false, async()=>{ const x=await emailUser('1108650+9@eahs.local','eahs#4321'); await claim(x.db,x.auth.currentUser.uid,'1108650','worker','4321'); });
   const b=await owner('borluulalt','GET'); await expect('borluulalt data present', true, async()=>{ if(!b || !b.users) throw new Error('missing'); });
@@ -158,6 +192,8 @@ async function transition(){
   await expect('anon: notif invalid type', false, ()=>an.db.ref(V+'notifs/n2').set({id:'n2',type:'evil',ts:1,title:'x'}));
   await expect('anon: user with plain pin', false, ()=>an.db.ref(V+'users/x').set({sap:'x',name:'X',role:'worker',pin:'1'}));
   await expect('anon: unknown collection', false, ()=>an.db.ref(V+'foo').set(1));
+  await expect('anon (old clients): svcheck valid write', true, ()=>an.db.ref(V+'svcheck/t1').set({id:'t1',tpl:'servis',start:T,heseg:'x',alba:'Бар',cells:{sv1m:{d0:'ok'},sv1e:{d0:'no'}}}));
+  await expect('anon: svcheck invalid cell', false, ()=>an.db.ref(V+'svcheck/t1/cells/sv1m/d1').set(5));
   const h=await emailUser('admin@eahs.local','eahs#1234');
   await expect('hyg migration claim (transition)', true, ()=>claim(h.db,h.auth.currentUser.uid,'admin','hygiene','1234'));
   await expect('hyg: grant role to new user (transition)', true, ()=>h.db.ref(V+'roles/zz').set({sap:'3300',role:'worker'}));
