@@ -60,10 +60,19 @@ AUTHGEN = {"$sap": {".read": True, ".write": HYG, ".validate": "!newData.exists(
 HZREF = "newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val()"
 NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 f"(newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && ({HZREF} === 'Их' || {HZREF} === 'Маш их'))"
-                f" || (newData.child('type').val() === 'hygfail' && {STAFF})))")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail)$/) && newData.child('ts').isNumber()"
+                f" || (newData.child('type').val() === 'hygfail' && {STAFF})))"
+                # v8: Цагаан дэвтэр / шинжилгээний мэдэгдэл — ахлах зөвхөн өөрийн албаных; давхар үүсгэлтэд (уралдаан) health→health дахин бичиж болно
+                f" || (auth != null && newData.exists() && newData.child('type').val() === 'health' && {SUP} && {SAME_ALBA_NEW}"
+                f" && (!data.exists() || data.child('type').val() === 'health'))")
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
+DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"
+# v8: Цагаан дэвтэр / жилийн шинжилгээний сунгалтын түүх (бичлэг бүр тусдаа; зураг нь photos/rn_<id>)
+RENEW_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('kind').val().matches(/^(book|exam)$/)"
+                  " && newData.child('exp').isString() && newData.child('exp').val().matches(" + DATE_RE + ")"
+                  " && (!newData.child('iss').exists() || (newData.child('iss').isString() && newData.child('iss').val().matches(" + DATE_RE + ")))"
+                  " && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 300)))")
 
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
@@ -97,6 +106,8 @@ def strict():
         "photos": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{ANY} && !data.exists() && newData.parent().parent().child('hazards/'+$id).exists()"}},
         "notifs": {".read": STAFF, ".write": HYG, "$id": {".write": NOTIF_CREATE, ".validate": NOTIF_VALIDATE}},
+        # Сунгалтын түүх: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрийнхөө (sap-аар query)
+        "renew": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": RENEW_VALIDATE}},
         # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
         "svcheck": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -118,6 +129,7 @@ def transition():
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},
+        "renew": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": RENEW_VALIDATE}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 

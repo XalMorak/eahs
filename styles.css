@@ -181,7 +181,7 @@ label.f,.f{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margi
 .home-btn.idle .st{background:var(--surface-2);color:var(--mut);border:1px solid var(--line)}
 .docs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .doc{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--surface-2)}
-.doc span{display:block;font-size:12px;color:var(--mut);margin-bottom:2px}
+.doc>span:first-child{display:block;font-size:12px;color:var(--mut);margin-bottom:2px}
 .doc b{display:block;font-size:15px;margin-bottom:6px}
 .critmini{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .critmini span{font-size:12.5px;padding:4px 9px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
@@ -810,3 +810,53 @@ table.svt{width:100%;border-collapse:collapse;table-layout:fixed}
 .svpick input:focus-visible + span{box-shadow:var(--ring)}
 #svf input[type=date]{width:100%}
 .ahint{font-size:11.5px;font-weight:400}
+
+/* ===== v8: Ажилтны хувийн хуудас, цагаан дэвтэр / шинжилгээ ===== */
+.lnk{background:none;border:0;padding:0;font:inherit;font-weight:650;color:var(--brand);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px}
+.lnk:hover,.lnk:focus-visible{text-decoration-color:currentColor}
+.muted.sm{font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.hbsum{margin-left:auto;flex-wrap:wrap}
+.wphead{display:grid;grid-template-columns:auto 1fr;gap:14px 16px;align-items:center}
+.wphead h3{margin:0 0 2px;font-size:19px}
+.wphead .row-gap{margin-top:8px}
+.avatar.lg{width:64px;height:64px;font-size:24px}
+.wpinfo{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 0}
+.wpinfo div{border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;background:var(--surface-2)}
+.wpinfo dt{font-size:12px;color:var(--mut)}
+.wpinfo dd{margin:2px 0 0;font-weight:650}
+.hbgrid,.wpgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start;margin-bottom:var(--s4)}
+.hbgrid>.card,.wpgrid>.card{margin:0;min-width:0}
+.wpgrid .tw th,.wpgrid .tw td,.wpsec .tw th,.wpsec .tw td{padding:9px 10px}
+.wpgrid .tw th{letter-spacing:.01em}
+.hbc{border-top:4px solid var(--line)}
+.hbc.hst-ok{border-top-color:var(--ok)}
+.hbc.hst-soon{border-top-color:var(--warn)}
+.hbc.hst-exp{border-top-color:var(--danger)}
+.hbdates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 10px}
+.hbdates span{display:block;font-size:12px;color:var(--mut)}
+.hbdates b{font-size:15px}
+.hbbar{height:8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.hbbar i{display:block;height:100%;background:var(--ok)}
+.hst-soon .hbbar i{background:var(--warn)}
+.hst-exp .hbbar i{background:var(--danger)}
+.hbform .g3{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.hbform{margin:12px 0 4px;padding:12px;border:1px dashed var(--brand-100);border-radius:var(--r);background:var(--brand-50)}
+.hbhist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.hbhist li{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-left:3px solid var(--brand);padding:6px 0 6px 12px}
+.hbhist li.legacy{border-left-color:var(--line)}
+.hbhist .thumbs{margin-top:0}
+.hbhist .thumbs img{width:64px;height:64px}
+.hbnote{font-size:13px;margin-top:2px}
+
+.doc .badge{display:inline-flex;margin:0 0 4px}
+.doc small{display:block;font-size:12px}
+.doc.hst-exp{border-color:var(--danger-200);background:var(--danger-50)}
+.doc.hst-soon{border-color:var(--warn-200);background:var(--warn-50)}
+@media (max-width:820px){
+  .hbgrid,.wpgrid{grid-template-columns:minmax(0,1fr)}
+  .hbdates b{font-size:14px}
+}
+@media print{ .hbform,[data-renew],#wpback{display:none!important} }

@@ -115,8 +115,18 @@
           ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
-            ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')))))",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))))) || (auth != null && newData.exists() && newData.child('type').val() === 'health' && (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || data.child('type').val() === 'health'))",
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+          }
+        },
+        "renew": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".indexOn": [
+            "sap"
+          ],
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('kind').val().matches(/^(book|exam)$/) && newData.child('exp').isString() && newData.child('exp').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('iss').exists() || (newData.child('iss').isString() && newData.child('iss').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/))) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 300)))"
           }
         },
         "svcheck": {

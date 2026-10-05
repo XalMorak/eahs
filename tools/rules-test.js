@@ -32,7 +32,8 @@ const seed={borluulalt:{users:{emp001:{name:"A",role:"employee"}}},
              svOf:{id:'svOf',tpl:'hk',start:'2026-09-28',heseg:'Оффис',alba:'Оффис'},
              svLeg:{id:'svLeg',tpl:'servis',start:'2026-09-28',heseg:'Оюут',alba:'Бар',cells:{sv1m:{d0:'ok'}}}},
     hazards:{hLow:{id:'hLow',risk:'Бага',status:'Шинэ',det:'x'},hHigh:{id:'hHigh',risk:'Их',status:'Шинэ',det:'y'}},
-    roster:{r1:{id:'r1',sap:'1108650',arrive:T}}}}};
+    roster:{r1:{id:'r1',sap:'1108650',arrive:T}},
+    renew:{rn1:{id:'rn1',sap:'1108650',kind:'book',exp:'2027-01-01',date:T},rn2:{id:'rn2',sap:'2200',kind:'exam',exp:'2027-02-01',date:T}}}}};
 async function reset(rulesFile){
   const rules=fs.readFileSync(rulesFile,'utf8');
   const r=await fetch(`${DBU}/.settings/rules.json?ns=${NS}`,{method:'PUT',headers:{Authorization:'Bearer owner'},body:rules}); if(!r.ok) throw new Error('rules load '+await r.text());
@@ -185,6 +186,34 @@ async function strict(){
   await expect('hyg: legacy record edit denied (validation)', false, ()=>h.db.ref(SV+'svOf/cells/hk2/d0').set('imp'));
   await expect('hyg: delete legacy svcheck', true, ()=>h.db.ref(SV+'svOf').remove());
   await expect('hyg: delete svcheck', true, ()=>h.db.ref(SV+'svOld').remove());
+  console.log('--- v8: renew (цагаан дэвтэр / шинжилгээ) + health notifs');
+  const RN=V+'renew/';
+  await expect('hyg: renew per-record (history + users exp/iss + photo + drop old notif)', true, ()=>h.db.ref(V).update({'renew/rn3':{id:'rn3',sap:'1108650',kind:'book',iss:T,exp:'2027-10-05',date:T,note:'Эмнэлэг',photo:1,ts:1},'users/1108650/bookExp':'2027-10-05','users/1108650/bookIss':T,'photos/rn_rn3':['data:x'],'notifs/hb_1108650_book_2026-10-20_soon':null}));
+  await expect('hyg: renew invalid kind', false, ()=>h.db.ref(RN+'rn4').set({id:'rn4',sap:'1108650',kind:'x',exp:'2027-10-05'}));
+  await expect('hyg: renew bad exp date', false, ()=>h.db.ref(RN+'rn4').set({id:'rn4',sap:'1108650',kind:'exam',exp:'05/10/2027'}));
+  await expect('hyg: renew empty iss', false, ()=>h.db.ref(RN+'rn4').set({id:'rn4',sap:'1108650',kind:'exam',iss:'',exp:'2027-10-05'}));
+  await expect('hyg: renew note > 300', false, ()=>h.db.ref(RN+'rn4').set({id:'rn4',sap:'1108650',kind:'exam',exp:'2027-10-05',note:'a'.repeat(301)}));
+  await expect('hyg: health notif', true, ()=>h.db.ref(V+'notifs/hb_2200_exam_2026-10-20_soon').set({id:'hb_2200_exam_2026-10-20_soon',type:'health',level:'hsoon',ts:5,title:'Жилийн шинжилгээ дуусах дөхсөн: Ө',alba:'Бар',ref:'2200'}));
+  await expect('sup: read renew', true, ()=>s.db.ref(RN).once('value'));
+  await expect('sup: read renewal photo', true, ()=>s.db.ref(V+'photos/rn_rn3').once('value'));
+  await expect('sup: write renew (hygienist only)', false, ()=>s.db.ref(RN+'rs1').set({id:'rs1',sap:'1108650',kind:'book',exp:'2027-10-05'}));
+  await expect('sup: change users bookExp', false, ()=>s.db.ref(V+'users/1108650/bookExp').set('2030-01-01'));
+  await expect('sup: write renewal photo', false, ()=>s.db.ref(V+'photos/rn_rs1').set(['data:x']));
+  await expect('sup: health notif own alba (Бар)', true, ()=>s.db.ref(V+'notifs/hb_1108650_exam_2026-10-01_exp').set({id:'hb_1108650_exam_2026-10-01_exp',type:'health',level:'hexp',ts:6,title:'Жилийн шинжилгээ дууссан: Б',alba:'Бар',ref:'1108650'}));
+  await expect('sup: health notif overwrite existing health (race)', true, ()=>s.db.ref(V+'notifs/hb_2200_exam_2026-10-20_soon').set({id:'hb_2200_exam_2026-10-20_soon',type:'health',level:'hsoon',ts:7,title:'x',alba:'Бар',ref:'2200'}));
+  await expect('sup: health notif other alba (Оффис)', false, ()=>s.db.ref(V+'notifs/hb_x_book_2026-10-01_exp').set({id:'hb_x_book_2026-10-01_exp',type:'health',level:'hexp',ts:6,title:'x',alba:'Оффис',ref:'x'}));
+  await expect('sup: overwrite hygfail notif as health', false, ()=>s.db.ref(V+'notifs/hf2').set({id:'hf2',type:'health',ts:8,title:'x',alba:'Бар',ref:'2200'}));
+  await expect('sup: health notif invalid (no title)', false, ()=>s.db.ref(V+'notifs/hb_y').set({id:'hb_y',type:'health',ts:6,alba:'Бар'}));
+  await expect('office sup: health notif Оффис', true, ()=>o.db.ref(V+'notifs/hb_z_book_2026-10-01_exp').set({id:'hb_z_book_2026-10-01_exp',type:'health',level:'hexp',ts:6,title:'x',alba:'Оффис',ref:'z'}));
+  await expect('office sup: health notif Бар', false, ()=>o.db.ref(V+'notifs/hb_q_book_2026-10-01_exp').set({id:'hb_q_book_2026-10-01_exp',type:'health',ts:6,title:'x',alba:'Бар',ref:'q'}));
+  await expect('worker: read all renew', false, ()=>w.db.ref(RN).once('value'));
+  await expect('worker: own renew query', true, ()=>w.db.ref(RN).orderByChild('sap').equalTo('1108650').once('value'));
+  await expect("worker: other's renew query", false, ()=>w.db.ref(RN).orderByChild('sap').equalTo('2200').once('value'));
+  await expect('worker: write renew', false, ()=>w.db.ref(RN+'rw1').set({id:'rw1',sap:'1108650',kind:'book',exp:'2030-01-01'}));
+  await expect('worker: health notif', false, ()=>w.db.ref(V+'notifs/hb_w').set({id:'hb_w',type:'health',ts:1,title:'x',alba:'Бар',ref:'1108650'}));
+  await expect('worker: read renewal photo', false, ()=>w.db.ref(V+'photos/rn_rn3').once('value'));
+  await expect('anon: read renew', false, ()=>an.db.ref(RN).once('value'));
+  await expect('anon: health notif', false, ()=>an.db.ref(V+'notifs/hb_a').set({id:'hb_a',type:'health',ts:1,title:'x',alba:'Бар',ref:'1'}));
   console.log('--- after migration');
   await expect('claim again after pinHash removed (new account, same PIN)', false, async()=>{ const x=await emailUser('1108650+9@eahs.local','eahs#4321'); await claim(x.db,x.auth.currentUser.uid,'1108650','worker','4321'); });
   const b=await owner('borluulalt','GET'); await expect('borluulalt data present', true, async()=>{ if(!b || !b.users) throw new Error('missing'); });
@@ -203,6 +232,9 @@ async function transition(){
   await expect('anon: unknown collection', false, ()=>an.db.ref(V+'foo').set(1));
   await expect('anon (old clients): svcheck valid write', true, ()=>an.db.ref(V+'svcheck/t1').set({id:'t1',tpl:'oyut',start:T,heseg:'Оюут',alba:'Бар',cells:{zg1:{d0:'ok'},zg2:{d0:'imp'}}}));
   await expect('anon: svcheck invalid cell', false, ()=>an.db.ref(V+'svcheck/t1/cells/zg1/d1').set(5));
+  await expect('anon (transition): renew valid', true, ()=>an.db.ref(V+'renew/t1').set({id:'t1',sap:'1108650',kind:'exam',iss:T,exp:'2027-10-05',date:T}));
+  await expect('anon (transition): renew invalid kind', false, ()=>an.db.ref(V+'renew/t2').set({id:'t2',sap:'1108650',kind:'x',exp:'2027-10-05'}));
+  await expect('anon (transition): health notif valid', true, ()=>an.db.ref(V+'notifs/hb_t').set({id:'hb_t',type:'health',level:'hsoon',ts:1,title:'x',alba:'Бар',ref:'1108650'}));
   await expect('anon: svcheck legacy template', false, ()=>an.db.ref(V+'svcheck/t2').set({id:'t2',tpl:'servis',start:T,heseg:'Оюут',alba:'Бар'}));
   const h=await emailUser('admin@eahs.local','eahs#1234');
   await expect('hyg migration claim (transition)', true, ()=>claim(h.db,h.auth.currentUser.uid,'admin','hygiene','1234'));
