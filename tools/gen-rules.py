@@ -20,11 +20,11 @@ def NORM(snap):
 MYALBA = NORM(f"root.child('{V2}/users/'+{MYSAP}+'/alba')")
 SAME_ALBA_NEW = NORM("newData.child('alba')") + " === " + MYALBA
 SAME_ALBA_OLD = NORM("data.child('alba')") + " === " + MYALBA
-SV_TPLS = "/^(oyut|manlai|zoogch|hk|tuslah|barmen|servis|abarmen)$/"
+SV_TPLS = "/^(oyut|manlai)$/"   # v7: зөвхөн 2 маягт; хуучин 6 маягтын бичлэг уншигдана, засагдахгүй (эрүүл ахуйч устгаж болно)
 SV_VALIDATE = ("!newData.exists() || (newData.child('tpl').isString() && newData.child('tpl').val().matches(" + SV_TPLS + ")"
                " && newData.child('start').isString() && newData.child('start').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
-               " && newData.child('heseg').isString() && newData.child('heseg').val().length <= 80"
-               " && newData.child('alba').isString())")
+               " && newData.child('heseg').val() === (newData.child('tpl').val() === 'oyut' ? 'Оюут' : 'Манлай')"
+               " && newData.child('alba').val() === 'Бар')")
 SVCHECK_KIDS = {
     "cells": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().matches(/^(ok|imp|no)$/)"}}},
     "notes": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().length <= 200"}}},

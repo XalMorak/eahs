@@ -797,3 +797,16 @@ table.svt{width:100%;border-collapse:collapse;table-layout:fixed}
   .svt th.hd,.svt th.dt,.svt td.fqc.on,.svt tr.sec td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .svt tr{break-inside:avoid}
 }
+/* v7: Оюут / Манлай маягт сонгогч */
+.svpicks{border:0;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.svpicks legend{padding:0}
+.svpick{position:relative;cursor:pointer}
+.svpick input{position:absolute;opacity:0;inset:0}
+.svpick span{display:flex;flex-direction:column;gap:2px;align-items:flex-start;min-height:76px;padding:14px 16px;border-radius:var(--r);border:1.5px solid var(--line-2);background:var(--surface);box-shadow:var(--sh-1);transition:all .12s}
+.svpick b{font-size:18px;color:var(--ink)}
+.svpick small{font-size:12.5px;color:var(--mut)}
+.svpick input:checked + span{border-color:var(--brand);background:var(--brand-50);box-shadow:0 0 0 1px var(--brand) inset}
+.svpick input:checked + span b{color:var(--brand-800)}
+.svpick input:focus-visible + span{box-shadow:var(--ring)}
+#svf input[type=date]{width:100%}
+.ahint{font-size:11.5px;font-weight:400}
