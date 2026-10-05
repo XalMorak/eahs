@@ -116,7 +116,7 @@
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))))) || (auth != null && newData.exists() && newData.child('type').val() === 'health' && (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || data.child('type').val() === 'health'))",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
         "renew": {
@@ -174,6 +174,20 @@
           }
         },
         "wbdata": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
+          }
+        },
+        "labcerts": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200 && newData.child('certNo').isString() && newData.child('certNo').val().length > 0 && newData.child('certNo').val().length <= 80 && newData.child('analyzed').isString() && newData.child('analyzed').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('received').isString() && newData.child('received').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('exp').isString() && newData.child('exp').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 500)) && (!newData.child('fileType').exists() || newData.child('fileType').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/)) && (!newData.child('fileSize').exists() || (newData.child('fileSize').isNumber() && newData.child('fileSize').val() <= 1100000)) && (!newData.child('fileName').exists() || (newData.child('fileName').isString() && newData.child('fileName').val().length <= 200)))"
+          }
+        },
+        "labdata": {
           ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {

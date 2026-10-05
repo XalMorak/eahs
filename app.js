@@ -63,7 +63,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -150,7 +150,8 @@ const ICONS = {
   chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>',
   clip:'<path d="m21 11.5-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>',
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
-  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
+  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  flask:'<path d="M9 3h6M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h12a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M8.5 14h7"/>'
 };
 const ic = (n, cls="") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n]||""}</svg>`;
 const initials = name => String(name||"?").replace(/^[^\s.]+\.\s*/,"").trim().slice(0,1).toUpperCase() || "?";
@@ -172,6 +173,7 @@ const DB = {};
 COLS.forEach(c=> DB[c] = lsGet(LS+c, {}) || {});
 let PHOTOS = lsGet(LS+"photos", {}) || {};
 let FILES = lsGet(LS+"wbdata", {}) || {};   // цагаан дэвтрийн файлын агуулга (base64) — жагсаалтаас тусдаа, хэрэгтэй үед татна
+let LABFILES = lsGet(LS+"labdata", {}) || {}; // бүтээгдэхүүний шинжилгээний бичгийн файл
 let PENDING = lsGet(LS+"pending", []) || [];
 let REJECTED = lsGet(LS+"rejected", []) || [];
 let _fb = null, _auth = null, CLOUD_AUTH = false, _cloudState = "off", _flushing = false;
@@ -197,17 +199,21 @@ function applyLocal(p, v){
     if(rest.length) { if(v==null) delete FILES[rest[0]]; else FILES[rest[0]] = v; }
     return;
   }
+  if(col==="labdata"){
+    if(rest.length) { if(v==null) delete LABFILES[rest[0]]; else LABFILES[rest[0]] = v; }
+    return;
+  }
   if(!DB[col]) DB[col] = {};
   if(!rest.length) DB[col] = clone(v)||{};
   else setPath(DB[col], rest.join("/"), v);
 }
 function persist(cols){
-  cols.forEach(c=>{ if(c==="photos") lsSet(LS+"photos", PHOTOS); else if(c==="wbdata"){ if(!_fb) lsSet(LS+"wbdata", FILES); } else if(DB[c]) lsSet(LS+c, DB[c]); });
+  cols.forEach(c=>{ if(c==="photos") lsSet(LS+"photos", PHOTOS); else if(c==="wbdata"){ if(!_fb) lsSet(LS+"wbdata", FILES); } else if(c==="labdata"){ if(!_fb) lsSet(LS+"labdata", LABFILES); } else if(DB[c]) lsSet(LS+c, DB[c]); });
 }
 function persistPending(){
   if(!lsSet(LS+"pending", PENDING)){
     // зураггүйгээр ч гэсэн хадгалж үзнэ
-    lsSet(LS+"pending", PENDING.filter(e=>!e.p.startsWith("photos/") && !e.p.startsWith("wbdata/")));
+    lsSet(LS+"pending", PENDING.filter(e=>!e.p.startsWith("photos/") && !e.p.startsWith("wbdata/") && !e.p.startsWith("labdata/")));
   }
 }
 /* updates: { "users/123": {...}, "hygcheck/id/rows/r1": {...}, "roster/x": null } */
@@ -362,7 +368,7 @@ function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; SYNC
 const OWN_COLS = ["uhaan","fatigue","infect"];
 function syncPlan(role){
   if(role==="hygiene") return COLS;
-  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles"];
+  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts"];
   return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck"];
 }
 function startSync(role, sap){
@@ -402,7 +408,7 @@ function syncWorkerAdvice(k){
 /* Өөр хэрэглэгч нэвтэрвэл өмнөх хэрэглэгчийн кэшийг цэвэрлэнэ (хүлээгдэж буй бичлэг үлдэнэ) */
 function claimCache(sap){
   const owner = lsGet(LS+"owner", null);
-  if(owner && owner!==sap){ COLS.forEach(c=>{ DB[c] = {}; }); PHOTOS = {}; FILES = {}; persist([...COLS, "photos"]); lsSet(LS+"wbdata", {}); }
+  if(owner && owner!==sap){ COLS.forEach(c=>{ DB[c] = {}; }); PHOTOS = {}; FILES = {}; LABFILES = {}; persist([...COLS, "photos"]); lsSet(LS+"wbdata", {}); lsSet(LS+"labdata", {}); }
   lsSet(LS+"owner", sap);
 }
 let _loggingIn = false;
@@ -743,6 +749,43 @@ function ensureHealthNotifs(u){
   _hbGenKey = key;
   write(upd);
 }
+
+/* ---------- Бүтээгдэхүүний шинжилгээний бичиг: төлөв / мэдэгдэл ---------- */
+let LABF = "";   // шүүлтүүр: "" | exp | soon | ok | file
+let LABQ = "";
+const labList = ()=> list("labcerts").filter(c=>c && c.id);
+function labAlerts(){
+  return labList().map(c=>{ const st=hState(c.exp); return {c, st, left: c.exp?daysBetween(today(), c.exp):9999}; })
+    .filter(a=>a.st==="soon" || a.st==="exp").sort((a,b)=>a.left-b.left || String(a.c.name||"").localeCompare(String(b.c.name||"")));
+}
+function labAlertCard(ro){
+  const al = labAlerts(); const ex = al.filter(a=>a.st==="exp").length, so = al.length-ex;
+  return `<div class="card" id="labcard"><div class="ctitle">${ic("flask")}<h3>Бүтээгдэхүүний шинжилгээ — анхаарах</h3>
+      <span class="row-gap hbsum"><span class="badge b-bad">Дууссан: ${ex}</span><span class="badge b-wait">Дуусах дөхсөн: ${so}</span>
+      ${ro?"":`<button type="button" class="btn ghost sm" data-nav="шинжилгээ" style="margin-left:auto">Бүгд ${ic("chev","sm")}</button>`}</span></div>
+    ${al.length ? tbl(["Бүтээгдэхүүн","Бичгийн №","Дуусах","Үлдсэн","Төлөв"], al.map(a=>`<tr class="click" data-labo="${esc(a.c.id)}"><td><b>${esc(a.c.name||"")}</b></td><td>${esc(a.c.certNo||"—")}</td><td class="nowrap">${esc(a.c.exp||"—")}</td><td class="nowrap">${esc(hLeftTxt(a.c.exp))}</td><td>${hBadge(a.c.exp)}</td></tr>`))
+      : `<p class="muted">${ic("check","sm")} Шинжилгээний бичгүүдийн хугацаа хүчинтэй (${H_SOON}-аас дээш хоног) эсвэл бүртгэл алга.</p>`}
+  </div>`;
+}
+let _labGenKey = "";
+function ensureLabNotifs(u){
+  if(!u || u.role!=="hygiene") return;
+  if(_fb && !(SYNCED.has("notifs") && SYNCED.has("labcerts"))) return;
+  const ts = Date.now(), upd = {};
+  labAlerts().forEach(a=>{
+    const id = keyOf(`lab_${a.c.id}_${a.c.exp}_${a.st}`);
+    if((DB.notifs||{})[id]) return;
+    upd["notifs/"+id] = {id, type:"lab", level: a.st==="exp" ? "lexp" : "lsoon", ts,
+      title: `Шинжилгээ ${a.st==="exp" ? "дууссан" : "дуусах дөхсөн"}: ${a.c.name||""}`.slice(0,200),
+      body: `Бичиг № ${a.c.certNo||"—"} · дуусах: ${a.c.exp} (${hLeftTxt(a.c.exp)})`.slice(0,300),
+      ref: a.c.id, by: "Систем", bySap: u.sap};
+  });
+  const key = Object.keys(upd).sort().join(",");
+  if(!key || key===_labGenKey) return;
+  _labGenKey = key;
+  write(upd);
+}
+
 function workerHome(){
   const u = me(); if(!u) return landing();
   view(workerHome, true);
@@ -1162,10 +1205,10 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
   const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Эрүүл ахуйчийн самбар";
@@ -1189,7 +1232,7 @@ function bindNav(app, extra){
       const sup = me()?.role==="supervisor";
       ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
-        "мэдэгдэл":notifPage, "зөвлөмж":()=>advicePage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
+        "мэдэгдэл":notifPage, "зөвлөмж":()=>advicePage(), "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -1222,9 +1265,11 @@ function supervisorHome(){
     ${hygDueCard(u.alba)}
     <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`), "УХААН бүртгэл алга")}</div>
     ${healthCard(u.alba)}
+    ${labAlertCard(true)}
     <div class="card" id="svstaff"><div class="ctitle">${ic("users")}<h3>Албаны ажилтнууд (${aw.length})</h3></div>
       ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр","Шинжилгээ"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
-  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba); });
+  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba);
+    const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); } });
   ensureHealthNotifs(u);
 }
 function viewUhaan(id){
@@ -1272,6 +1317,7 @@ function hygieneHome(){
   const infPend=inf.filter(x=>(!x.verdict||x.verdict==="huleegdej")).length;
   const infBlock=inf.filter(x=>x.verdict==="ersdel" && x.date===today()).length;
   const due = hygDue(today());
+  const labs = labAlerts(); const labExp = labs.filter(a=>a.st==="exp").length, labSoon = labs.filter(a=>a.st==="soon").length;
   const app = mount(shell("тойм", `
         ${phead("Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
         <div class="kpis">
@@ -1282,9 +1328,12 @@ function hygieneHome(){
           <div class="kpi k-org click" data-hbjump id="kpi-hbsoon"><i>${ic("file")}</i><div>Дуусах дөхсөн (≤${H_SOON} хоног)<b>${hSoon}</b><span class="muted">ажилтан</span></div></div>
           <div class="kpi k-vio"><i>${ic("virus")}</i><div>Халдвар шийдээгүй<b>${infPend}</b><span class="muted">өнөөдөр оруулахгүй: ${infBlock}</span></div></div>
           <div class="kpi k-grn"><i>${ic("drop")}</i><div>Ариун цэвэр өнөөдөр<b>${due.done}/${due.total}</b><span class="muted">бүртгэсэн / бүртгэх</span></div></div>
+          <div class="kpi k-red ${labExp?"hot":""} click" data-nav="шинжилгээ" id="kpi-labexp"><i>${ic("flask")}</i><div>Шинжилгээ дууссан<b>${labExp}</b><span class="muted">бүтээгдэхүүн</span></div></div>
+          <div class="kpi k-org click" data-nav="шинжилгээ" id="kpi-labsoon"><i>${ic("flask")}</i><div>Шинжилгээ дуусах дөхсөн<b>${labSoon}</b><span class="muted">≤${H_SOON} хоног</span></div></div>
         </div>
         ${hygDueCard(null)}
         ${healthCard(null)}
+        ${labAlertCard()}
         <div class="card"><div class="ctitle">${ic("alert")}<h3>Сүүлийн аюулын мэдээлэл</h3><button class="btn ghost sm" data-nav="аюул" style="margin-left:auto">Бүгд ${ic("chev","sm")}</button></div>
           ${hzN.slice(0,6).map(x=>`<div class="hzrow click" data-hzd="${esc(x.id)}"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")}
         </div>
@@ -1300,8 +1349,10 @@ function hygieneHome(){
   app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
     if(e.target.closest("[data-hbjump]")){ $("#hbcard")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+    const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); return; }
     const z=e.target.closest("[data-hzd]"); if(z){ hazardDetail(z.dataset.hzd); window.scrollTo(0,0); } });
   ensureHealthNotifs(me_);
+  ensureLabNotifs(me_);
 }
 
 /* ======================= АЖИЛТНЫ ХУВИЙН ХУУДАС ======================= */
@@ -1900,6 +1951,10 @@ function reportsPage(){
   const hCnt = kind=> ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:hp.filter(w=>hState(w[HB[kind].exp])===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
   const hBad = hp.filter(w=>HB_KINDS.some(k=>["soon","exp"].includes(hState(w[HB[k].exp])))).length;
   const hExpN = hp.filter(w=>HB_KINDS.some(k=>hState(w[HB[k].exp])==="exp")).length;
+  const labAll = labList();
+  const labBad = labAll.filter(c=>["soon","exp"].includes(hState(c.exp))).length;
+  const labExpN = labAll.filter(c=>hState(c.exp)==="exp").length;
+  const labCnt = ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:labAll.filter(c=>hState(c.exp)===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
   const rn = list("renew").filter(inR);
   const rnS = HB_KINDS.map((k,j)=>({name:HB[k].l, color:j?CH_COL.vio:CH_COL.blue, data:zero()}));
   rn.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; rnS[x.kind==="exam"?1:0].data[i]++; });
@@ -1925,6 +1980,7 @@ function reportsPage(){
       ${kpi("k-grn","drop","Ариун цэврийн шалгалт",rows,`ажиллахгүй: ${sum(hFail)}${rows?` (${Math.round(100*sum(hFail)/rows)}%)`:""}`)}
       ${kpi("k-vio","virus","Халдварын асуумж",inf.length,`оруулахгүй: ${sum(vS[1].data)}`)}
       ${kpi("k-red "+(hExpN?"hot":""),"book","Дэвтэр/шинжилгээ анхаарах",hBad,`дууссан: ${hExpN} · сунгасан: ${rn.length}`)}
+      ${kpi("k-red "+(labExpN?"hot":""),"flask","Бүтээгдэхүүний шинжилгээ",labBad,`дууссан: ${labExpN} · бүртгэл: ${labAll.length}`)}
     </div>
     ${sec("alert","Аюулын мэдээлэл — эрсдлийн түвшингээр", hz.length? svgBars(cats, [...riskSeries, ...(sum(noRisk.data)?[noRisk]:[])], {title:"Аюул эрсдлээр"}) : emptyState("Энэ хугацаанд аюулын мэдээлэл алга","","alert"))}
     <div class="rgrid">
@@ -1942,6 +1998,8 @@ function reportsPage(){
     </div>
     ${sec("history","Сунгалт (хугацаанд)", rn.length? svgBars(cats, rnS, {h:170, title:"Сунгалт"}) : emptyState("Энэ хугацаанд сунгалт бүртгээгүй","","history"))}
     ${hBad? sec("alert","Дуусах дөхсөн / дууссан ажилтнууд", tbl(["Ажилтан","SAP","Алба","Баримт","Дуусах","Төлөв"], healthAlerts(F.alba||null).map(a=>`<tr><td>${esc(a.w.name)}</td><td>${esc(a.w.sap)}</td><td>${esc(albaN(a.w.alba))}</td><td>${esc(HB[a.kind].l)}</td><td>${esc(a.exp)} <span class="muted">(${esc(hLeftTxt(a.exp))})</span></td><td>${hBadge(a.exp)}</td></tr>`))) : ""}
+    ${sec("flask","Бүтээгдэхүүний шинжилгээ — одоогийн төлөв", labAll.length? hbars(labCnt) : emptyState("Шинжилгээний бичиг бүртгэгдээгүй","","flask"))}
+    ${labBad? sec("alert","Дуусах дөхсөн / дууссан шинжилгээ", tbl(["Бүтээгдэхүүн","Бичгийн №","Шинжилгээ","Нягтлангаас","Дуусах","Төлөв"], labAlerts().map(a=>`<tr><td>${esc(a.c.name||"")}</td><td>${esc(a.c.certNo||"")}</td><td>${esc(a.c.analyzed||"")}</td><td>${esc(a.c.received||"")}</td><td>${esc(a.c.exp)} <span class="muted">(${esc(hLeftTxt(a.c.exp))})</span></td><td>${hBadge(a.c.exp)}</td></tr>`))) : ""}
     <p class="muted repfoot">Гаргасан: ${esc(u.name)} · ${esc(nowStr())} · ЭАХС — Ерөө говь ХХК</p>
     </div>`));
   bindNav(app, e=>{
@@ -2052,10 +2110,12 @@ function openNotif(id){
   if(n.type==="hazard" && DB.hazards[n.ref]) return hazardDetail(n.ref);
   if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
   if(n.type==="health" && DB.users[keyOf(n.ref)]){ WP.from = notifPage; return workerProfile(n.ref); }
+  if(n.type==="lab" && (DB.labcerts||{})[n.ref]) return labPage(null, n.ref);
   notifPage();
 }
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"],
-  hexp:["Дууссан","b-bad","book"], hsoon:["Дуусах дөхсөн","b-wait","book"]};
+  hexp:["Дууссан","b-bad","book"], hsoon:["Дуусах дөхсөн","b-wait","book"],
+  lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"]};
 function notifPage(){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(notifPage, true);
@@ -2065,7 +2125,7 @@ function notifPage(){
     : perm==="denied" ? `<span class="badge b-bad">Хөтчийн мэдэгдлийг хориглосон — хөтчийн тохиргооноос зөвшөөрнө</span>`
     : perm==="none" ? `<span class="badge b-wait">Энэ хөтөч мэдэгдэл дэмжихгүй</span>`
     : `<button class="btn sm" id="nperm">${ic("bell","sm")} Хөтчийн мэдэгдэл асаах</button>`;
-  const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(albaN(u.alba))} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / шинжилгээний хугацаа`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / шинжилгээний хугацаа")}
+  const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(albaN(u.alba))} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / бүтээгдэхүүний шинжилгээ`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / бүтээгдэхүүний шинжилгээ")}
     <div class="card row-between wrap nperm"><div class="row-gap">${permHtml}</div>
       <button class="btn ghost sm" id="nall" ${ns.some(n=>!r.has(n.id))?"":"disabled"}>${ic("checks","sm")} Бүгдийг уншсан</button></div>
     <p class="muted">Апп нээлттэй (эсвэл таб далд) үед мэдэгдэл ирнэ. Апп хаалттай үед ирэх «push» мэдэгдэлд сервер шаардлагатай.</p>
@@ -2390,6 +2450,171 @@ async function wbAction(e, canEdit, rerender){
   return true;
 }
 
+
+/* ======================= БҮТЭЭГДЭХҮҮНИЙ ШИНЖИЛГЭЭНИЙ БИЧИГ ======================= */
+/* Firebase Storage-гүй: meta labcerts/{id}, файл labdata/{id} (base64). Эрүүл ахуйч CRUD; ахлах зөвхөн харна. */
+async function getLabData(id){
+  if(LABFILES[id]) return LABFILES[id];
+  if(!_fb) return null;
+  try{ const v = (await _fb.ref(ROOT+"/labdata/"+id).once("value")).val(); if(v) LABFILES[id] = v; return v; }
+  catch(e){ console.warn("labdata", e && (e.code||e.message)); return null; }
+}
+function labPage(editId, focusId){
+  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const canEdit = u.role==="hygiene";
+  const ed = editId ? (DB.labcerts||{})[editId] : null;
+  view(()=>labPage(), !(ed||focusId));
+  const all = labList().sort((a,b)=>String(a.exp||"9999").localeCompare(String(b.exp||"9999")) || String(a.name||"").localeCompare(String(b.name||"")));
+  const match = c=>{
+    if(LABF==="exp") return hState(c.exp)==="exp";
+    if(LABF==="soon") return hState(c.exp)==="soon";
+    if(LABF==="ok") return hState(c.exp)==="ok";
+    if(LABF==="file") return !!(c.fileName || c.fileType);
+    if(LABF==="none") return hState(c.exp)==="none";
+    return true;
+  };
+  const shown = all.filter(match);
+  const cnt = st => all.filter(c=> st==="file" ? !!(c.fileName||c.fileType) : hState(c.exp)===st).length;
+  const chip = (k,l,n)=>`<button type="button" class="chip ${LABF===k?"on":""}" data-labf="${k}">${esc(l)} (${n})</button>`;
+  const q = (typeof LABQ==="string"?LABQ:"");
+  const filtered = shown.filter(c=>{
+    if(!q) return true; const hay = `${c.name||""} ${c.certNo||""} ${c.note||""}`.toLowerCase();
+    return hay.includes(q.toLowerCase());
+  });
+  const focus = focusId ? (DB.labcerts||{})[focusId] : null;
+  const form = canEdit ? `<form class="card labform" id="labf" novalidate>
+      <div class="ctitle">${ic(ed?"edit":"flask")}<h3>${ed?"Бичиг засах":"Шинэ шинжилгээний бичиг"}</h3></div>
+      <div class="g3">
+        <div class="span2"><label class="f" for="lbn">Бүтээгдэхүүний нэр *</label><input id="lbn" maxlength="200" required value="${esc(ed?.name||"")}" placeholder="Жишээ: Ундаа — Кола 0.5л"/></div>
+        <div><label class="f" for="lbc">Шинжилгээний бичгийн дугаар *</label><input id="lbc" maxlength="80" required value="${esc(ed?.certNo||"")}" placeholder="Жишээ: АБ-2026/014"/></div>
+        <div><label class="f" for="lba">Шинжилгээ хийсэн огноо *</label><input type="date" id="lba" required value="${esc(ed?.analyzed||today())}"/></div>
+        <div><label class="f" for="lbr">Нягтлангаас ирсэн огноо *</label><input type="date" id="lbr" required value="${esc(ed?.received||today())}"/></div>
+        <div><label class="f" for="lbe">Хүчинтэй хугацаа / дуусах огноо *</label><input type="date" id="lbe" required value="${esc(ed?.exp||"")}"/></div>
+      </div>
+      <label class="f" for="lbnote">Тэмдэглэл</label><textarea id="lbnote" rows="2" maxlength="500" placeholder="Нэмэлт тэмдэглэл…">${esc(ed?.note||"")}</textarea>
+      <div class="wbup" id="labup">
+        <span class="f" style="margin:0">Хавсралт (зураг / PDF)</span>
+        <label class="btn sm" for="lbfile">${ic("upload","sm")} Файл оруулах</label><input type="file" id="lbfile" accept="image/*,application/pdf" class="vh"/>
+        <label class="btn ghost sm" for="lbcam">${ic("camera","sm")} Зураг авах</label><input type="file" id="lbcam" accept="image/*" capture="environment" class="vh"/>
+        ${ed && (ed.fileName||ed.fileType)?`<button type="button" class="btn warn sm" id="lbfileclear">${ic("trash","sm")} Файлыг хасах</button>`:""}
+        <span class="muted sm">Зураг ~300 КБ хүртэл шахагдана · PDF 1 МБ хүртэл</span>
+        <div id="lbprog" class="muted sm" role="status" aria-live="polite">${ed && ed.fileName?`Одоогийн: ${esc(ed.fileName)} (${esc(fmtSize(ed.fileSize||0))})`:""}</div>
+      </div>
+      <div class="gap"></div>
+      <div class="row-gap"><button class="btn" type="submit">${ic("check","sm")} ${ed?"Хадгалах":"Бүртгэх"}</button>${ed?'<button class="btn ghost" type="button" id="lbcancel">Болих</button>':""}</div>
+    </form>` : `<div class="card"><p class="muted">${ic("lock","sm")} Шинжилгээний бичгийг эрүүл ахуйч бүртгэнэ. Та зөвхөн харах / татах эрхтэй.</p></div>`;
+  const row = c=>{
+    const st = hState(c.exp); const has = !!(c.fileName||c.fileType);
+    return `<article class="card labitem st-${st}${focusId===c.id?" on":""}" data-lab="${esc(c.id)}">
+      <div class="row-between wrap">
+        <div><div class="row-gap">${hBadge(c.exp)}${has?`<span class="badge b-new">${ic("clip","sm")} Файл</span>`:""}<span class="muted sm">${esc(c.exp?hLeftTxt(c.exp):"Дуусах огноогүй")}</span></div>
+          <h3 class="labt">${esc(c.name||"")}</h3>
+          <p class="muted sm">№ ${esc(c.certNo||"—")} · Шинжилгээ: ${esc(c.analyzed||"—")} · Нягтлангаас: ${esc(c.received||"—")}</p>
+          ${c.note?`<p class="advtext clamp">${esc(c.note)}</p>`:""}
+          <p class="muted sm">${esc(c.by||"")} · ${esc(c.at||c.date||"")}${c.updatedAt?" · засвар: "+esc(c.updatedAt):""}</p></div>
+        <div class="row-gap wrap labacts">
+          ${has?`<button type="button" class="btn ghost sm" data-labview="${esc(c.id)}">${ic("eye","sm")} Харах</button><button type="button" class="btn ghost sm" data-labdl="${esc(c.id)}">${ic("download","sm")} Татах</button>`:""}
+          ${canEdit?`<button type="button" class="btn ghost sm" data-labe="${esc(c.id)}">${ic("edit","sm")} Засах</button><button type="button" class="btn warn sm" data-labx="${esc(c.id)}">${ic("trash","sm")} Устгах</button>`:""}
+        </div>
+      </div>
+    </article>`;
+  };
+  const app = mount(shell("шинжилгээ", `${phead("Бүтээгдэхүүний шинжилгээ", "Шинжилгээний бичиг · нягтлангаас ирсэн огноо · хүчинтэй хугацаа")}
+    ${form}
+    <div class="chips" role="group" aria-label="Шүүлтүүр">${chip("","Бүгд",all.length)}${chip("exp","Дууссан",cnt("exp"))}${chip("soon","Дуусах дөхсөн",cnt("soon"))}${chip("ok","Хүчинтэй",cnt("ok"))}${chip("none","Огноогүй",cnt("none"))}${chip("file","Файлтай",cnt("file"))}</div>
+    <div class="card filters"><label class="f" for="labq">Хайх</label><input type="search" id="labq" value="${esc(q)}" placeholder="Нэр, бичгийн дугаар, тэмдэглэл…"/></div>
+    <div class="labitems" id="labitems">${filtered.map(row).join("") || `<div class="card">${emptyState("Шинжилгээний бичиг алга", canEdit?"Дээрх маягтаар бүртгэнэ үү":"Эрүүл ахуйч бүртгэхэд энд харагдана","flask")}</div>`}</div>`));
+  let pendingFile = null, clearFile = false;
+  const setProg = t=>{ const el=$("#lbprog"); if(el) el.textContent = t||""; };
+  if(canEdit){
+    ["lbfile","lbcam"].forEach(i=>{
+      const inp=document.getElementById(i); if(!inp) return;
+      inp.onchange = async ()=>{ const f=inp.files[0]; inp.value=""; if(!f) return;
+        setProg("Бэлтгэж байна…");
+        try{
+          pendingFile = await prepWbFile(f);
+          const base=String(f.name||"файл").replace(/[\u0000-\u001f]/g,"").slice(0,120)||"файл";
+          pendingFile._name = pendingFile.type==="image/jpeg" && !/\.jpe?g$/i.test(base) ? base.replace(/\.[^.]*$/,"")+".jpg" : base;
+          clearFile=false; setProg(`Бэлэн: ${pendingFile._name} · ${fmtSize(pendingFile.size)}`);
+        }catch(err){ pendingFile=null; setProg(""); toast(err.message); }
+      };
+    });
+    if($("#lbfileclear")) $("#lbfileclear").onclick = ()=>{ pendingFile=null; clearFile=true; setProg("Файл хасагдана (хадгалахад)"); };
+    if($("#lbcancel")) $("#lbcancel").onclick = ()=>{ LABQ=$("#labq")?.value||""; labPage(); };
+    app.onsubmit = e=>{
+      e.preventDefault(); if(!canEdit) return;
+      const name=$("#lbn").value.trim().slice(0,200), certNo=$("#lbc").value.trim().slice(0,80);
+      const analyzed=$("#lba").value, received=$("#lbr").value, exp=$("#lbe").value, note=$("#lbnote").value.trim().slice(0,500);
+      if(!name){ toast("Бүтээгдэхүүний нэр оруулна уу"); $("#lbn").focus(); return; }
+      if(!certNo){ toast("Шинжилгээний бичгийн дугаар оруулна уу"); $("#lbc").focus(); return; }
+      if(!analyzed || !received || !exp){ toast("Огноонуудыг бүрэн бөглөнө үү"); return; }
+      if(exp < analyzed){ toast("Дуусах огноо шинжилгээ хийсэн өдрөөс өмнө байна"); return; }
+      const ts=Date.now(), id = ed ? ed.id : keyOf("lab_"+ts.toString(36));
+      const prev = ed || {};
+      const meta = {id, name, certNo, analyzed, received, exp, by: prev.by||u.name, bySap: prev.bySap||u.sap, ts: prev.ts||ts, at: prev.at||nowStr(), date: prev.date||today()};
+      if(note) meta.note = note;
+      if(prev.fileName){ meta.fileName=prev.fileName; meta.fileType=prev.fileType; meta.fileSize=prev.fileSize; if(prev.fileW){ meta.fileW=prev.fileW; meta.fileH=prev.fileH; } }
+      if(ed){ meta.updatedAt = nowStr(); meta.updatedBy = u.name; }
+      const upd = {};
+      if(pendingFile){
+        meta.fileName = pendingFile._name || (pendingFile.type==="application/pdf"?"shinjelgee.pdf":"shinjelgee.jpg");
+        meta.fileType = pendingFile.type; meta.fileSize = pendingFile.size;
+        if(pendingFile.w){ meta.fileW = pendingFile.w; meta.fileH = pendingFile.h; }
+        upd["labdata/"+id] = pendingFile.data;
+      } else if(clearFile){
+        delete meta.fileName; delete meta.fileType; delete meta.fileSize; delete meta.fileW; delete meta.fileH;
+        upd["labdata/"+id] = null;
+      }
+      upd["labcerts/"+id] = meta;
+      if(ed && ed.exp && ed.exp!==exp){
+        ["soon","exp"].forEach(st=>{ const nid=keyOf(`lab_${id}_${ed.exp}_${st}`); if((DB.notifs||{})[nid]) upd["notifs/"+nid]=null; });
+      }
+      write(upd);
+      toast(ed?"Хадгаллаа":"Бүртгэлээ");
+      pendingFile=null; clearFile=false; LABQ=$("#labq")?.value||"";
+      labPage(); window.scrollTo(0,0);
+      ensureLabNotifs(u);
+    };
+  }
+  if($("#labq")) $("#labq").oninput = ()=>{ LABQ = $("#labq").value;
+    const hay = LABQ.trim().toLowerCase();
+    $$("#labitems [data-lab]").forEach(el=>{
+      const c=(DB.labcerts||{})[el.dataset.lab]; if(!c) return;
+      el.hidden = !!(hay && !`${c.name||""} ${c.certNo||""} ${c.note||""}`.toLowerCase().includes(hay));
+    });
+  };
+  bindNav(app, e=>{
+    if(e.target.closest("[data-labview],[data-labdl]")){ labFileAction(e); return; }
+    const f=e.target.closest("[data-labf]"); if(f){ LABF=f.dataset.labf; LABQ=$("#labq")?.value||""; labPage(); return; }
+    const ee=e.target.closest("[data-labe]"); if(ee && canEdit){ LABQ=$("#labq")?.value||""; labPage(ee.dataset.labe); window.scrollTo(0,0); return; }
+    const x=e.target.closest("[data-labx]"); if(x && canEdit){ const c=(DB.labcerts||{})[x.dataset.labx]; if(c && confirm(`«${c.name}» бичгийг устгах уу?`)){
+      const upd={["labcerts/"+c.id]:null, ["labdata/"+c.id]:null};
+      ["soon","exp"].forEach(st=>{ const nid=keyOf(`lab_${c.id}_${c.exp}_${st}`); if((DB.notifs||{})[nid]) upd["notifs/"+nid]=null; });
+      write(upd); toast("Устгалаа"); labPage(); } return; }
+  });
+  if(focusId){ const el = app.querySelector(`[data-lab="${String(focusId).replace(/"/g,"")}"]`); el?.scrollIntoView({behavior:"smooth", block:"center"}); }
+}
+async function labFileAction(e){
+  const v=e.target.closest("[data-labview]"); const dl=e.target.closest("[data-labdl]");
+  const id=(v||dl)?.dataset.labview || (v||dl)?.dataset.labdl; if(!id) return false;
+  const c=(DB.labcerts||{})[id]; if(!c || !(c.fileName||c.fileType)){ toast("Файл алга"); return true; }
+  const d=await getLabData(id); if(!d){ toast("Файлыг ачаалж чадсангүй"); return true; }
+  const url=URL.createObjectURL(dataUrlToBlob(d));
+  const name=c.fileName||"shinjelgee";
+  if(dl){ const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); return true; }
+  closeModal("labbox");
+  const m=document.createElement("div"); m.id="labbox"; m.className="modal-bg";
+  const pdf=c.fileType==="application/pdf";
+  m.innerHTML=`<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="lbt">
+    <div class="mhead"><span class="mic">${ic(pdf?"file":"camera")}</span><div><small>${esc(c.name||"")} · ${esc(fmtSize(c.fileSize||0))} · ${esc(c.exp||"")}</small><h3 id="lbt">${esc(name)}</h3></div></div>
+    <div class="wbview">${pdf?`<iframe src="${esc(url)}" title="${esc(name)}"></iframe>`:`<img src="${esc(url)}" alt="${esc(name)}"/>`}</div>
+    <div class="mfoot"><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Шинэ цонхонд нээх</a><a class="btn ghost" href="${esc(url)}" download="${esc(name)}">${ic("download","sm")} Татах</a><button class="btn" type="button" id="labclose">Хаах</button></div></div>`;
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  const close=()=>{ closeModal("labbox"); setTimeout(()=>URL.revokeObjectURL(url),1000); };
+  m.querySelector("#labclose").onclick=close; m.querySelector("#labclose").focus();
+  m.onclick=ev=>{ if(ev.target===m) close(); }; m.onkeydown=ev=>{ if(ev.key==="Escape") close(); };
+  return true;
+}
 /* ======================= ТОХИРГОО ======================= */
 /* Нууц үг солих — бүх үүрэгт (ажилтан ч мөн) */
 function pwFormHtml(u){
@@ -3014,13 +3239,14 @@ function reportPage(){
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
       <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр / жилийн шинжилгээ (одоогийн төлөв + сунгалтын түүх)</label>
+      <label class="chk"><input type="checkbox" id="x-lab" checked/> Бүтээгдэхүүний шинжилгээний бичиг</label>
       <div class="gap"></div>
       <button class="btn" type="submit" id="xl">${ic("download")} Татах</button>
     </form>`));
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
-    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-book","book"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
+    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
     if(!kinds.length){ toast("Дор хаяж нэг тайлан сонгоно уу"); return; }
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     $("#xl").disabled=true; $("#xl").textContent="Бэлдэж байна…";
@@ -3136,6 +3362,7 @@ async function exportExcel(from,to,kinds){
     list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,albaN(x.alba),x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q11,x.score,x.level]));
   }
   if(kinds.includes("book")) addBookSheets(wb, inR);
+  if(kinds.includes("lab")) addLabSheet(wb);
   await downloadWb(wb, `EAHS_${kinds.join("-")}_${from}_${to}.xlsx`);
 }
 
@@ -3157,6 +3384,19 @@ function addBookSheets(wb, inR){
   list("renew").filter(x=>inR(x.date||"")).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(x=>h.addRow([x.at||x.date, x.sap, x.name||"", albaN(x.alba), HB[x.kind]?.l||x.kind, x.iss||"", x.exp, x.prevExp||"", x.note||"", x.photo?"Тийм":"", x.by||""]));
   h.columns.forEach((c,i)=>{ c.width = [17,12,24,10,18,13,13,13,36,8,20][i]||14; });
   h.views = [{state:"frozen", ySplit:1}];
+}
+function addLabSheet(wb){
+  const FILL = {exp:"FFFDE2E2", soon:"FFFFF1D6", ok:"FFE3F4E8", none:"FFF1F3F7"};
+  const head = r=>{ r.font={bold:true}; r.eachCell(c=>{ c.fill={type:"pattern", pattern:"solid", fgColor:{argb:"FFDCE5FB"}}; c.border={bottom:{style:"thin"}}; }); };
+  const s = wb.addWorksheet("Шинжилгээний бичиг");
+  head(s.addRow(["Бүтээгдэхүүн","Бичгийн №","Шинжилгээ хийсэн","Нягтлангаас ирсэн","Дуусах","Төлөв","Үлдсэн хоног","Тэмдэглэл","Файл","Файл хэмжээ","Бүртгэсэн","Бүртгэсэн огноо"]));
+  labList().sort((a,b)=>String(a.exp||"9999").localeCompare(String(b.exp||"9999")) || String(a.name||"").localeCompare(String(b.name||""))).forEach(c=>{
+    const st=hState(c.exp);
+    const r=s.addRow([c.name||"", c.certNo||"", c.analyzed||"", c.received||"", c.exp||"", H_ST[st][0], c.exp?daysBetween(today(), c.exp):"", c.note||"", c.fileName||"", c.fileSize||"", c.by||"", c.at||c.date||""]);
+    r.getCell(6).fill={type:"pattern", pattern:"solid", fgColor:{argb:FILL[st]}};
+  });
+  s.columns.forEach((c,i)=>{ c.width=[28,16,14,16,12,14,12,36,22,12,18,18][i]||14; });
+  s.views=[{state:"frozen", ySplit:1}];
 }
 
 /* ======================= ЭХЛЭЛ ======================= */

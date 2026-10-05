@@ -274,6 +274,23 @@ async function strict(){
   await expect('hyg: file type text/html', false, ()=>h.db.ref(V+'wbfiles/wb4').set({id:'wb4',sap:'1108650',name:'x.html',type:'text/html',size:10}));
   await expect('hyg: file size > 1.1MB', false, ()=>h.db.ref(V+'wbfiles/wb4').set({id:'wb4',sap:'1108650',name:'x.pdf',type:'application/pdf',size:2000000}));
   await expect('hyg: delete file', true, ()=>h.db.ref(V).update({'wbfiles/wb3':null,'wbdata/wb3':null}));
+  
+  // ---- v11 product lab certificates ----
+  const LC=V+'labcerts/', LD=V+'labdata/';
+  const labOk={id:'lab1',name:'Ундаа Кола 0.5л',certNo:'АБ-2026/014',analyzed:T,received:T,exp:'2027-01-01',by:'Эрүүл ахуйч',ts:1,date:T};
+  await expect('hyg: create labcerts', true, ()=>h.db.ref(LC+'lab1').set(labOk));
+  await expect('hyg: labcerts empty name', false, ()=>h.db.ref(LC+'lab2').set({...labOk,id:'lab2',name:''}));
+  await expect('hyg: labcerts bad date', false, ()=>h.db.ref(LC+'lab2').set({...labOk,id:'lab2',exp:'1/1/2027'}));
+  await expect('hyg: labcerts + labdata (jpeg)', true, ()=>h.db.ref(V).update({'labcerts/lab2':{...labOk,id:'lab2',name:'Сүү',certNo:'X-1',fileName:'a.jpg',fileType:'image/jpeg',fileSize:100},'labdata/lab2':'data:image/jpeg;base64,AA'}));
+  await expect('hyg: labdata not data URL', false, ()=>h.db.ref(LD+'lab3').set('<script>'));
+  await expect('hyg: lab fileType text/html', false, ()=>h.db.ref(LC+'lab3').set({...labOk,id:'lab3',fileType:'text/html',fileName:'x.html',fileSize:1}));
+  await expect('sup: read labcerts + labdata', true, async()=>{ await s.db.ref(LC).once('value'); await s.db.ref(LD+'lab2').once('value'); });
+  await expect('sup: write labcerts', false, ()=>s.db.ref(LC+'sx').set(labOk));
+  await expect('worker: read labcerts', false, ()=>w.db.ref(LC).once('value'));
+  await expect('worker: write labdata', false, ()=>w.db.ref(LD+'wx').set('data:image/jpeg;base64,AA'));
+  await expect('hyg: lab notif type', true, ()=>h.db.ref(V+'notifs/lab_lab1_2027-01-01_soon').set({id:'lab_lab1_2027-01-01_soon',type:'lab',level:'lsoon',ts:1,title:'x',ref:'lab1'}));
+  await expect('hyg: delete labcerts + labdata', true, ()=>h.db.ref(V).update({'labcerts/lab1':null,'labcerts/lab2':null,'labdata/lab2':null}));
+
   console.log('--- after migration');
   await expect('claim again after pinHash removed (new account, same PIN)', false, async()=>{ const x=await emailUser('1108650+9@eahs.local','eahs#4321'); await claim(x.db,x.auth.currentUser.uid,'1108650','worker','4321'); });
   const b=await owner('borluulalt','GET'); await expect('borluulalt data present', true, async()=>{ if(!b || !b.users) throw new Error('missing'); });
@@ -299,6 +316,10 @@ async function transition(){
   await expect('anon (transition): wbdata not a data URL', false, ()=>an.db.ref(V+'wbdata/f2').set('hello'));
   await expect('anon (transition): renew valid', true, ()=>an.db.ref(V+'renew/t1').set({id:'t1',sap:'1108650',kind:'exam',iss:T,exp:'2027-10-05',date:T}));
   await expect('anon (transition): renew invalid kind', false, ()=>an.db.ref(V+'renew/t2').set({id:'t2',sap:'1108650',kind:'x',exp:'2027-10-05'}));
+  await expect('anon (transition): labcerts valid', true, ()=>an.db.ref(V+'labcerts/t1').set({id:'t1',name:'X',certNo:'1',analyzed:T,received:T,exp:T}));
+  await expect('anon (transition): labcerts missing certNo', false, ()=>an.db.ref(V+'labcerts/t2').set({id:'t2',name:'X',analyzed:T,received:T,exp:T}));
+  await expect('anon (transition): labdata valid', true, ()=>an.db.ref(V+'labdata/t1').set('data:image/jpeg;base64,AA'));
+
   await expect('anon (transition): health notif valid', true, ()=>an.db.ref(V+'notifs/hb_t').set({id:'hb_t',type:'health',level:'hsoon',ts:1,title:'x',alba:'Бар',ref:'1108650'}));
   await expect('anon: svcheck legacy template', false, ()=>an.db.ref(V+'svcheck/t2').set({id:'t2',tpl:'servis',start:T,heseg:'Оюут',alba:'Бар'}));
   const h=await emailUser('admin@eahs.local','eahs#1234');
@@ -309,7 +330,7 @@ async function transition(){
 }
 (async()=>{
   // borluulalt section must be byte-identical in both files and vs. live (main) rules
-  const live=JSON.parse(require('child_process').execSync('git -C /workspace/eahs show main:database.rules.json').toString()).rules.borluulalt;
+  const live=JSON.parse(require('child_process').execSync('git -C /workspace/eahs show origin/main:database.rules.json').toString()).rules.borluulalt;
   for(const f of ['database.rules.json','database.rules.transition.json']){
     const r=JSON.parse(fs.readFileSync('/workspace/eahs/'+f)).rules;
     await expect(f+': borluulalt identical to main', true, async()=>{ if(JSON.stringify(r.borluulalt)!==JSON.stringify(live)) throw new Error('diff'); });

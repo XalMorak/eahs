@@ -81,7 +81,7 @@
         "notifs": {
           "$id": {
             ".write": "auth != null",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
         "renew": {
@@ -131,6 +131,18 @@
           }
         },
         "wbdata": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
+          }
+        },
+        "labcerts": {
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200 && newData.child('certNo').isString() && newData.child('certNo').val().length > 0 && newData.child('certNo').val().length <= 80 && newData.child('analyzed').isString() && newData.child('analyzed').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('received').isString() && newData.child('received').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('exp').isString() && newData.child('exp').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 500)) && (!newData.child('fileType').exists() || newData.child('fileType').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/)) && (!newData.child('fileSize').exists() || (newData.child('fileSize').isNumber() && newData.child('fileSize').val() <= 1100000)) && (!newData.child('fileName').exists() || (newData.child('fileName').isString() && newData.child('fileName').val().length <= 200)))"
+          }
+        },
+        "labdata": {
           "$id": {
             ".write": "auth != null",
             ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"

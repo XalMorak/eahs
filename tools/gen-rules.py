@@ -64,7 +64,7 @@ NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 # v8: Цагаан дэвтэр / шинжилгээний мэдэгдэл — ахлах зөвхөн өөрийн албаных; давхар үүсгэлтэд (уралдаан) health→health дахин бичиж болно
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'health' && {SUP} && {SAME_ALBA_NEW}"
                 f" && (!data.exists() || data.child('type').val() === 'health'))")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health)$/) && newData.child('ts').isNumber()"
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"
@@ -97,6 +97,17 @@ WB_META_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && ne
                     " && newData.child('size').isNumber() && newData.child('size').val() <= 1100000"
                     " && (!newData.child('kind').exists() || newData.child('kind').val().matches(/^(book|exam)$/)))")
 WB_DATA_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
+# v11: Бүтээгдэхүүний шинжилгээний бичиг — meta labcerts, файл labdata (Storage-гүй base64)
+LAB_VALIDATE = ("!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200"
+                " && newData.child('certNo').isString() && newData.child('certNo').val().length > 0 && newData.child('certNo').val().length <= 80"
+                " && newData.child('analyzed').isString() && newData.child('analyzed').val().matches(" + DATE_RE + ")"
+                " && newData.child('received').isString() && newData.child('received').val().matches(" + DATE_RE + ")"
+                " && newData.child('exp').isString() && newData.child('exp').val().matches(" + DATE_RE + ")"
+                " && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 500))"
+                " && (!newData.child('fileType').exists() || newData.child('fileType').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/))"
+                " && (!newData.child('fileSize').exists() || (newData.child('fileSize').isNumber() && newData.child('fileSize').val() <= 1100000))"
+                " && (!newData.child('fileName').exists() || (newData.child('fileName').isString() && newData.child('fileName').val().length <= 200)))")
+LAB_DATA_VALIDATE = WB_DATA_VALIDATE
 
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
@@ -141,6 +152,9 @@ def strict():
         # Цагаан дэвтрийн файл: эрүүл ахуйч бичнэ, эрүүл ахуйч + ахлах уншина (сунгалтын зурагтай адил)
         "wbfiles": {".read": STAFF, ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": WB_META_VALIDATE}},
         "wbdata": {".read": STAFF, ".write": HYG, "$id": {".validate": WB_DATA_VALIDATE}},
+        # Бүтээгдэхүүний шинжилгээ: эрүүл ахуйч бичнэ; ахлах уншина
+        "labcerts": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_VALIDATE}},
+        "labdata": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_DATA_VALIDATE}},
         # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
         "svcheck": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -169,6 +183,8 @@ def transition():
         "adviceAck": {"$sap": {"$id": {".write": ANY, ".validate": ACK_VALIDATE}}},
         "wbfiles": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": WB_META_VALIDATE}},
         "wbdata": {"$id": {".write": ANY, ".validate": WB_DATA_VALIDATE}},
+        "labcerts": {"$id": {".write": ANY, ".validate": LAB_VALIDATE}},
+        "labdata": {"$id": {".write": ANY, ".validate": LAB_DATA_VALIDATE}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 
@@ -178,3 +194,7 @@ if __name__ == "__main__":
         with open(os.path.join(here, name), "w", encoding="utf-8") as f:
             json.dump(r, f, ensure_ascii=False, indent=2); f.write("\n")
         print("wrote", name)
+    # merged = strict (борлуулалт + eahs нэгтгэсэн)
+    import shutil
+    shutil.copyfile(os.path.join(here, "database.rules.json"), os.path.join(here, "database.rules.merged.json"))
+    print("wrote database.rules.merged.json")
