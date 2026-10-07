@@ -108,6 +108,11 @@ LAB_VALIDATE = ("!newData.exists() || (newData.child('name').isString() && newDa
                 " && (!newData.child('fileSize').exists() || (newData.child('fileSize').isNumber() && newData.child('fileSize').val() <= 1100000))"
                 " && (!newData.child('fileName').exists() || (newData.child('fileName').isString() && newData.child('fileName').val().length <= 200)))")
 LAB_DATA_VALIDATE = WB_DATA_VALIDATE
+# v12: Зөвлөмжийн зураг — мэдээлэл advice/{id}/imgs/{iid}, агуулга advimg/{id}/{iid} (JPEG/PNG/WebP dataURL, ~300 КБ шахсан; дээд хязгаар 450 КБ × 4/3)
+ADV_IMG_META_VALIDATE = ("!newData.exists() || (newData.child('size').isNumber() && newData.child('size').val() <= 470000"
+                         " && (!newData.child('o').exists() || (newData.child('o').isNumber() && newData.child('o').val() >= 0 && newData.child('o').val() <= 3))"
+                         " && (!newData.child('w').exists() || newData.child('w').isNumber()) && (!newData.child('h').exists() || newData.child('h').isNumber()))")
+ADV_IMG_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
 
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
@@ -144,11 +149,15 @@ def strict():
         # Сунгалтын түүх: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрийнхөө (sap-аар query)
         "renew": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": RENEW_VALIDATE}},
         # Зөвлөмж: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрт хамаарахыг (устсан бол хоосныг) уншина
-        "advice": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && (!data.exists() || " + ADV_TARGETS("data") + ")", ".validate": ADV_VALIDATE}},
+        "advice": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && (!data.exists() || " + ADV_TARGETS("data") + ")", ".validate": ADV_VALIDATE,
+                                                      "imgs": {"$iid": {".validate": ADV_IMG_META_VALIDATE}}}},
         "adviceIdx": {".read": MEMBER, ".write": HYG, "$id": {".validate": ADV_IDX_VALIDATE}},
         "adviceTo": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".validate": ADV_TO_VALIDATE}}},
         # Танилцсан: ажилтан зөвхөн өөрийн sap дор, өөрт хамаарах зөвлөмжид нэг удаа; эрүүл ахуйч уншина/устгана
         "adviceAck": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".write": ACK_OWN, ".validate": ACK_VALIDATE}}},
+        # Зөвлөмжийн зураг: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрт хамаарах (одоо байгаа) зөвлөмжийн зургийг уншина
+        "advimg": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && {ADV_NODE}.exists() && " + ADV_TARGETS(ADV_NODE),
+                                                          "$iid": {".validate": ADV_IMG_VALIDATE}}},
         # Цагаан дэвтрийн файл: эрүүл ахуйч бичнэ, эрүүл ахуйч + ахлах уншина (сунгалтын зурагтай адил)
         "wbfiles": {".read": STAFF, ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": WB_META_VALIDATE}},
         "wbdata": {".read": STAFF, ".write": HYG, "$id": {".validate": WB_DATA_VALIDATE}},
@@ -177,7 +186,8 @@ def transition():
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},
         "renew": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": RENEW_VALIDATE}},
-        "advice": {"$id": {".write": ANY, ".validate": ADV_VALIDATE}},
+        "advice": {"$id": {".write": ANY, ".validate": ADV_VALIDATE, "imgs": {"$iid": {".validate": ADV_IMG_META_VALIDATE}}}},
+        "advimg": {"$id": {".write": ANY, "$iid": {".validate": ADV_IMG_VALIDATE}}},
         "adviceIdx": {"$id": {".write": ANY, ".validate": ADV_IDX_VALIDATE}},
         "adviceTo": {"$sap": {"$id": {".write": ANY, ".validate": ADV_TO_VALIDATE}}},
         "adviceAck": {"$sap": {"$id": {".write": ANY, ".validate": ACK_VALIDATE}}},

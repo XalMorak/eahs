@@ -174,6 +174,7 @@ COLS.forEach(c=> DB[c] = lsGet(LS+c, {}) || {});
 let PHOTOS = lsGet(LS+"photos", {}) || {};
 let FILES = lsGet(LS+"wbdata", {}) || {};   // цагаан дэвтрийн файлын агуулга (base64) — жагсаалтаас тусдаа, хэрэгтэй үед татна
 let LABFILES = lsGet(LS+"labdata", {}) || {}; // бүтээгдэхүүний шинжилгээний бичгийн файл
+let ADVIMG = lsGet(LS+"advimg", {}) || {};    // зөвлөмжийн зураг: {"<adviceId>/<imgId>": dataURL} — хэрэгтэй үед татна
 let PENDING = lsGet(LS+"pending", []) || [];
 let REJECTED = lsGet(LS+"rejected", []) || [];
 let _fb = null, _auth = null, CLOUD_AUTH = false, _cloudState = "off", _flushing = false;
@@ -203,17 +204,22 @@ function applyLocal(p, v){
     if(rest.length) { if(v==null) delete LABFILES[rest[0]]; else LABFILES[rest[0]] = v; }
     return;
   }
+  if(col==="advimg"){   // advimg/{adviceId}[/{imgId}]
+    if(rest.length===1 && v==null){ Object.keys(ADVIMG).forEach(k=>{ if(k.startsWith(rest[0]+"/")) delete ADVIMG[k]; }); }
+    else if(rest.length>=2){ const k = rest[0]+"/"+rest[1]; if(v==null) delete ADVIMG[k]; else ADVIMG[k] = v; }
+    return;
+  }
   if(!DB[col]) DB[col] = {};
   if(!rest.length) DB[col] = clone(v)||{};
   else setPath(DB[col], rest.join("/"), v);
 }
 function persist(cols){
-  cols.forEach(c=>{ if(c==="photos") lsSet(LS+"photos", PHOTOS); else if(c==="wbdata"){ if(!_fb) lsSet(LS+"wbdata", FILES); } else if(c==="labdata"){ if(!_fb) lsSet(LS+"labdata", LABFILES); } else if(DB[c]) lsSet(LS+c, DB[c]); });
+  cols.forEach(c=>{ if(c==="photos") lsSet(LS+"photos", PHOTOS); else if(c==="wbdata"){ if(!_fb) lsSet(LS+"wbdata", FILES); } else if(c==="labdata"){ if(!_fb) lsSet(LS+"labdata", LABFILES); } else if(c==="advimg"){ if(!_fb) lsSet(LS+"advimg", ADVIMG); } else if(DB[c]) lsSet(LS+c, DB[c]); });
 }
 function persistPending(){
   if(!lsSet(LS+"pending", PENDING)){
     // зураггүйгээр ч гэсэн хадгалж үзнэ
-    lsSet(LS+"pending", PENDING.filter(e=>!e.p.startsWith("photos/") && !e.p.startsWith("wbdata/") && !e.p.startsWith("labdata/")));
+    lsSet(LS+"pending", PENDING.filter(e=>!e.p.startsWith("photos/") && !e.p.startsWith("wbdata/") && !e.p.startsWith("labdata/") && !e.p.startsWith("advimg/")));
   }
 }
 /* updates: { "users/123": {...}, "hygcheck/id/rows/r1": {...}, "roster/x": null } */
@@ -408,7 +414,7 @@ function syncWorkerAdvice(k){
 /* Өөр хэрэглэгч нэвтэрвэл өмнөх хэрэглэгчийн кэшийг цэвэрлэнэ (хүлээгдэж буй бичлэг үлдэнэ) */
 function claimCache(sap){
   const owner = lsGet(LS+"owner", null);
-  if(owner && owner!==sap){ COLS.forEach(c=>{ DB[c] = {}; }); PHOTOS = {}; FILES = {}; LABFILES = {}; persist([...COLS, "photos"]); lsSet(LS+"wbdata", {}); lsSet(LS+"labdata", {}); }
+  if(owner && owner!==sap){ COLS.forEach(c=>{ DB[c] = {}; }); PHOTOS = {}; FILES = {}; LABFILES = {}; ADVIMG = {}; persist([...COLS, "photos"]); lsSet(LS+"wbdata", {}); lsSet(LS+"labdata", {}); lsSet(LS+"advimg", {}); }
   lsSet(LS+"owner", sap);
 }
 let _loggingIn = false;
@@ -604,7 +610,7 @@ function signOutCloud(){
   }
 }
 function landing(){
-  closeModal("advmodal"); closeModal("wbbox"); ADV_DISMISSED = false;
+  closeModal("advlb"); closeModal("advmodal"); closeModal("wbbox"); closeModal("labbox"); ADV_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}};
   setSession(null); signOutCloud(); view(landing, false);
   const app = mount(`
     <div class="land">
@@ -835,7 +841,7 @@ function workerHome(){
       </div>
     </div>
     <div class="card advhome" id="advhome"><div class="ctitle">${ic("chat")}<h3>Эрүүл ахуйчийн зөвлөмж</h3>${advNew?`<span class="badge b-wait">Шинэ: ${advNew}</span>`:""}</div>
-      ${advMine.slice(0,2).map(a=>`<button type="button" class="advmini" data-wadvopen="${esc(a.id)}">${advPrio(a.prio)}<span><b>${esc(a.title||"")}</b><small class="muted">${esc(a.date||"")}${advAck(a.id,u.sap)?" · танилцсан":" · танилцаагүй"}</small></span>${ic("chev","sm")}</button>`).join("") || `<p class="muted">Одоогоор зөвлөмж алга.</p>`}
+      ${advMine.slice(0,2).map(a=>`<button type="button" class="advmini" data-wadvopen="${esc(a.id)}">${advPrio(a.prio)}<span><b>${esc(a.title||"")}</b><small class="muted">${esc(a.date||"")}${advImgList(a).length?` · ${advImgList(a).length} зураг`:""}${advAck(a.id,u.sap)?" · танилцсан":" · танилцаагүй"}</small></span>${ic("chev","sm")}</button>`).join("") || `<p class="muted">Одоогоор зөвлөмж алга.</p>`}
       ${advMine.length?`<button class="btn ghost sm" id="advall">${ic("chat","sm")} Бүх зөвлөмж (${advMine.length})</button>`:""}
     </div>
     ${u.mustChange?`<div class="warnbox">${ic("key","sm")} Анхны нууц үгээ солино уу (дор хаяж 6 тэмдэгт).</div>`:""}
@@ -1232,7 +1238,7 @@ function bindNav(app, extra){
       const sup = me()?.role==="supervisor";
       ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
-        "мэдэгдэл":notifPage, "зөвлөмж":()=>advicePage(), "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
+        "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -2174,10 +2180,96 @@ function advAckStats(a){
   return {rs, yes, no: rs.filter(w=>!advAck(a.id, w.sap))};
 }
 let ADVF = "all", ADVQ = "";
+/* ---------- Зөвлөмжийн зураг (Storage-гүй, RTDB base64) ----------
+   advice/{id}/imgs/{iid} = {w,h,size,o,ts} — жижиг мэдээлэл; агуулга advimg/{id}/{iid} = dataURL (тусдаа, харуулах үед л татна). */
+const ADV_IMG_MAX = 4;
+let ADV_DRAFT = {key:null, add:[], del:{}};   // маягтын түр зураг — шууд дахин зурахад алдагдахгүй
+const advImgList = a => Object.entries((a && a.imgs) || {}).filter(([,m])=>m && typeof m==="object")
+  .sort((x,y)=>(x[1].o||0)-(y[1].o||0) || (x[1].ts||0)-(y[1].ts||0)).map(([iid,m])=>({iid, ...m}));
+async function getAdvImg(id, iid){
+  const k = id+"/"+iid; if(ADVIMG[k]) return ADVIMG[k];
+  if(!_fb) return null;
+  try{ const v = (await _fb.ref(ROOT+"/advimg/"+id+"/"+iid).once("value")).val(); if(typeof v==="string" && v.startsWith("data:image/")){ ADVIMG[k] = v; return v; } return null; }
+  catch(e){ console.warn("advimg", e && (e.code||e.message)); return null; }
+}
+function advImgsHtml(a, cls=""){
+  const im = advImgList(a); if(!im.length) return "";
+  return `<div class="advimgs ${cls}" aria-label="Зураг (${im.length})">${im.map((m,i)=>`<button type="button" class="advth" data-advimg="${esc(a.id)}" data-iid="${esc(m.iid)}" aria-label="Зураг ${i+1} / ${im.length} — томруулах"><span class="muted sm">…</span></button>`).join("")}</div>`;
+}
+function loadAdvThumbs(root){
+  (root||document).querySelectorAll("[data-advimg]:not([data-ld])").forEach(async el=>{
+    el.dataset.ld = "1";
+    const d = await getAdvImg(el.dataset.advimg, el.dataset.iid);
+    if(el.isConnected) el.innerHTML = d ? `<img src="${esc(d)}" alt=""/>` : `<span class="muted sm">Ачаалагдсангүй</span>`;
+  });
+}
+function advImgClick(e){
+  const b = e.target.closest("[data-advimg]"); if(!b) return false;
+  e.preventDefault(); openAdvLightbox(b.dataset.advimg, b.dataset.iid); return true;
+}
+function openAdvLightbox(id, iid){
+  const a = (DB.advice||{})[id]; const im = advImgList(a); if(!im.length) return;
+  let i = Math.max(0, im.findIndex(m=>m.iid===iid));
+  closeModal("advlb");
+  const m = document.createElement("div"); m.id = "advlb"; m.className = "modal-bg lb";
+  m.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="advlbt">
+    <div class="mhead"><span class="mic">${ic("eye")}</span><div><small id="advlbn"></small><h3 id="advlbt">${esc(a.title||"")}</h3></div></div>
+    <div class="wbview"><img id="advlbimg" alt=""/></div>
+    <div class="mfoot">${im.length>1?`<button class="btn ghost" type="button" id="advlbprev">${ic("back","sm")} Өмнөх</button><button class="btn ghost" type="button" id="advlbnext">Дараах ${ic("chev","sm")}</button>`:""}<button class="btn" type="button" id="advlbclose">Хаах</button></div></div>`;
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  const show = async ()=>{ const cur = i; m.querySelector("#advlbn").textContent = `Зураг ${i+1} / ${im.length}`;
+    const img = m.querySelector("#advlbimg"); img.removeAttribute("src"); img.alt = `Зураг ${i+1}`;
+    const d = await getAdvImg(id, im[cur].iid); if(img.isConnected && cur===i && d) img.src = d; };
+  const close = ()=>{ closeModal("advlb"); document.querySelector("#advmodal #advok")?.focus(); };
+  const step = d=>{ i = (i+d+im.length)%im.length; show(); };
+  m.querySelector("#advlbclose").onclick = close; m.querySelector("#advlbclose").focus();
+  if(im.length>1){ m.querySelector("#advlbprev").onclick = ()=>step(-1); m.querySelector("#advlbnext").onclick = ()=>step(1); }
+  m.onclick = ev=>{ if(ev.target===m) close(); };
+  m.onkeydown = ev=>{ ev.stopPropagation(); if(ev.key==="Escape") close(); else if(im.length>1 && ev.key==="ArrowLeft") step(-1); else if(im.length>1 && ev.key==="ArrowRight") step(1); };
+  show();
+}
+/* Маягт доторх зургийн хэсэг (одоо байгаа − хассан + шинэ) */
+function advDraftKeep(ed){ return ed ? advImgList(ed).filter(m=>!ADV_DRAFT.del[m.iid]) : []; }
+function advDraftHtml(ed){
+  const keep = advDraftKeep(ed), n = keep.length + ADV_DRAFT.add.length;
+  return `<span class="f">Зураг <span class="muted">(${n}/${ADV_IMG_MAX})</span></span>
+    ${n?`<div class="advimgs draft">${keep.map((m,i)=>`<figure class="advfig"><button type="button" class="advth" data-advimg="${esc(ed.id)}" data-iid="${esc(m.iid)}" aria-label="Зураг ${i+1} томруулах"><span class="muted sm">…</span></button><button type="button" class="advrm" data-advrm="${esc(m.iid)}" aria-label="Зураг ${i+1} хасах">${ic("trash","sm")}</button></figure>`).join("")}${ADV_DRAFT.add.map((d,j)=>`<figure class="advfig new"><span class="advth"><img src="${esc(d.data)}" alt="Шинэ зураг ${j+1}"/></span><button type="button" class="advrm" data-advrmnew="${j}" aria-label="Шинэ зураг ${j+1} хасах">${ic("trash","sm")}</button><figcaption>${esc(fmtSize(d.size||0))}</figcaption></figure>`).join("")}</div>`:""}
+    ${n<ADV_IMG_MAX?`<div class="wbup"><label class="btn ghost sm" for="adimg">${ic("upload","sm")} Зураг нэмэх</label><input type="file" id="adimg" accept="image/*" multiple class="vh"/>
+      <label class="btn ghost sm" for="adcam">${ic("camera","sm")} Зураг авах</label><input type="file" id="adcam" accept="image/*" capture="environment" class="vh"/>
+      <span class="muted sm">Дээд тал нь ${ADV_IMG_MAX} · зураг бүр ~300 КБ хүртэл шахагдана</span></div>`:`<p class="muted sm">Дээд тал нь ${ADV_IMG_MAX} зураг — нэмэхийн тулд аль нэгийг хасна уу.</p>`}
+    <div id="adimgprog" class="muted sm" role="status" aria-live="polite"></div>`;
+}
+function advDraftBind(ed){
+  const box = $("#advimgup"); if(!box) return;
+  const dk = ed ? ed.id : "new";
+  const redraw = ()=>{ const b = $("#advimgup"); if(!b) return; b.innerHTML = advDraftHtml(ed); advDraftBind(ed); };
+  loadAdvThumbs(box);
+  const add = async files=>{
+    const fs = [...(files||[])]; if(!fs.length) return;
+    const room = ADV_IMG_MAX - advDraftKeep(ed).length - ADV_DRAFT.add.length;
+    if(room<=0){ toast(`Дээд тал нь ${ADV_IMG_MAX} зураг`); return; }
+    if(fs.length>room) toast(`Дээд тал нь ${ADV_IMG_MAX} зураг — эхний ${room}-ийг авлаа`);
+    const pr = $("#adimgprog"); if(pr) pr.textContent = "Шахаж байна…";
+    VIEW.live = false;   // маягт бөглөж байхад шууд дахин зурахгүй
+    for(const f of fs.slice(0, room)){
+      if(!/^image\//.test(f.type||"")){ toast("Зөвхөн зураг (JPG, PNG…) оруулна уу"); continue; }
+      try{ const r = await prepWbFile(f); if(ADV_DRAFT.key!==dk) return; ADV_DRAFT.add.push({data:r.data, w:r.w, h:r.h, size:r.size}); }
+      catch(err){ toast(err.message); }
+    }
+    redraw();
+  };
+  ["adimg","adcam"].forEach(i=>{ const inp = document.getElementById(i); if(inp) inp.onchange = ev=>{ ev.stopPropagation(); const f = [...inp.files]; inp.value = ""; add(f); }; });
+  box.onclick = e=>{
+    const r = e.target.closest("[data-advrm]"); if(r){ e.stopPropagation(); ADV_DRAFT.del[r.dataset.advrm] = true; VIEW.live = false; redraw(); return; }
+    const rn = e.target.closest("[data-advrmnew]"); if(rn){ e.stopPropagation(); ADV_DRAFT.add.splice(+rn.dataset.advrmnew, 1); redraw(); return; }
+  };
+}
+
 function advicePage(editId){
   const u = requireRole("hygiene"); if(!u) return;
   const ed = editId ? (DB.advice||{})[editId] : null;
-  view(()=>advicePage(), !ed);
+  const dk = ed ? ed.id : "new"; if(ADV_DRAFT.key!==dk) ADV_DRAFT = {key:dk, add:[], del:{}};
+  view(()=>advicePage(), !ed && !ADV_DRAFT.add.length);
   const all = list("advice").sort(advSort);
   const shown = all.filter(a=> ADVF==="live" ? advLive(a) : ADVF==="sched" ? !advLive(a) : ADVF==="open" ? advLive(a) && advAckStats(a).no.length>0 : true);
   const t = ed?.target || {type:"all"};
@@ -2201,6 +2293,7 @@ function advicePage(editId){
         <div class="row-gap"><input type="search" id="advq" placeholder="Нэр, SAP-аар хайх" aria-label="Ажилтан хайх"/><span class="muted sm" id="advsel">${sel.size} сонгосон</span></div>
         <div class="advlist">${ws.map(w=>`<label class="advw"><input type="checkbox" name="adts" value="${esc(w.sap)}" ${sel.has(keyOf(w.sap))?"checked":""}/><span><b>${esc(w.name)}</b><small>SAP ${esc(w.sap)} · ${esc(albaN(w.alba))}</small></span></label>`).join("") || `<p class="muted">Ажилтан бүртгэгдээгүй</p>`}</div>
       </div>
+      <div class="advimgup" id="advimgup">${advDraftHtml(ed)}</div>
       <p class="muted" id="advcnt"></p>
       ${ed?`<label class="chk"><input type="checkbox" id="adreset"/> Дахин танилцуулах (танилцсан бүртгэлийг цэвэрлэж, ажилтанд дахин гарна)</label>`:""}
       <div class="gap"></div>
@@ -2213,6 +2306,7 @@ function advicePage(editId){
           <h3 class="advt">${esc(a.title||"")}</h3><p class="muted sm">${esc(advTargetTxt(a))} · ${esc(a.by||"")}</p></div>
           <div class="row-gap"><button class="btn ghost sm" data-advd="${esc(a.id)}">${ic("userCheck","sm")} Танилцсан</button><button class="btn ghost sm" data-adve="${esc(a.id)}">${ic("edit","sm")} Засах</button><button class="btn warn sm" data-advx="${esc(a.id)}">${ic("trash","sm")} Устгах</button></div></div>
         <p class="advtext clamp">${esc(a.text||"")}</p>
+        ${advImgsHtml(a)}
         <div class="ackbar"><i style="width:${pct}%"></i></div><p class="muted sm">Танилцсан: <b>${y}/${n}</b>${n?` (${pct}%)`:""}${a.log?` · Засварын түүх: ${Object.keys(a.log).length}`:""}</p>
       </article>`; }).join("") || `<div class="card">${emptyState("Зөвлөмж алга","Дээрх маягтаар шинэ зөвлөмж илгээнэ үү","chat")}</div>`}</div>`));
   const recount = ()=>{
@@ -2225,11 +2319,13 @@ function advicePage(editId){
   recount();
   app.oninput = e=>{ if(e.target.id==="advq"){ const q=e.target.value.trim().toLowerCase(); app.querySelectorAll(".advw").forEach(l=>{ l.hidden = q && !l.textContent.toLowerCase().includes(q); }); } };
   app.onchange = e=>{ if(e.target.closest("#advf")) recount(); };
-  if($("#adcancel")) $("#adcancel").onclick = ()=>advicePage();
+  if($("#adcancel")) $("#adcancel").onclick = ()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); };
+  advDraftBind(ed); loadAdvThumbs(app);
   bindNav(app, e=>{
+    if(advImgClick(e)) return;
     const f = e.target.closest("[data-advf]"); if(f){ ADVF = f.dataset.advf; advicePage(); return; }
     const d = e.target.closest("[data-advd]"); if(d){ adviceDetail(d.dataset.advd); window.scrollTo(0,0); return; }
-    const ee = e.target.closest("[data-adve]"); if(ee){ advicePage(ee.dataset.adve); window.scrollTo(0,0); return; }
+    const ee = e.target.closest("[data-adve]"); if(ee){ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(ee.dataset.adve); window.scrollTo(0,0); return; }
     const x = e.target.closest("[data-advx]"); if(x){ const a=(DB.advice||{})[x.dataset.advx]; if(a && confirm(`«${a.title}» зөвлөмжийг устгах уу? Танилцсан бүртгэл ч устна.`)) deleteAdvice(a); }
   });
   app.onsubmit = e=>{ e.preventDefault(); saveAdvice(app, ed, u); };
@@ -2249,23 +2345,33 @@ function saveAdvice(app, ed, u){
   if(target.type==="workers" && !Object.keys(target.saps).length){ toast("Дор хаяж нэг ажилтан сонгоно уу"); return; }
   const ts = Date.now(), id = ed ? ed.id : keyOf("adv_"+ts.toString(36));
   const upd = {}, lid = uid();
+  // зураг: мэдээлэл advice/{id}/imgs, агуулга advimg/{id}/{iid}
+  const dr = ADV_DRAFT.key===(ed ? ed.id : "new") ? ADV_DRAFT : {add:[], del:{}};
+  const keep = ed ? advImgList(ed).filter(m=>!dr.del[m.iid]) : [];
+  const imgs = {};
+  keep.forEach((m,i)=>{ imgs[m.iid] = {w:m.w||0, h:m.h||0, size:m.size||0, o:i, ts:m.ts||ts}; });
+  dr.add.slice(0, Math.max(0, ADV_IMG_MAX-keep.length)).forEach((d,j)=>{ const iid = keyOf("i"+uid()); imgs[iid] = {w:d.w||0, h:d.h||0, size:d.size||0, o:keep.length+j, ts}; upd[`advimg/${id}/${iid}`] = d.data; });
+  const hasImgs = Object.keys(imgs).length > 0;
   if(ed){
+    advImgList(ed).forEach(m=>{ if(dr.del[m.iid]) upd[`advimg/${id}/${m.iid}`] = null; });
+    upd[`advice/${id}/imgs`] = hasImgs ? imgs : null;
     Object.assign(upd, {[`advice/${id}/title`]:title, [`advice/${id}/text`]:text, [`advice/${id}/date`]:date, [`advice/${id}/prio`]:prio, [`advice/${id}/target`]:target,
       [`advice/${id}/updatedAt`]:nowStr(), [`advice/${id}/updatedBy`]:u.name});
-    upd[`advice/${id}/log/${lid}`] = {ts, at:nowStr(), by:u.name, kind:"edited", prev:{title:ed.title||"", text:ed.text||"", date:ed.date||"", prio:ed.prio||"normal", target:advTargetTxt(ed)}};
+    upd[`advice/${id}/log/${lid}`] = {ts, at:nowStr(), by:u.name, kind:"edited", prev:{title:ed.title||"", text:ed.text||"", date:ed.date||"", prio:ed.prio||"normal", target:advTargetTxt(ed), imgs:advImgList(ed).length}};
     Object.keys(ed.target?.saps||{}).forEach(s=>{ if(!target.saps || !target.saps[s]) upd[`adviceTo/${s}/${id}`] = null; });
     if($("#adreset")?.checked) Object.keys(DB.adviceAck||{}).forEach(s=>{ if((DB.adviceAck[s]||{})[id]) upd[`adviceAck/${s}/${id}`] = null; });
   } else {
-    upd["advice/"+id] = {id, title, text, date, prio, target, by:u.name, bySap:u.sap, ts, at:nowStr(), log:{[lid]:{ts, at:nowStr(), by:u.name, kind:"created"}}};
+    upd["advice/"+id] = {id, title, text, date, prio, target, by:u.name, bySap:u.sap, ts, at:nowStr(), ...(hasImgs?{imgs}:{}), log:{[lid]:{ts, at:nowStr(), by:u.name, kind:"created", ...(hasImgs?{imgs:Object.keys(imgs).length}:{})}}};
   }
   upd["adviceIdx/"+id] = {t:target.type, ...(target.type==="alba"?{a:albaN(target.alba)}:{}), date, ts: ed?.ts || ts};
   Object.keys(target.saps||{}).forEach(s=>{ upd[`adviceTo/${s}/${id}`] = ed?.ts || ts; });
   write(upd);
+  ADV_DRAFT = {key:null, add:[], del:{}};
   toast(ed ? "Зөвлөмж хадгалагдлаа" : "Зөвлөмж илгээгдлээ");
   advicePage();
 }
 function deleteAdvice(a){
-  const upd = {["advice/"+a.id]: null, ["adviceIdx/"+a.id]: null};
+  const upd = {["advice/"+a.id]: null, ["adviceIdx/"+a.id]: null, ["advimg/"+a.id]: null};
   Object.keys(a.target?.saps||{}).forEach(s=>{ upd[`adviceTo/${s}/${a.id}`] = null; });
   Object.keys(DB.adviceAck||{}).forEach(s=>{ if((DB.adviceAck[s]||{})[a.id]) upd[`adviceAck/${s}/${a.id}`] = null; });
   write(upd); toast("Устгалаа"); advicePage();
@@ -2279,7 +2385,7 @@ function adviceDetail(id){
   const row = (w, ack)=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td><td>${ack?`<span class="badge b-ok">Танилцсан</span> <span class="muted sm">${esc(ack.at||"")}</span>`:'<span class="badge b-wait">Танилцаагүй</span>'}</td></tr>`;
   const app = mount(shell("зөвлөмж", `${phead(esc(a.title||"Зөвлөмж"), `${esc(a.date||"")} · ${esc(advTargetTxt(a))}`, `<button class="btn ghost sm" id="advback">${ic("back","sm")} Буцах</button>`)}
     <section class="card advitem prio-${esc(a.prio||"normal")}"><div class="row-gap">${advPrio(a.prio)}${advLive(a)?"":'<span class="badge b-closed">Товлосон</span>'}<span class="muted sm">${esc(a.by||"")} · ${esc(a.at||"")}${a.updatedAt?" · засварласан: "+esc(a.updatedAt):""}</span></div>
-      <p class="advtext">${esc(a.text||"")}</p></section>
+      <p class="advtext">${esc(a.text||"")}</p>${advImgsHtml(a,"lg")}</section>
     <div class="kpis kpis3">
       <div class="kpi k-blu"><i>${ic("users")}</i><div>Хүлээн авагч<b>${st.rs.length}</b><span class="muted">ажилтан</span></div></div>
       <div class="kpi k-grn"><i>${ic("userCheck")}</i><div>Танилцсан<b>${st.yes.length}</b><span class="muted">${st.rs.length?Math.round(100*st.yes.length/st.rs.length):0}%</span></div></div>
@@ -2288,14 +2394,15 @@ function adviceDetail(id){
     <section class="card" id="ackcard"><div class="ctitle">${ic("userCheck")}<h3>Танилцсан эсэх</h3></div>
       ${tbl(["Ажилтан","SAP","Алба","Төлөв"], [...st.no.map(w=>row(w,null)), ...st.yes.sort((x,y)=>(advAck(a.id,y.sap).ts||0)-(advAck(a.id,x.sap).ts||0)).map(w=>row(w, advAck(a.id, w.sap)))], "Хүлээн авагч ажилтан алга")}</section>
     <section class="card"><div class="ctitle">${ic("history")}<h3>Түүх</h3></div>
-      <ol class="hbhist">${logs.map(l=>`<li><div><b>${l.kind==="edited"?"Засварласан":"Үүсгэсэн"}</b> <span class="muted sm">${esc(l.by||"")} · ${esc(l.at||"")}</span>
-        ${l.prev?`<details class="advprev"><summary>Өмнөх хувилбар</summary><p><b>${esc(l.prev.title)}</b> · ${esc(l.prev.date)} · ${esc((ADV_PRIO[l.prev.prio]||ADV_PRIO.normal)[0])} · ${esc(l.prev.target||"")}</p><p class="advtext">${esc(l.prev.text)}</p></details>`:""}</div></li>`).join("") || `<li class="legacy"><span class="muted">Түүх алга</span></li>`}</ol></section>`));
+      <ol class="hbhist">${logs.map(l=>`<li><div><b>${l.kind==="edited"?"Засварласан":"Үүсгэсэн"}</b> <span class="muted sm">${esc(l.by||"")} · ${esc(l.at||"")}${!l.prev && l.imgs?` · ${esc(l.imgs)} зураг`:""}</span>
+        ${l.prev?`<details class="advprev"><summary>Өмнөх хувилбар</summary><p><b>${esc(l.prev.title)}</b> · ${esc(l.prev.date)} · ${esc((ADV_PRIO[l.prev.prio]||ADV_PRIO.normal)[0])} · ${esc(l.prev.target||"")}${l.prev.imgs?` · ${esc(l.prev.imgs)} зураг`:""}</p><p class="advtext">${esc(l.prev.text)}</p></details>`:""}</div></li>`).join("") || `<li class="legacy"><span class="muted">Түүх алга</span></li>`}</ol></section>`));
   $("#advback").onclick = ()=>{ advicePage(); window.scrollTo(0,0); };
-  bindNav(app);
+  loadAdvThumbs(app);
+  bindNav(app, e=>{ advImgClick(e); });
 }
 /* ---------- Ажилтан: pop-up + өмнөх зөвлөмж ---------- */
 let ADV_DISMISSED = false;   // «Дараа» дарсан бол энэ удаад дахин гаргахгүй (дараагийн нээлтэд гарна)
-function closeModal(id){ const m = document.getElementById(id); if(m){ m.remove(); document.body.classList.remove("modal-open"); } }
+function closeModal(id){ const m = document.getElementById(id); if(m){ m.remove(); if(!document.querySelector(".modal-bg")) document.body.classList.remove("modal-open"); } }
 function maybeAdvicePopup(u){
   if(!u || u.role!=="worker" || ADV_DISMISSED) return;
   const q = myUnseen(u);
@@ -2312,9 +2419,11 @@ function showAdviceModal(u, a, total){
     <div class="mhead"><span class="mic">${ic("chat")}</span><div><small>Эрүүл ахуйчийн зөвлөмж<span id="advctr">${total>1?` · 1 / ${total}`:""}</span></small><h3 id="advmt">${esc(a.title||"")}</h3></div></div>
     <div class="row-gap">${advPrio(a.prio)}<span class="muted sm">${esc(a.date||"")} · ${esc(a.by||"")}</span></div>
     <div class="mbody advtext">${esc(a.text||"")}</div>
+    ${advImgsHtml(a,"pop")}
     <div class="mfoot"><button class="btn ghost" type="button" id="advlater">Дараа унших</button><button class="btn" type="button" id="advok">${ic("check","sm")} Танилцлаа</button></div>
   </div>`;
   document.body.appendChild(m); document.body.classList.add("modal-open");
+  loadAdvThumbs(m); m.addEventListener("click", e=>{ advImgClick(e); });
   const ok = m.querySelector("#advok"); ok.focus();
   m.querySelector("#advlater").onclick = ()=>{ ADV_DISMISSED = true; closeModal("advmodal"); };
   m.onkeydown = e=>{ if(e.key==="Escape"){ ADV_DISMISSED = true; closeModal("advmodal"); } };
@@ -2339,12 +2448,14 @@ function workerAdvicePage(){
     ${all.map(a=>{ const ack = advAck(a.id, u.sap); return `<article class="card advitem prio-${esc(a.prio||"normal")}" data-wadv="${esc(a.id)}">
       <div class="row-gap">${advPrio(a.prio)}<span class="muted sm">${esc(a.date||"")} · ${esc(a.by||"")}</span></div>
       <h3 class="advt">${esc(a.title||"")}</h3><p class="advtext">${esc(a.text||"")}</p>
+      ${advImgsHtml(a)}
       ${ack?`<p class="muted sm">${ic("check","sm")} Танилцсан: ${esc(ack.at||"")}</p>`:`<button class="btn sm" data-wack="${esc(a.id)}">${ic("check","sm")} Танилцлаа</button>`}
     </article>`; }).join("") || `<div class="card">${emptyState("Зөвлөмж алга","Эрүүл ахуйч зөвлөмж илгээхэд энд харагдана","chat")}</div>`}
     <button class="btn ghost" id="wab">${ic("back","sm")} Буцах</button></main>`);
   const back = ()=>{ workerHome(); window.scrollTo(0,0); };
   $("#wab").onclick = back; $("[data-hback]").onclick = back;
-  app.onclick = e=>{ const b = e.target.closest("[data-wack]"); if(b){ const a=(DB.advice||{})[b.dataset.wack]; if(a){ ackAdvice(u, a); toast("Танилцсан нь бүртгэгдлээ"); workerAdvicePage(); } } };
+  loadAdvThumbs(app);
+  app.onclick = e=>{ if(advImgClick(e)) return; const b = e.target.closest("[data-wack]"); if(b){ const a=(DB.advice||{})[b.dataset.wack]; if(a){ ackAdvice(u, a); toast("Танилцсан нь бүртгэгдлээ"); workerAdvicePage(); } } };
 }
 
 /* ======================= ЦАГААН ДЭВТРИЙН ФАЙЛ ======================= */

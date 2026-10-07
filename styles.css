@@ -956,3 +956,34 @@ body.modal-open{overflow:hidden}
   .labacts{width:100%}
   .labacts .btn{flex:1 1 auto;justify-content:center}
 }
+
+/* ---------- v12: зөвлөмжийн зураг ---------- */
+.advimgs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px}
+.advth{width:76px;height:76px;padding:0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);overflow:hidden;display:grid;place-items:center;cursor:zoom-in;flex:0 0 auto;transition:box-shadow .15s var(--ease),transform .15s var(--ease)}
+button.advth:hover{box-shadow:var(--sh-2);transform:translateY(-1px)}
+button.advth:focus-visible{outline:3px solid var(--brand-100);outline-offset:2px}
+.advth img{width:100%;height:100%;object-fit:cover;display:block}
+.advimgs.lg .advth{width:140px;height:140px}
+.advimgs.pop{margin:0}
+.advimgs.pop .advth{width:88px;height:88px}
+.advimgup{border:1px dashed var(--line);border-radius:var(--r);padding:10px 12px;margin:4px 0 10px;background:var(--surface-2)}
+.advimgup .f{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
+.advimgup .wbup{margin:6px 0 0}
+.advimgs.draft{margin:4px 0 6px}
+.advfig{position:relative;margin:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.advfig .advth{width:92px;height:92px;cursor:default}
+.advfig button.advth{cursor:zoom-in}
+.advfig figcaption{font-size:.72rem;color:var(--mut)}
+.advrm{position:absolute;top:-8px;right:-8px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:#b42318;display:grid;place-items:center;cursor:pointer;box-shadow:var(--sh-1);padding:0}
+.advrm:hover{background:#fef3f2}
+.advrm:focus-visible{outline:3px solid var(--brand-100)}
+.modal-bg.lb{z-index:70}
+.modal-bg.lb .modal{width:min(980px,100%)}
+@media (max-width:640px){
+  .advth{width:68px;height:68px}
+  .advimgs.lg .advth{width:104px;height:104px}
+  .advfig .advth{width:80px;height:80px}
+  .modal-bg.lb{place-items:center;padding:8px}
+  .modal-bg.lb .modal{border-radius:var(--r-lg);border-top:0;max-height:96dvh}
+  .modal-bg.lb .wbview img{max-height:62dvh}
+}

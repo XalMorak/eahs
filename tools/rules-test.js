@@ -42,6 +42,7 @@ const seed={borluulalt:{users:{emp001:{name:"A",role:"employee"}}},
     adviceAck:{'2200':{advW:{ts:1,at:'x',name:'Ө'}}},
     wbfiles:{wb1:{id:'wb1',sap:'1108650',name:'a.jpg',type:'image/jpeg',size:1000,kind:'book'}},
     wbdata:{wb1:'data:image/jpeg;base64,AAAA'},
+    advimg:{advAll:{i1:'data:image/jpeg;base64,AAAA'},advBar:{i1:'data:image/jpeg;base64,BBBB'},advOf:{i1:'data:image/jpeg;base64,CCCC'},advW:{i1:'data:image/jpeg;base64,DDDD'},orphan:{i1:'data:image/jpeg;base64,EEEE'}},
     renew:{rn1:{id:'rn1',sap:'1108650',kind:'book',exp:'2027-01-01',date:T},rn2:{id:'rn2',sap:'2200',kind:'exam',exp:'2027-02-01',date:T}}}}};
 async function reset(rulesFile){
   const rules=fs.readFileSync(rulesFile,'utf8');
@@ -265,7 +266,32 @@ async function strict(){
   await expect('hyg: advice bad target', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,target:{type:'everyone'}}));
   await expect('hyg: advice alba not Оффис/Бар', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,target:{type:'alba',alba:'Оюут баар'}}));
   await expect('hyg: advice bad prio', false, ()=>h.db.ref(AD+'a3').set({id:'a3',title:'x',text:'x',date:T,prio:'max',target:{type:'all'}}));
-  await expect('hyg: delete advice + idx + adviceTo + acks', true, ()=>h.db.ref(V).update({'advice/advAll':null,'adviceIdx/advAll':null,'adviceAck/1108650/advAll':null,'advice/advW':null,'adviceIdx/advW':null,'adviceTo/2200/advW':null,'adviceAck/2200/advW':null}));
+  console.log('--- v12: advice images (advimg)');
+  const AI=V+'advimg/', IMG='data:image/jpeg;base64,'+'A'.repeat(400000);
+  await expect('worker: read all advimg', false, ()=>w.db.ref(AI).once('value'));
+  await expect('worker: read image of advice target=all', true, ()=>w.db.ref(AI+'advAll/i1').once('value'));
+  await expect('worker: read images of own-alba advice (Бар)', true, ()=>w.db.ref(AI+'advBar').once('value'));
+  await expect('worker: read image of other-alba advice (Оффис)', false, ()=>w.db.ref(AI+'advOf/i1').once('value'));
+  await expect('worker: read image of advice targeted to other worker', false, ()=>w.db.ref(AI+'advW/i1').once('value'));
+  await expect('worker: read image whose advice does not exist', false, ()=>w.db.ref(AI+'orphan/i1').once('value'));
+  await expect('worker: read image of advice targeted by name (a2)', true, ()=>w.db.ref(AI+'a2').once('value'));
+  await expect('worker: write advimg', false, ()=>w.db.ref(AI+'advAll/w1').set('data:image/jpeg;base64,AA'));
+  await expect('worker: delete advimg', false, ()=>w.db.ref(AI+'advAll/i1').remove());
+  await expect('anon: read advimg target=all', false, ()=>an.db.ref(AI+'advAll/i1').once('value'));
+  await expect('sup: read all advimg', true, ()=>s.db.ref(AI).once('value'));
+  await expect('sup: write advimg', false, ()=>s.db.ref(AI+'advAll/s1').set('data:image/jpeg;base64,AA'));
+  await expect('hyg: add images to advice (meta + data, one update)', true, ()=>h.db.ref(V).update({'advice/a2/imgs':{ia:{w:1600,h:1200,size:290000,o:0,ts:11},ib:{w:900,h:1600,size:120000,o:1,ts:11}},'advimg/a2/ia':IMG,'advimg/a2/ib':'data:image/jpeg;base64,BB'}));
+  await expect('worker: reads new image on targeted advice', true, ()=>w.db.ref(AI+'a2/ia').once('value'));
+  await expect('hyg: create advice with image (whole record)', true, ()=>h.db.ref(V).update({'advice/a4':{id:'a4',title:'Зурагтай',text:'x',date:T,target:{type:'all'},ts:12,imgs:{ic:{w:10,h:10,size:100,o:0,ts:12}}},'adviceIdx/a4':{t:'all',ts:12},'advimg/a4/ic':'data:image/png;base64,AA'}));
+  await expect('hyg: image not a data:image URL', false, ()=>h.db.ref(AI+'a2/ix').set('data:text/html;base64,PHNjcmlwdD4='));
+  await expect('hyg: image is script text', false, ()=>h.db.ref(AI+'a2/ix').set('<img src=x onerror=alert(1)>'));
+  await expect('hyg: image svg (not allowed)', false, ()=>h.db.ref(AI+'a2/ix').set('data:image/svg+xml;base64,AA'));
+  await expect('hyg: image too large (> 640k chars)', false, ()=>h.db.ref(AI+'a2/ix').set('data:image/jpeg;base64,'+'A'.repeat(640000)));
+  await expect('hyg: image meta bad size', false, ()=>h.db.ref(AD+'a2/imgs/ix').set({size:'big',o:0}));
+  await expect('hyg: image meta order > 3 (max 4)', false, ()=>h.db.ref(AD+'a2/imgs/ix').set({size:10,o:4}));
+  await expect('hyg: remove one image on edit (meta + data)', true, ()=>h.db.ref(V).update({'advice/a2/imgs/ib':null,'advimg/a2/ib':null,'advice/a2/log/l3':{ts:13,kind:'edited',prev:{title:'Засварласан',imgs:2}}}));
+  await expect('hyg: delete advice + idx + adviceTo + acks', true, ()=>h.db.ref(V).update({'advice/advAll':null,'adviceIdx/advAll':null,'adviceAck/1108650/advAll':null,'advice/advW':null,'adviceIdx/advW':null,'adviceTo/2200/advW':null,'adviceAck/2200/advW':null,'advimg/advAll':null,'advimg/advW':null}));
+  await expect('worker: image of deleted advice not readable', false, ()=>w.db.ref(V+'advimg/advAll/i1').once('value'));
   const WD='data:image/jpeg;base64,'+'A'.repeat(200000);
   await expect('hyg: upload file (meta + data, separate nodes)', true, ()=>h.db.ref(V).update({'wbfiles/wb2':{id:'wb2',sap:'1108650',name:'дэвтэр.jpg',type:'image/jpeg',size:150000,kind:'book',by:'Эрүүл ахуйч',ts:1,date:T},'wbdata/wb2':WD}));
   await expect('hyg: upload PDF ~1MB', true, ()=>h.db.ref(V).update({'wbfiles/wb3':{id:'wb3',sap:'1108650',name:'scan.pdf',type:'application/pdf',size:1040000},'wbdata/wb3':'data:application/pdf;base64,'+'A'.repeat(1386000)}));
@@ -313,6 +339,9 @@ async function transition(){
   await expect('anon (transition): advice invalid target', false, ()=>an.db.ref(V+'advice/t2').set({id:'t2',title:'x',text:'y',date:T,target:{type:'x'}}));
   await expect('anon (transition): adviceIdx + adviceTo + ack', true, ()=>an.db.ref(V).update({'adviceIdx/t1':{t:'all',ts:1},'adviceTo/1108650/t1':1,'adviceAck/1108650/t1':{ts:1,at:'x'}}));
   await expect('anon (transition): wbfiles + wbdata valid', true, ()=>an.db.ref(V).update({'wbfiles/f1':{id:'f1',sap:'1108650',name:'a.jpg',type:'image/jpeg',size:10},'wbdata/f1':'data:image/jpeg;base64,AA'}));
+  await expect('anon (transition): advice imgs meta + advimg valid', true, ()=>an.db.ref(V).update({'advice/t1/imgs/i1':{w:1,h:1,size:10,o:0,ts:1},'advimg/t1/i1':'data:image/jpeg;base64,AA'}));
+  await expect('anon (transition): advimg not an image data URL', false, ()=>an.db.ref(V+'advimg/t1/i2').set('data:application/pdf;base64,AA'));
+  await expect('anon (transition): delete advimg', true, ()=>an.db.ref(V+'advimg/t1').remove());
   await expect('anon (transition): wbdata not a data URL', false, ()=>an.db.ref(V+'wbdata/f2').set('hello'));
   await expect('anon (transition): renew valid', true, ()=>an.db.ref(V+'renew/t1').set({id:'t1',sap:'1108650',kind:'exam',iss:T,exp:'2027-10-05',date:T}));
   await expect('anon (transition): renew invalid kind', false, ()=>an.db.ref(V+'renew/t2').set({id:'t2',sap:'1108650',kind:'x',exp:'2027-10-05'}));
