@@ -3,6 +3,32 @@
  * Өгөгдөл: Firebase RTDB "eahs/v2/<цуглуулга>/<id>" (бичлэг тус бүрээр update хийнэ),
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
+/* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
+const APP_VER = "v13 · 2026-10-08";
+const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
+const bugScrub = s => String(s==null?"":s)
+  .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
+  .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[redacted]")
+  .replace(/eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{4,}/g, "[jwt]")
+  .replace(/Bearer\s+[\w.~+/=-]+/gi, "Bearer [redacted]")
+  .replace(/data:[a-z]+\/[\w.+-]+;base64,[A-Za-z0-9+/=]{16,}/gi, "data:…");
+function bugCapture(type, message, source, line, col, stack){
+  try{
+    const cut = (v,n)=>{ v = bugScrub(v); return v.length>n ? v.slice(0,n)+"…" : v; };
+    let vw = ""; try{ vw = viewName(); }catch(_){}
+    BUG_ERRS.push({type, message:cut(message,500), source:cut(source,300), line:+line||null, col:+col||null, stack:cut(stack,1500), ts:new Date().toISOString(), view:vw});
+    if(BUG_ERRS.length>10) BUG_ERRS.splice(0, BUG_ERRS.length-10);
+  }catch(_){}
+}
+window.addEventListener("error", e=>{
+  const t = e.target;
+  if(t && t!==window && t.tagName){ bugCapture("resource", "Ачаалж чадсангүй: <"+t.tagName.toLowerCase()+">", t.src||t.href||"", 0, 0, ""); return; }
+  bugCapture("error", e.message || (e.error && e.error.message) || "Error", e.filename||"", e.lineno, e.colno, e.error && e.error.stack || "");
+}, true);
+window.addEventListener("unhandledrejection", e=>{
+  const r = e.reason;
+  bugCapture("rejection", r && (r.message || r.code) ? String(r.code ? r.code+": " : "")+(r.message||"") : String(r), "", 0, 0, r && r.stack || "");
+});
 /* Алба: зөвхөн 2. Хуучин өгөгдлийг ХӨНДӨХГҮЙ — зөвхөн харуулах/харьцуулахдаа хөрвүүлнэ:
    «Оффис» агуулсан → «Оффис», бусад бүх нэр (Оюут баар, Манлай баар, Эрчим баар…) → «Бар», хоосон → "" */
 const ALBA = ["Оффис", "Бар"];
@@ -149,6 +175,7 @@ const ICONS = {
   search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>',
   clip:'<path d="m21 11.5-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>',
+  bug:'<path d="m8 2 1.9 1.9M16 2l-1.9 1.9"/><path d="M9 7.1V6a3 3 0 0 1 6 0v1.1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6 13H2M22 13h-4M6.5 9 3 7M17.5 9 21 7M6.5 17 3 19M17.5 17 21 19"/>',
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
   eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   flask:'<path d="M9 3h6M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h12a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M8.5 14h7"/>'
@@ -567,6 +594,8 @@ async function getPhotos(id){
 /* ---------- харагдац / дахин зурах ---------- */
 let VIEW = {fn:null, live:false};
 function view(fn, live){ VIEW = {fn, live:!!live}; }
+/* Одоогийн дэлгэцийн нэр (функцийн нэр; нэр/өгөгдөл агуулахгүй) */
+function viewName(){ const f = VIEW.fn; if(!f) return ""; return f.name || (String(f).match(/([A-Za-z_$][\w$]*)\(/)||[])[1] || "?"; }
 let _rt=null;
 function scheduleRender(){
   clearTimeout(_rt);
@@ -581,6 +610,7 @@ function mount(html){
   const app = $("#app"); window.onresize = null;
   app.onclick = null; app.onchange = null; app.onsubmit = null; app.oninput = null;
   app.innerHTML = html;
+  placeBugBtn();
   return app;
 }
 
@@ -610,7 +640,7 @@ function signOutCloud(){
   }
 }
 function landing(){
-  closeModal("advlb"); closeModal("advmodal"); closeModal("wbbox"); closeModal("labbox"); ADV_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}};
+  closeModal("advlb"); closeModal("advmodal"); closeModal("wbbox"); closeModal("labbox"); closeModal("bugmodal"); ADV_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}}; BUG_DRAFT = {text:"", img:null};
   setSession(null); signOutCloud(); view(landing, false);
   const app = mount(`
     <div class="land">
@@ -3619,6 +3649,143 @@ function addLabSheet(wb){
   });
   s.columns.forEach((c,i)=>{ c.width=[28,16,14,16,12,14,12,36,22,12,18,18][i]||14; });
   s.views=[{state:"frozen", ySplit:1}];
+}
+
+/* ======================= АЛДАА МЭДЭЭЛЭХ (v13) ======================= */
+/* Дэлгэц бүрт: толгойд (appbar/самбарын лого) жижиг товч, толгойгүй дэлгэцэд (нүүр, аюулын маягт) зүүн доод буланд хөвөгч товч.
+   Илгээх: POST /api/bug (Vercel function) → webhook. Нууц үг/PIN/токен/Firebase өгөгдөл ХЭЗЭЭ Ч хавсаргахгүй. */
+const BUG_DESC_MAX = 2000, BUG_IMG_MAX = 200*1024, BUG_IMG_PX = 1400, BUG_GAP_MS = 60*1000;
+let BUG_DRAFT = {text:"", img:null};   // илгээхээс өмнө хаасан ч алдагдахгүй (хуудас дахин зурахад)
+const bugBtnHtml = cls => `<button type="button" class="${cls}" data-bug aria-label="Алдаа мэдээлэх" title="Алдаа мэдээлэх">${ic("bug")}</button>`;
+function placeBugBtn(){
+  // самбар: компьютер дээр доод хэрэглэгчийн мөрөнд (.suser), утсан дээр дээд толгойд (.sbrand) — CSS аль нэгийг нь харуулна
+  const slots = $("#app .fhead") ? [[$("#app .fhead"), "hbug"]]
+    : $("#app .sbrand") ? [[$("#app .sbrand"), "hbug dark sb"], [$("#app .suser"), "hbug dark su"]]
+    : $("#app .printbar") ? [[$("#app .printbar"), "hbug pb"]] : [];
+  let fab = document.getElementById("bugfab");
+  if(slots.length){
+    slots.forEach(([slot, cls])=>{
+      if(!slot) return;
+      if(!slot.querySelector("[data-bug]")) slot.insertAdjacentHTML("beforeend", bugBtnHtml(cls));
+      slot.querySelector("[data-bug]").onclick = e=>{ e.stopPropagation(); openBugReport(); };
+    });
+    if(fab) fab.hidden = true;
+    return;
+  }
+  if(!fab){
+    document.body.insertAdjacentHTML("beforeend", bugBtnHtml("bugfab noprint").replace("<button ", '<button id="bugfab" '));
+    fab = document.getElementById("bugfab");
+    fab.onclick = e=>{ e.stopPropagation(); openBugReport(); };
+  }
+  fab.hidden = false;
+}
+function bugContext(){
+  const s = session || null;
+  const role = s && ["worker","supervisor","hygiene"].includes(s.role) ? s.role : "none";
+  const sap = s && authSapOk(s.sap) ? String(s.sap) : (s && s.sap ? keyOf(s.sap).slice(0,40) : null);
+  return {
+    view: viewName(), nav: ($("#app .navb.on")||{}).dataset?.nav || "", modals: $$(".modal-bg").map(m=>m.id).filter(id=>id && id!=="bugmodal"),
+    path: location.pathname, role, sap: sap || null, appVersion: APP_VER, userAgent: navigator.userAgent,
+    screen: {w: screen.width, h: screen.height, vw: window.innerWidth, vh: window.innerHeight, dpr: window.devicePixelRatio||1},
+    ts: new Date().toISOString(), localTime: new Date().toLocaleString("mn-MN"), tzOffset: -new Date().getTimezoneOffset(),
+    lang: navigator.language||"", online: navigator.onLine!==false, cloud: typeof CLOUD_AUTH!=="undefined" ? !!CLOUD_AUTH : false,
+    errors: BUG_ERRS.slice(-10),
+  };
+}
+async function prepBugImg(file){
+  if(!/^image\//.test(file.type||"")) throw new Error("Зөвхөн зураг (JPG, PNG…) хавсаргана уу.");
+  if(file.size > 25*1024*1024) throw new Error(`Зураг хэт том байна (${fmtSize(file.size)}).`);
+  let img; try{ img = await loadImg(file); }catch(e){ throw new Error("Зургийг уншиж чадсангүй. Өөр зураг сонгоно уу."); }
+  let max = BUG_IMG_PX, q = 0.72, r = imgToJpeg(img, max, q);
+  for(let i=0; i<14 && dataBytes(r.data) > BUG_IMG_MAX; i++){ if(q > 0.5) q = +(q-0.1).toFixed(2); else max = Math.round(max*0.8); r = imgToJpeg(img, max, q); }
+  if(dataBytes(r.data) > BUG_IMG_MAX) throw new Error("Зургийг хангалттай шахаж чадсангүй — өөр зураг оруулна уу.");
+  return {data:r.data, size:dataBytes(r.data), w:r.w, h:r.h};
+}
+function bugWaitLeft(){ const t = +lsGet(LS+"bugts", 0) || 0; return Math.max(0, BUG_GAP_MS - (Date.now() - t)); }
+function openBugReport(){
+  if(document.getElementById("bugmodal")) return;
+  const opener = document.activeElement;
+  const ctx = bugContext();
+  const m = document.createElement("div");
+  m.id = "bugmodal"; m.className = "modal-bg bugbg";
+  const ctxRows = [["Дэлгэц", ctx.view + (ctx.nav ? " · "+ctx.nav : "")], ["Үүрэг", ctx.role==="none" ? "Нэвтрээгүй" : roleName(ctx.role)], ...(ctx.sap ? [["SAP", ctx.sap]] : []),
+    ["Хувилбар", ctx.appVersion], ["Төхөөрөмж", `${ctx.screen.vw}×${ctx.screen.vh} · ${ctx.userAgent}`], ["Цаг", ctx.localTime], ["Сүүлийн алдаа", ctx.errors.length ? `${ctx.errors.length} ширхэг` : "Алга"]];
+  m.innerHTML = `<div class="modal bugm" role="dialog" aria-modal="true" aria-labelledby="bugt">
+    <div class="mhead"><span class="mic">${ic("bug")}</span><div><small>ЭАХС · тусламж</small><h3 id="bugt">Алдаа мэдээлэх</h3></div></div>
+    <form id="bugf" class="bugform" novalidate>
+      <label class="f" for="bugtx">Юу болсон бэ? <span class="req" aria-hidden="true">*</span></label>
+      <textarea id="bugtx" maxlength="${BUG_DESC_MAX}" rows="5" required placeholder="Жишээ: «Хадгалах» дарахад юу ч болохгүй байна. Ямар дэлгэц дээр, юу хийж байхад гарсныг бичнэ үү."></textarea>
+      <div class="bugmeta"><span class="muted sm">Нууц үг, PIN бүү бичээрэй.</span><span class="muted sm" id="bugcnt">0 / ${BUG_DESC_MAX}</span></div>
+      <div class="bugimg" id="bugimg"></div>
+      <details class="bugctx"><summary>Хамт илгээх техникийн мэдээлэл</summary>
+        <dl>${ctxRows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+        ${ctx.errors.length ? `<ul class="bugerrs">${ctx.errors.map(e=>`<li><code>${esc(e.message)}</code>${e.source?` <span class="muted sm">${esc(String(e.source).split("/").pop())}${e.line?":"+esc(e.line):""}</span>`:""}</li>`).join("")}</ul>` : ""}
+        <p class="muted sm">Нэр, нууц үг, PIN болон бүртгэлийн өгөгдөл илгээгдэхгүй.</p>
+      </details>
+      <div id="bugmsg" class="bugmsg" role="status" aria-live="polite"></div>
+      <div class="mfoot"><button class="btn ghost" type="button" id="bugcancel">Болих</button><button class="btn" type="submit" id="bugsend">${ic("send","sm")} Илгээх</button></div>
+    </form>
+  </div>`;
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  const tx = m.querySelector("#bugtx"), cnt = m.querySelector("#bugcnt"), msg = m.querySelector("#bugmsg"), sendB = m.querySelector("#bugsend");
+  const say = (t, kind)=>{ msg.textContent = t; msg.className = "bugmsg" + (kind ? " "+kind : ""); };
+  tx.value = BUG_DRAFT.text || "";
+  const upd = ()=>{ BUG_DRAFT.text = tx.value; cnt.textContent = `${tx.value.length} / ${BUG_DESC_MAX}`; };
+  tx.oninput = ()=>{ upd(); if(msg.classList.contains("err") && tx.value.trim()) say(""); }; upd();
+  const drawImg = ()=>{
+    const box = m.querySelector("#bugimg"), im = BUG_DRAFT.img;
+    box.innerHTML = im
+      ? `<figure class="advfig bugfig"><span class="advth"><img src="${esc(im.data)}" alt="Хавсаргасан зураг"/></span><figcaption>${esc(fmtSize(im.size))}</figcaption><button type="button" class="advrm" id="bugrm" aria-label="Зураг хасах">${ic("trash","sm")}</button></figure>`
+      : `<label class="btn ghost sm" for="bugfile">${ic("camera","sm")} Дэлгэцийн зураг хавсаргах</label><input id="bugfile" class="vh" type="file" accept="image/*"/><span class="muted sm">Сонголттой · 1 зураг</span>`;
+    const f = box.querySelector("#bugfile");
+    if(f) f.onchange = async ()=>{
+      const file = f.files && f.files[0]; if(!file) return;
+      say("Зургийг шахаж байна…");
+      try{ BUG_DRAFT.img = await prepBugImg(file); say(""); }
+      catch(ex){ say(ex.message || "Зургийг уншиж чадсангүй.", "err"); }
+      if(document.getElementById("bugmodal")===m) drawImg();
+    };
+    const rm = box.querySelector("#bugrm"); if(rm) rm.onclick = ()=>{ BUG_DRAFT.img = null; drawImg(); };
+  };
+  drawImg();
+  const close = ()=>{ closeModal("bugmodal"); if(opener && opener.focus && document.contains(opener)) try{ opener.focus(); }catch(_){} };
+  m.querySelector("#bugcancel").onclick = close;
+  m.addEventListener("click", e=>{ if(e.target===m) close(); });
+  m.addEventListener("keydown", e=>{ if(e.key==="Escape"){ e.stopPropagation(); close(); } });
+  m.querySelector("#bugf").onsubmit = async e=>{
+    e.preventDefault();
+    const text = tx.value.trim();
+    if(!text){ say("«Юу болсон бэ?» хэсгийг бөглөнө үү.", "err"); tx.focus(); return; }
+    if(text.length > BUG_DESC_MAX){ say(`Тайлбар ${BUG_DESC_MAX} тэмдэгтээс хэтэрсэн байна.`, "err"); return; }
+    const left = bugWaitLeft();
+    if(left > 0){ say(`Саяхан илгээсэн байна. ${Math.ceil(left/1000)} секундын дараа дахин илгээнэ үү.`, "err"); return; }
+    const payload = {description: text, context: bugContext(), ...(BUG_DRAFT.img ? {screenshot: BUG_DRAFT.img.data} : {})};
+    sendB.disabled = true; say("Илгээж байна…");
+    let res = null, data = null;
+    const ac = typeof AbortController!=="undefined" ? new AbortController() : null; const tm = setTimeout(()=>ac && ac.abort(), 20000);
+    try{
+      res = await fetch("/api/bug", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload), signal: ac ? ac.signal : undefined, credentials:"same-origin"});
+      try{ data = await res.json(); }catch(_){ data = null; }
+    }catch(ex){ res = null; }
+    finally{ clearTimeout(tm); }
+    if(!document.getElementById("bugmodal")) return;
+    sendB.disabled = false;
+    if(res && res.ok && data && data.ok){
+      lsSet(LS+"bugts", Date.now());
+      BUG_DRAFT = {text:"", img:null};
+      m.querySelector(".bugm").innerHTML = `<div class="mhead"><span class="mic ok">${ic("check")}</span><div><small>ЭАХС · тусламж</small><h3 id="bugt">Баярлалаа!</h3></div></div>
+        <div class="bugdone" role="status"><p>Алдааны мэдээлэл илгээгдлээ. Бид шалгаад засах болно.</p></div>
+        <div class="mfoot"><button class="btn" type="button" id="bugclose">Хаах</button></div>`;
+      const cb = m.querySelector("#bugclose"); cb.onclick = close; cb.focus();
+      return;
+    }
+    const code = data && data.error ? String(data.error).slice(0,40) : res ? "HTTP "+res.status : "";
+    if(!res) say(navigator.onLine===false ? "Интернэт холболтгүй байна. Холбогдсоны дараа дахин илгээнэ үү." : "Түр илгээж чадсангүй. Түр хүлээгээд дахин оролдоно уу.", "err");
+    else if(res.status===413) say("Хавсралт хэт том байна. Зургаа хасаад дахин илгээнэ үү.", "err");
+    else if(res.status===400) say("Мэдээлэл буруу байна — тайлбараа шалгаад дахин илгээнэ үү. ("+code+")", "err");
+    else say("Түр илгээж чадсангүй. Түр хүлээгээд дахин оролдоно уу." + (code ? " ("+code+")" : ""), "err");
+  };
+  setTimeout(()=>tx.focus(), 30);
 }
 
 /* ======================= ЭХЛЭЛ ======================= */
