@@ -60,14 +60,20 @@
           ".indexOn": [
             "sap"
           ],
-          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')"
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && !data.exists() && newData.child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())"
+          }
         },
         "infect": {
           ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
           ".indexOn": [
             "sap"
           ],
-          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')"
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && !data.exists() && newData.child('sap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())"
+          }
         },
         "roster": {
           ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
