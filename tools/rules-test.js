@@ -106,10 +106,13 @@ async function strict(){
   await expect('worker: query own fatigue+infect', true, async()=>{ await w.db.ref(V+'fatigue').orderByChild('sap').equalTo('1108650').once('value'); await w.db.ref(V+'infect').orderByChild('sap').equalTo('1108650').once('value'); });
   await expect('worker: query other sap fatigue', false, ()=>w.db.ref(V+'fatigue').orderByChild('sap').equalTo('2200').once('value'));
   await expect('worker: read all uhaan', false, ()=>w.db.ref(V+'uhaan').once('value'));
-  await expect('worker: create own fatigue', true, ()=>w.db.ref(V+'fatigue/f9').set({id:'f9',sap:'1108650',date:T,score:2}));
+  await expect('worker: create own fatigue', false, ()=>w.db.ref(V+'fatigue/f9').set({id:'f9',sap:'1108650',date:T,score:2}));
   await expect('worker: create fatigue for other sap', false, ()=>w.db.ref(V+'fatigue/f10').set({id:'f10',sap:'2200',date:T,score:2}));
+  await expect('hyg: create fatigue for worker', true, ()=>h.db.ref(V+'fatigue/f9').set({id:'f9',sap:'1108650',date:T,score:2,bySap:'admin'}));
   await expect('worker: edit existing own fatigue', false, ()=>w.db.ref(V+'fatigue/f1/score').set(0));
-  await expect('worker: create own uhaan + infect', true, ()=>w.db.ref(V).update({'uhaan/u9':{id:'u9',sap:'1108650',alba:'Оюут баар'},'infect/i9':{id:'i9',sap:'1108650',verdict:'huleegdej'}}));
+  await expect('worker: create own uhaan', true, ()=>w.db.ref(V).update({'uhaan/u9':{id:'u9',sap:'1108650',alba:'Оюут баар'}}));
+  await expect('worker: create own infect', false, ()=>w.db.ref(V+'infect/i9').set({id:'i9',sap:'1108650',verdict:'huleegdej'}));
+  await expect('hyg: create infect for worker', true, ()=>h.db.ref(V+'infect/i9').set({id:'i9',sap:'1108650',verdict:'huleegdej',bySap:'admin'}));
   await expect('worker: set own infect verdict', false, ()=>w.db.ref(V+'infect/i1/verdict').set('orjbolno'));
   await expect('worker: sign own hygcheck row', true, ()=>w.db.ref(V).update({[`hygcheck/${T}_Оюут баар/rows/1108650/sign`]:true,[`hygcheck/${T}_Оюут баар/rows/1108650/signAt`]:'x'}));
   await expect('worker: sign other row', false, ()=>w.db.ref(V+`hygcheck/${T}_Оюут баар/rows/2200/sign`).set(true));

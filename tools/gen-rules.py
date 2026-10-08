@@ -132,8 +132,9 @@ def strict():
         "settings": {".read": MEMBER, ".write": HYG},
         "uhaan": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
                   "$id": {".write": f"({SUP} && data.exists() && newData.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},
-        "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
-        "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
+        # v13: ядаргаа / халдвар — зөвхөн эрүүл ахуйч бичнэ (ажилтан өөрийнхөө бичлэгийг уншина)
+        "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG},
+        "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG},
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",

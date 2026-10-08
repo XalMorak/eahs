@@ -625,7 +625,7 @@ function landing(){
           </div>
           <nav class="menu" aria-label="Нэвтрэх сонголт">
             <div class="menu-h">Нэвтрэх</div>
-            <button class="menu-btn" data-g="worker"><span class="mi">${ic("user")}</span><span><b>Ажилтан</b><small>УХААН, ядаргаа, халдварын асуумж</small></span>${ic("chev","chev")}</button>
+            <button class="menu-btn" data-g="worker"><span class="mi">${ic("user")}</span><span><b>Ажилтан</b><small>УХААН, аюул мэдэгдэх, зөвлөмж</small></span>${ic("chev","chev")}</button>
             <button class="menu-btn" data-g="supervisor"><span class="mi">${ic("clipboard")}</span><span><b>Ахлах</b><small>УХААН батлах, ариун цэврийн хяналт</small></span>${ic("chev","chev")}</button>
             <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
             <hr/>
@@ -801,9 +801,10 @@ function workerHome(){
   const needF = !lastF || daysBetween(lastF.date, today()) >= (set.fatigueDays||7);
   const roster = list("roster").find(x=>x.sap===u.sap && x.arrive===today());
   const infect = list("infect").find(x=>x.sap===u.sap && x.date===today());
-  let infTxt = "Өнөөдөр хуваарь байхгүй";
-  if(roster && !infect) infTxt = "Өнөөдөр талбарт ирэх хуваарьтай — бөглөнө";
-  if(infect && (!infect.verdict || infect.verdict==="huleegdej")) infTxt = "Бөглөсөн · эрүүл ахуйч шийдээгүй";
+  let fatTxt = lastF ? `Сүүлийн: ${lastF.date} · ${lastF.level||"—"} (${lastF.score??"—"}/12)` : "Оруулаагүй";
+  if(needF) fatTxt += " — эрүүл ахуйч оруулна";
+  let infTxt = roster ? "Өнөөдөр хуваарьтай — эрүүл ахуйч оруулна" : "Өнөөдөр хуваарь байхгүй";
+  if(infect && (!infect.verdict || infect.verdict==="huleegdej")) infTxt = "Оруулсан · шийдвэр хүлээгдэж байна";
   if(infect && infect.verdict==="orjbolno") infTxt = "Шийдвэр: орж болно";
   if(infect && infect.verdict==="ersdel") infTxt = "Шийдвэр: ажилд оруулахгүй";
   // Ариун цэврийн хяналт — өнөөдрийн хуудсанд байгаа эсэх
@@ -828,8 +829,8 @@ function workerHome(){
     <div class="sec-t">Өнөөдрийн ажил · ${today()}</div>
     <div class="tasks">
     ${task("uhaan","checks","УХААН", uhaan.length?"Өнөөдөр бөглөсөн":"Өнөөдөр бөглөөгүй — ажил эхлэхийн өмнө", uhaan.length?"done":"todo", uhaan.length?"Бөглөсөн":"Бөглөх")}
-    ${task("fat","battery","Ядаргаа", needF?"Бөглөх хугацаа болсон":"Дараагийн бөглөлт хүлээгдэж байна", needF?"todo":"done", needF?"Бөглөх":"Хийгдсэн")}
-    ${task("inf","virus","Халдварын асуумж", infTxt, infTodo?"todo":infect?"done":"idle", infTodo?"Бөглөх":infect?"Илгээсэн":"Шаардлагагүй")}
+    ${task("fat","battery","Ядаргаа", fatTxt, needF?"todo":"done", needF?"Хүлээгдэж буй":"Оруулсан")}
+    ${task("inf","virus","Халдварын асуумж", infTxt, infect?"done":roster?"todo":"idle", infect?(VERDICT[infect.verdict]||"Хүлээгдэж"):"Эрүүл ахуйч")}
     </div>
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
@@ -848,8 +849,8 @@ function workerHome(){
     <div class="row-gap"><button class="btn ghost" id="haz">${ic("alert")} Аюул мэдэгдэх</button><button class="btn ghost" id="wpw">${ic("key")} Нууц үг солих</button></div></main>`);
   $("#out").onclick = landing;
   $("#uhaan").onclick = uhaanForm;
-  $("#fat").onclick = ()=> needF ? fatigueForm() : toast("Одоо бөглөх шаардлагагүй");
-  $("#inf").onclick = ()=> roster && !infect ? infectForm() : toast(roster?"Өнөөдөр бөглөсөн":"Өнөөдөр хуваарь байхгүй");
+  $("#fat").onclick = ()=> toast("Ядаргааны асуумжийг эрүүл ахуйч оруулна");
+  $("#inf").onclick = ()=> toast("Халдварын асуумжийг эрүүл ахуйч оруулна");
   $("#haz").onclick = ()=>hazardForm();
   $("#wpw").onclick = workerPwPage;
   if($("#advall")) $("#advall").onclick = ()=>{ workerAdvicePage(); window.scrollTo(0,0); };
@@ -937,33 +938,60 @@ function bindOpts(app){
 }
 const optVal = id => document.querySelector("#"+id+" .opt.on")?.textContent.trim();
 
-function fatigueForm(){
-  const u = me(); if(!u) return landing();
-  view(fatigueForm, false);
-  const g = u.gender==="Эм";
+function surveyWorkerOpts(sel){
+  const ws = workers().sort((a,b)=>a.name.localeCompare(b.name));
+  if(!ws.length) return `<option value="">Ажилтан алга</option>`;
+  return ws.map(w=>`<option value="${esc(w.sap)}" ${sel===w.sap?"selected":""}>${esc(w.name)} (${esc(w.sap)}) · ${esc(albaN(w.alba))}</option>`).join("");
+}
+function fatigueForm(preset){
+  const hyg = requireRole("hygiene"); if(!hyg) return;
+  const sap0 = preset && preset.sap ? preset.sap : "";
+  const date0 = preset && preset.date ? preset.date : today();
+  view(()=>fatigueForm({sap: $("#wsap")?.value || sap0, date: $("#fdate")?.value || date0}), false);
+  const w0 = DB.users[keyOf(sap0)] || workers()[0] || {};
+  const g = (w0.gender==="Эм");
   const app = mount(`
-    ${appbar("Алжаал ядаргааны үнэлгээ", "Олон нийтийн эрүүл мэндийн үнэлгээний хэрэгсэл", true)}
+    ${appbar("Алжаал ядаргааны үнэлгээ", "Эрүүл ахуйч ажилтны өмнөөс оруулна", true)}
     <main class="fwrap">
-      <div class="lockgrid">
-        <div class="cell"><span>${ic("lock")}SAP</span><b>${esc(u.sap)}</b></div>
-        <div class="cell"><span>${ic("lock")}Нэр</span><b>${esc(u.name)}</b></div>
-        <div class="cell"><span>${ic("lock")}Огноо</span><b>${today()}</b></div>
-        <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b>${esc(albaN(u.alba))}</b></div>
+      <div class="g2">
+        <div><label class="f" for="wsap">Ажилтан *</label><select id="wsap">${surveyWorkerOpts(w0.sap)}</select></div>
+        <div><label class="f" for="fdate">Огноо *</label><input type="date" id="fdate" value="${esc(date0)}" required/></div>
       </div>
-      ${qblock("q5","1. Сүүлийн 24 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 24 цагт нийт хэдэн цаг унтав?",["7 ба түүнээс их","6-7 цаг","6 цагаас бага"])}
-      ${qblock("q6","2. Сүүлийн 48 цагийн унтах хугацаа (ойролцоогоор)","Та сүүлийн 48 цагт нийт хэдэн цаг унтав?",["14 цагаас их","12-14","12 цагаас бага"])}
-      ${qblock("q7","3. Ээлж дуусах үед сэрүүн байсан цаг (ойролцоогоор)","Та ээлж эхэлснээс хойш ээлж дуустал хэдэн цаг сэрүүн байв?",["14 цагаас бага","14-16","16 цагаас илүү"])}
-      ${qblock("q8", "4. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — "+(g?"ЭМ":"ЭР"),"Та сүүлийн 24 цагт хэдэн стандарт нэгж архи хэрэглэсэн бэ?",["хэрэглээгүй","1-3","4-6"])}
-      ${qblock("q10","5. Эмийн хэрэглээ (сүүлийн 24 цаг)","Та сүүлийн 24 цагт ямар нэг эм, нойрны эм, тайвшруулах эм хэрэглэсэн үү?",["Үгүй","Тийм"])}
-      ${qblock("q11","6. Анхаарал төвлөрөл / Сэтгэцийн хурц байдал","Та өөрийгөө ямар түвшинд үнэлэх вэ?",["Маш сайн / Хурц","Дунд зэрэг / Хангалттай","Муу / Бүдэг"])}
-      <div class="actions"><button class="btn" id="calc">Оноо тооцох ${ic("chev")}</button>
+      <div class="lockgrid">
+        <div class="cell"><span>${ic("lock")}SAP</span><b id="fsap">${esc(w0.sap||"—")}</b></div>
+        <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b id="falba">${esc(albaN(w0.alba)||"—")}</b></div>
+        <div class="cell"><span>${ic("lock")}Хүйс</span><b id="fgender">${esc(w0.gender||"—")}</b></div>
+        <div class="cell"><span>${ic("lock")}Оруулсан</span><b>${esc(hyg.name||"")}</b></div>
+      </div>
+      ${qblock("q5","1. Сүүлийн 24 цагийн унтах хугацаа (ойролцоогоор)","Сүүлийн 24 цагт нийт хэдэн цаг унтсан бэ?",["7 ба түүнээс их","6-7 цаг","6 цагаас бага"])}
+      ${qblock("q6","2. Сүүлийн 48 цагийн унтах хугацаа (ойролцоогоор)","Сүүлийн 48 цагт нийт хэдэн цаг унтсан бэ?",["14 цагаас их","12-14","12 цагаас бага"])}
+      ${qblock("q7","3. Ээлж дуусах үед сэрүүн байсан цаг (ойролцоогоор)","Ээлж эхэлснээс хойш ээлж дуустал хэдэн цаг сэрүүн байсан бэ?",["14 цагаас бага","14-16","16 цагаас илүү"])}
+      ${qblock("q8", "4. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — "+(g?"ЭМ":"ЭР"),"Сүүлийн 24 цагт хэдэн стандарт нэгж архи хэрэглэсэн бэ?",["хэрэглээгүй","1-3","4-6"])}
+      ${qblock("q10","5. Эмийн хэрэглээ (сүүлийн 24 цаг)","Сүүлийн 24 цагт ямар нэг эм, нойрны эм, тайвшруулах эм хэрэглэсэн үү?",["Үгүй","Тийм"])}
+      ${qblock("q11","6. Анхаарал төвлөрөл / Сэтгэцийн хурц байдал","Анхаарал төвлөрлийг ямар түвшинд үнэлэх вэ?",["Маш сайн / Хурц","Дунд зэрэг / Хангалттай","Муу / Бүдэг"])}
+      <div class="actions"><button class="btn" id="calc">${ic("plus")} Оноо тооцож хадгалах</button>
       <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
   bindOpts(app);
-  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+  const syncW = ()=>{
+    const w = DB.users[keyOf($("#wsap").value)] || {};
+    $("#fsap").textContent = w.sap || "—";
+    $("#falba").textContent = albaN(w.alba) || "—";
+    $("#fgender").textContent = w.gender || "—";
+    const h = document.querySelector("#q8 h3");
+    if(h) h.textContent = "4. Сүүлийн 24 цагийн архины хэрэглээ (стандарт нэгж) — " + (w.gender==="Эм"?"ЭМ":"ЭР");
+  };
+  $("#wsap").onchange = syncW;
+  $("#back").onclick = fatigueListPage; $("[data-hback]").onclick = fatigueListPage;
   $("#calc").onclick = ()=>{
+    const w = DB.users[keyOf($("#wsap").value)];
+    if(!w){ toast("Ажилтан сонгоно уу"); return; }
+    const date = $("#fdate").value;
+    if(!date){ toast("Огноо сонгоно уу"); return; }
     const ids=["q5","q6","q7","q8","q10","q11"];
     if(ids.some(i=>!optVal(i))){ toast("Бүх асуултыг сонгоно уу"); return; }
+    const dup = list("fatigue").find(x=>x.sap===w.sap && x.date===date);
+    if(dup && !confirm(`${w.name} — ${date} өдрийн ядаргаа аль хэдийн байна. Дахиад оруулах уу?`)) return;
     const map3 = (v,opts)=>Math.max(0,opts.indexOf(v));
     const s5 = map3(optVal("q5"),["7 ба түүнээс их","6-7 цаг","6 цагаас бага"]);
     const s6 = map3(optVal("q6"),["14 цагаас их","12-14","12 цагаас бага"]);
@@ -976,10 +1004,11 @@ function fatigueForm(){
     if(optVal("q10")==="Тийм" || s11===2) level = level==="Бага"?"Дунд":level;
     if(s8===2 && s5===2) level="Өндөр";
     const id=uid();
-    write({["fatigue/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), gender:u.gender, date:today(),
-      q5:optVal("q5"),q6:optVal("q6"),q7:optVal("q7"),q8:optVal("q8"),q10:optVal("q10"),q11:optVal("q11"),score,level}});
-    alert(`${level} оноо: ${score}/12`+(level==="Өндөр"?" — ахлах/эрүүл ахуйчид мэдэгдлээ":""));
-    workerHome();
+    write({["fatigue/"+id]: {id, sap:w.sap, name:w.name, alba:albaN(w.alba), gender:w.gender||"", date,
+      q5:optVal("q5"),q6:optVal("q6"),q7:optVal("q7"),q8:optVal("q8"),q10:optVal("q10"),q11:optVal("q11"),score,level,
+      by:hyg.name||"", bySap:hyg.sap||"", at:nowStr()}});
+    toast(`${w.name}: ${level} · ${score}/12`);
+    fatigueListPage();
   };
 }
 
@@ -990,33 +1019,52 @@ const INF_QS = [
   {id:"f4", t:"Танд бэртэл гэмтэл авсан зэрэг эрүүл мэндийн асуудал байна уу? (Тийм бол ахлах ажилтандаа мэдэгдэнэ үү)", o:["Тийм","Үгүй"]},
   {id:"f5", t:"Нойр, амралт хангалттай авч ажилдаа бэлэн байх нөхцөлийг хангаж чадаж байна уу?", o:["Тийм","Үгүй"]}
 ];
-function infectForm(){
-  const u = me(); if(!u) return landing();
-  view(infectForm, false);
+function infectForm(preset){
+  const hyg = requireRole("hygiene"); if(!hyg) return;
+  const sap0 = preset && preset.sap ? preset.sap : "";
+  const date0 = preset && preset.date ? preset.date : today();
+  view(()=>infectForm({sap: $("#wsap")?.value || sap0, date: $("#arrive")?.value || date0}), false);
+  const w0 = DB.users[keyOf(sap0)] || workers()[0] || {};
   const app = mount(`
-    ${appbar("Гэдэсний халдварт өвчнийг тандах", esc(u.name), true)}
+    ${appbar("Гэдэсний халдварт өвчнийг тандах", "Эрүүл ахуйч ажилтны өмнөөс оруулна", true)}
     <main class="fwrap">
-      <p class="muted">ГХӨ-г эрт илрүүлэх, халдвар дамжихаас сэргийлэх зорилготой.</p>
-      <div class="lockgrid two">
-        <div class="cell">Овог нэр<b>${esc(u.name)}</b></div>
-        <div class="cell">SAP / алба<b>${esc(u.sap)} · ${esc(albaN(u.alba))}</b></div>
+      <p class="muted">ГХӨ-г эрт илрүүлэх, халдвар дамжихаас сэргийлэх зорилготой. Асуумж, үр дүнг эндээс оруулна.</p>
+      <div class="g2">
+        <div><label class="f" for="wsap">Ажилтан *</label><select id="wsap">${surveyWorkerOpts(w0.sap)}</select></div>
+        <div><label class="f" for="arrive">Ээлжинд ирэх огноо *</label><input type="date" id="arrive" value="${esc(date0)}" required/></div>
       </div>
-      <label class="f" for="arrive">Ээлжинд ирэх хугацаа *</label>
-      <input type="date" id="arrive" value="${today()}"/>
+      <div class="lockgrid two">
+        <div class="cell">Овог нэр<b id="iname">${esc(w0.name||"—")}</b></div>
+        <div class="cell">SAP / алба<b id="ialba">${esc(w0.sap||"—")} · ${esc(albaN(w0.alba)||"—")}</b></div>
+      </div>
       ${INF_QS.map(q=>`<div class="qcard" id="${q.id}"><h3>${esc(q.t)}</h3>
         <div class="opts ${q.o.length===3?"":"two"}" role="radiogroup">${q.o.map(o=>`<button type="button" class="opt" role="radio">${esc(o)}</button>`).join("")}</div></div>`).join("")}
-      <div class="actions"><button class="btn" id="send">${ic("send")} Илгээх</button>
+      <label class="f" for="verd">Үр дүн *</label>
+      <select id="verd">${Object.entries(VERDICT).map(([k,l])=>`<option value="${k}" ${k==="huleegdej"?"selected":""}>${l}</option>`).join("")}</select>
+      <div class="actions"><button class="btn" id="send">${ic("plus")} Хадгалах</button>
       <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
   bindOpts(app);
-  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+  $("#wsap").onchange = ()=>{
+    const w = DB.users[keyOf($("#wsap").value)] || {};
+    $("#iname").textContent = w.name || "—";
+    $("#ialba").textContent = `${w.sap||"—"} · ${albaN(w.alba)||"—"}`;
+  };
+  $("#back").onclick = infectListPage; $("[data-hback]").onclick = infectListPage;
   $("#send").onclick = ()=>{
+    const w = DB.users[keyOf($("#wsap").value)];
+    if(!w){ toast("Ажилтан сонгоно уу"); return; }
+    const date = $("#arrive").value;
+    if(!date){ toast("Огноо сонгоно уу"); return; }
     if(INF_QS.some(q=>!optVal(q.id))){ toast("Бүх асуултыг хариулна уу"); return; }
+    const dup = list("infect").find(x=>x.sap===w.sap && x.date===date);
+    if(dup && !confirm(`${w.name} — ${date} өдрийн халдварын асуумж аль хэдийн байна. Дахиад оруулах уу?`)) return;
     const id=uid();
-    write({["infect/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:$("#arrive").value||today(),
-      ans: INF_QS.map(q=>({q:q.t, a:optVal(q.id)})), verdict:"huleegdej"}});
-    toast("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
-    workerHome();
+    write({["infect/"+id]: {id, sap:w.sap, name:w.name, alba:albaN(w.alba), date,
+      ans: INF_QS.map(q=>({q:q.t, a:optVal(q.id)})), verdict:$("#verd").value||"huleegdej",
+      by:hyg.name||"", bySap:hyg.sap||"", at:nowStr()}});
+    toast("Хадгаллаа");
+    infectListPage();
   };
 }
 
@@ -1514,9 +1562,12 @@ function fatigueListPage(){
   if(!requireRole("hygiene")) return;
   view(fatigueListPage, true);
   const f=list("fatigue").sort(byNew);
-  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Ажилтнуудын бөглөсөн үнэлгээ, шинээс нь")}<div class="card">
-    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
+  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Эрүүл ахуйч оруулна. Ажилтан өөрөө бөглөхгүй.")}
+    <div class="row-gap noprint"><button class="btn" id="fadd">${ic("plus")} Асуумж оруулах</button></div>
+    <div class="card">
+    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин","Оруулсан"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${wpLink(x)}</td><td>${esc(albaN(x.alba))}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td><td class="muted">${esc(x.by||"—")}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
   bindNav(app);
+  $("#fadd").onclick = ()=>fatigueForm();
 }
 /* ---------- Аюулын хяналт: жагсаалт + шүүлтүүр ---------- */
 let HZF = {st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""};
@@ -1678,14 +1729,16 @@ function infectListPage(){
   if(!requireRole("hygiene")) return;
   view(infectListPage, true);
   const inf=list("infect").sort(byNew);
-  const app = mount(shell("халдвар", `${phead("Халдвар — үр дүн гаргах", "Ажилтан зөвхөн бөглөсөн. Орж болно / оруулахгүй-г эндээс та тогтооно.")}
+  const app = mount(shell("халдвар", `${phead("Халдварын асуумж", "Эрүүл ахуйч асуумж оруулж, орж болно / оруулахгүй-г тогтооно.")}
+    <div class="row-gap noprint"><button class="btn" id="iadd">${ic("plus")} Асуумж оруулах</button></div>
     ${inf.map(x=>{ const v = x.verdict && VERDICT[x.verdict] ? x.verdict : "huleegdej"; return `<div class="card">
       <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(albaN(x.alba))}</div></div></div>
       <div class="qa">${arr(x.ans).map(a=>`<div class="item inl"><p>${esc(a.q)}</p><b>${esc(a.a)}</b></div>`).join("")}</div>
       <label class="f">Үр дүн</label>
       <select data-inf="${esc(x.id)}" class="v-${v}">${Object.entries(VERDICT).map(([k,l])=>`<option value="${k}" ${k===v?"selected":""}>${l}</option>`).join("")}</select>
-    </div>`;}).join("")||`<div class="card">${emptyState("Халдварын асуумж алга","Хуваарьтай ажилтан ирэх өдрөө бөглөнө","virus")}</div>`}`));
+    </div>`;}).join("")||`<div class="card">${emptyState("Халдварын асуумж алга","Эрүүл ахуйч ажилтнаа сонгож оруулна","virus")}</div>`}`));
   bindNav(app);
+  $("#iadd").onclick = ()=>infectForm();
   app.onchange = e=>{
     const s=e.target.closest("[data-inf]");
     if(s){ write({["infect/"+s.dataset.inf+"/verdict"]: s.value}); toast("Хадгаллаа"); }
