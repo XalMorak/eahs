@@ -619,7 +619,7 @@ function landing(){
           <div class="brand">
             <img class="logo" src="/logo.png" alt="Ерөө говь ХХК" width="148" height="117"/>
             <span class="kicker">${ic("shield","sm")} Ерөө говь ХХК</span>
-            <h1>ЭАХС<br><span>Аюулгүй ажиллагаа,<br>эрүүл ахуйн хяналт</span></h1>
+            <h1><span>Аюулгүй ажиллагаа,<br>эрүүл ахуйн хяналт</span></h1>
             <p>Ажилтны эрүүл мэнд, ариун цэвэр, ядаргаа, аюулын мэдээллийг нэг дор — утас, компьютер дээр.</p>
             <div class="sites" aria-label="Талбарууд">${ALBA.map(a=>`<span>${esc(a)}</span>`).join("")}</div>
           </div>
