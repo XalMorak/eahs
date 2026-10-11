@@ -1405,14 +1405,22 @@ function supervisorHome(){
   const app = mount(shell("тойм", `
     ${phead("УХААН шалгах", `${esc(albaN(u.alba))} · Өнөөдөр: ${today()}`)}
     ${hygDueCard(u.alba)}
-    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td><button class="btn sm" data-u="${esc(x.id)}">Нээх</button></td></tr>`), "УХААН бүртгэл алга")}</div>
+    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td class="nowrap"><button class="btn sm" data-u="${esc(x.id)}">Нээх</button> <button class="btn sm warn" data-udel="${esc(x.id)}" aria-label="Устгах" title="Устгах">${ic("trash","sm")}</button></td></tr>`), "УХААН бүртгэл алга")}</div>
     ${healthCard(u.alba)}
     ${labAlertCard(true)}
     <div class="card" id="svstaff"><div class="ctitle">${ic("users")}<h3>Албаны ажилтнууд (${aw.length})</h3></div>
       ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр","Шинжилгээ"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
+  app.addEventListener("click", e=>{ const d=e.target.closest("[data-udel]"); if(d){ e.preventDefault(); e.stopImmediatePropagation(); if(delUhaan(d.dataset.udel)) supervisorHome(); } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba);
     const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); } });
   ensureHealthNotifs(u);
+}
+function canDelUhaan(u,x){ return !!(u && x && (u.role==="hygiene" || (u.role==="supervisor" && albaN(x.alba)===albaN(u.alba)))); }
+function delUhaan(id){
+  const u=me(), x=(DB.uhaan||{})[id];
+  if(!canDelUhaan(u,x)) return false;
+  if(!confirm(`${x.name||x.sap||""} — ${x.date||""} өдрийн УХААН хуудсыг устгах уу? Энэ үйлдлийг буцаах боломжгүй.`)) return false;
+  write({["uhaan/"+id]: null}); toast("УХААН хуудас устлаа"); return true;
 }
 function viewUhaan(id){
   const x=DB.uhaan[id]; if(!x) return;
@@ -1430,9 +1438,11 @@ function viewUhaan(id){
     <p><b>Хяналт:</b> ${esc(x.ctrl||"—")}</p>
     <p>Ахлах: ${esc(x.supervisor||"хүлээгдэж")} ${x.note?"· "+esc(x.note):""}</p>
     <div class="actions">${who==="supervisor" && x.status==="huleegdej"?`<button class="btn" id="ok">${ic("check")} Батална</button><button class="btn warn" id="no">Буцаа</button>`:""}
+    ${canDelUhaan(u,x)?`<button class="btn warn" id="udel">${ic("trash")} Устгах</button>`:""}
     <button class="btn ghost" id="back">Буцах</button></div>
   </div></div>`);
   const back = ()=> who==="supervisor"?supervisorHome():hygieneHome();
+  const ud=$("#udel"); if(ud) ud.onclick=()=>{ if(delUhaan(id)) back(); };
   $("#back").onclick=back; $("[data-hback]").onclick=back;
   const ok=$("#ok"), no=$("#no");
   if(ok) ok.onclick=()=>{ write({["uhaan/"+id+"/status"]:"batlagdsan", ["uhaan/"+id+"/supervisor"]:u.name+" "+nowStr()}); back(); };
@@ -1646,16 +1656,57 @@ async function saveRenew(w, kind, u, form){
   workerProfile(w.sap);
 }
 
+let FTF = {who:"", from:"", to:"", lvl:""};
+const fLvlB = l => l==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':l==="Дунд"?'<span class="badge b-wait">Дунд</span>':l==="Бага"?'<span class="badge b-ok">Бага</span>':esc(l||"—");
+function fatigueAnswers(x){
+  if(Array.isArray(x.ans) && x.ans.length) return x.ans.filter(a=>a&&a.q).map(a=>({q:a.q, a:a.a}));
+  if(x.ans && typeof x.ans==="object"){ const v=Object.values(x.ans).filter(a=>a&&a.q); if(v.length) return v; }
+  return surveyQs("fatigue").filter(q=>x[q.id]!=null).map(q=>({q:q.title, a:x[q.id]}));
+}
 function fatigueListPage(){
   if(!requireRole("hygiene")) return;
   view(fatigueListPage, true);
-  const f=list("fatigue").sort(byNew);
-  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Ажилтнуудын бөглөсөн үнэлгээ. Асуултыг эндээс засаж болно.")}
+  const all=list("fatigue").sort(byNew);
+  const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl));
+  const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
+  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
     <div class="row-gap noprint"><button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button></div>
+    <div class="card filters noprint" id="ftfilt"><div class="frow">
+      <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
+      <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option ${FTF.lvl===l?"selected":""}>${l}</option>`).join("")}</select>
+      <label class="fdate">Эхлэх <input type="date" id="ftfrom" value="${esc(FTF.from)}"/></label>
+      <label class="fdate">Дуусах <input type="date" id="ftto" value="${esc(FTF.to)}"/></label>
+      <button class="btn ghost sm" id="ftclr">Цэвэрлэх</button></div>
+      <p class="muted" id="ftcnt">${f.length} / ${all.length} бүртгэл</p></div>
     <div class="card">
-    ${tbl(["Огноо","Нэр","Алба","Оноо","Түвшин"], f.map(x=>`<tr><td>${esc(x.date)}</td><td>${wpLink(x)}</td><td>${esc(albaN(x.alba))}</td><td>${esc(x.score)}</td><td>${x.level==="Өндөр"?'<span class="badge b-bad">Өндөр</span>':x.level==="Дунд"?'<span class="badge b-wait">Дунд</span>':x.level==="Бага"?'<span class="badge b-ok">Бага</span>':esc(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга")}</div>`));
+    ${tbl(["Огноо","Нэр","SAP","Тасаг","Оноо","Түвшин",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td>${esc(x.score)}${x.max?"/"+esc(x.max):""}</td><td>${fLvlB(x.level)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>`));
+  app.addEventListener("click", e=>{ const r=e.target.closest("[data-fv]"); if(r){ e.preventDefault(); e.stopImmediatePropagation(); fatigueView(r.dataset.fv); window.scrollTo(0,0); } }, true);
   bindNav(app);
+  const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
+  ["#ftwho","#ftlvl","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
+  $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:""}; fatigueListPage(); };
   $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
+}
+function fatigueView(id){
+  if(!requireRole("hygiene")) return;
+  const x=(DB.fatigue||{})[id]; if(!x) return fatigueListPage();
+  view(()=>fatigueView(id), false);
+  const w=(DB.users||{})[keyOf(x.sap)]||{};
+  const ans=fatigueAnswers(x);
+  mount(`${appbar("Ядаргаа · "+esc(x.name||x.sap), esc(x.date), true)}<div class="paper"><div class="formcard" id="fview">
+    <div class="lockgrid">
+      <div class="cell"><span>Нэр</span><b>${esc(x.name||w.name||"")}</b></div>
+      <div class="cell"><span>SAP</span><b>${esc(x.sap)}</b></div>
+      <div class="cell"><span>Тасаг / Нэгж</span><b>${esc(albaN(x.alba||w.alba))}</b></div>
+      <div class="cell"><span>Огноо</span><b>${esc(x.date)}</b></div>
+    </div>
+    <p><b>Оноо:</b> ${esc(x.score)}${x.max?"/"+esc(x.max):""} · <b>Түвшин:</b> ${fLvlB(x.level)}</p>
+    <h4>Асуулт, хариулт</h4>
+    ${ans.length?ans.map((a,i)=>`<div class="item inl fqa"><p>${i+1}. ${esc(a.q)}</p><b>${esc(a.a==null?"—":a.a)}</b></div>`).join(""):'<p class="muted">Хариултын дэлгэрэнгүй хадгалагдаагүй байна.</p>'}
+    <div class="actions"><button class="btn ghost" id="back">Буцах</button></div>
+  </div></div>`);
+  $("#back").onclick=fatigueListPage; $("[data-hback]").onclick=fatigueListPage;
 }
 /* ---------- Аюулын хяналт: жагсаалт + шүүлтүүр ---------- */
 let HZF = {st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""};

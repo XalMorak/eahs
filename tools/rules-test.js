@@ -106,6 +106,8 @@ async function strict(){
   await expect('worker: query own fatigue+infect', true, async()=>{ await w.db.ref(V+'fatigue').orderByChild('sap').equalTo('1108650').once('value'); await w.db.ref(V+'infect').orderByChild('sap').equalTo('1108650').once('value'); });
   await expect('worker: query other sap fatigue', false, ()=>w.db.ref(V+'fatigue').orderByChild('sap').equalTo('2200').once('value'));
   await expect('worker: read all uhaan', false, ()=>w.db.ref(V+'uhaan').once('value'));
+  await expect('worker: delete own uhaan', false, ()=>w.db.ref(V+'uhaan/u1').remove());
+  await expect('worker: read fatigue list', false, ()=>w.db.ref(V+'fatigue').once('value'));
   await expect('worker: create own fatigue', true, ()=>w.db.ref(V+'fatigue/f9').set({id:'f9',sap:'1108650',date:T,score:2}));
   await expect('worker: create fatigue for other sap', false, ()=>w.db.ref(V+'fatigue/f10').set({id:'f10',sap:'2200',date:T,score:2}));
   await expect('worker: edit existing own fatigue', false, ()=>w.db.ref(V+'fatigue/f1/score').set(0));
@@ -129,6 +131,8 @@ async function strict(){
   await expect('hyg: create user + roles + authgen', true, ()=>h.db.ref(V).update({'users/3300':{sap:'3300',name:'Шинэ',role:'worker',alba:'Оффис',uid:'newuid'},'roles/newuid':{sap:'3300',role:'worker',by:'admin',at:1},'authgen/3300':'1'}));
   await expect('hyg: user with plain pin', false, ()=>h.db.ref(V+'users/x').set({sap:'x',name:'X',role:'worker',pin:'1234'}));
   await expect('hyg: user with bad role', false, ()=>h.db.ref(V+'users/x').set({sap:'x',name:'X',role:'root'}));
+  await expect('hyg: delete any uhaan (v14)', true, async()=>{ await h.db.ref(V+'uhaan/u3').remove(); await owner('eahs/v2/uhaan/u3','PUT',{id:'u3',sap:'2200',alba:'Оффис',date:T,status:'huleegdej'}); });
+  await expect('hyg: read fatigue list', true, ()=>h.db.ref(V+'fatigue').once('value'));
   await expect('hyg: change role / delete role', true, async()=>{ await h.db.ref(V+'roles/newuid/role').set('supervisor'); await h.db.ref(V+'roles/newuid').remove(); });
   await expect('hyg: hazard tracking update (status, assignee, due, log)', true, ()=>h.db.ref(V).update({'hazards/hHigh/status':'Хийгдэж буй','hazards/hHigh/assignee':'akhakh','hazards/hHigh/due':'2026-10-01','hazards/hHigh/log/l1':{ts:1,text:'Төлөв'}}));
   await expect('hyg: det > 1000', false, ()=>h.db.ref(V+'hazards/hHigh/det').set('a'.repeat(1001)));
@@ -149,6 +153,9 @@ async function strict(){
   await expect('sup: approve uhaan own alba', true, ()=>s.db.ref(V).update({'uhaan/u1/status':'batlagdsan','uhaan/u1/supervisor':'Д'}));
   await expect('sup: approve uhaan old name «Манлай баар» → Бар (same alba)', true, ()=>s.db.ref(V+'uhaan/u2/status').set('batlagdsan'));
   await expect('sup: approve uhaan other alba (Оффис)', false, ()=>s.db.ref(V+'uhaan/u3/status').set('batlagdsan'));
+  await expect('sup: delete uhaan other alba (Оффис)', false, ()=>s.db.ref(V+'uhaan/u3').remove());
+  await expect('sup: delete uhaan own alba (v14)', true, async()=>{ await s.db.ref(V+'uhaan/u2').remove(); await owner('eahs/v2/uhaan/u2','PUT',{id:'u2',sap:'2200',alba:'Манлай баар',date:T,status:'batlagdsan'}); });
+  await expect('sup: create uhaan for someone (no create)', false, ()=>s.db.ref(V+'uhaan/uX').set({id:'uX',sap:'2200',alba:'Оюут баар'}));
   await expect('sup: hazard status + log', true, ()=>s.db.ref(V).update({'hazards/hLow/status':'Шийдсэн','hazards/hLow/log/l2':{ts:2,text:'ok'}}));
   await expect('sup: delete hazard', false, ()=>s.db.ref(V+'hazards/hLow').remove());
   await expect('sup: hygcheck own alba edit', true, ()=>s.db.ref(V).update({[`hygcheck/${T}_Оюут баар/rows/2200/c`]:['ok','no'],[`hygcheck/${T}_Оюут баар/_u`]:1}));

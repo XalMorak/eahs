@@ -131,7 +131,7 @@ def strict():
                 "mustChange": {".write": f"auth != null && {MYSAP} === $sap"}}},
         "settings": {".read": MEMBER, ".write": HYG},
         "uhaan": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
-                  "$id": {".write": f"({SUP} && data.exists() && newData.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},
+                  "$id": {".write": f"({SUP} && data.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},  # v14: ахлах өөрийн албаны УХААН-ыг устгаж болно
         "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "roster": {".read": MEMBER, ".write": HYG},
