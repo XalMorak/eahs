@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v13 · 2026-10-08";
+const APP_VER = "v13 · 2026-10-11";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1480,13 +1480,13 @@ function hygieneHome(){
           ${hzN.slice(0,6).map(x=>`<div class="hzrow click" data-hzd="${esc(x.id)}"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")}
         </div>
         <div class="card"><div class="ctitle">${ic("users")}<h3>Ажилтнуудын тойм</h3></div>
-          ${tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр","Шинжилгээ"], ws.map(w=>{
+          ${tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр","Шинжилгээ"], ws.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(w=>{
             const last=f.find(x=>x.sap===w.sap);
-            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td>${expBadge(w.bookExp)}</td><td>${expBadge(w.exam)}</td></tr>`;
+            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td class="nowrap">${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`;
           }))}
         </div>
         <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН</h3></div>
-          ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}</td><td>${stU(x)}</td></tr>`))}
+          ${tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td>${stU(x)}</td></tr>`))}
         </div>`));
   app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
