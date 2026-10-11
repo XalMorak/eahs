@@ -1035,3 +1035,20 @@ button.advth:focus-visible{outline:3px solid var(--brand-100);outline-offset:2px
 .fdate{display:inline-flex;align-items:center;gap:6px;font-size:.9em;color:var(--muted,#667)}
 .fdate input{min-width:0}
 .fqa p{flex:1}
+/* v15: цэгцтэй Тойм + Excel маягийн график */
+.ovk{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.todo{display:flex;gap:10px;align-items:flex-start;padding:9px 4px;border-top:1px solid var(--line)}
+.todo:first-of-type{border-top:0}
+.todo .badge{flex:none;min-width:84px;text-align:center}
+details.ovd{padding:0}
+details.ovd>summary{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;list-style:none}
+details.ovd>summary::-webkit-details-marker{display:none}
+details.ovd>summary .ovmore{margin-left:auto;font-size:12.5px}
+details.ovd>summary .ovmore::after{content:" ▾"}
+details.ovd[open]>summary .ovmore::after{content:" ▴"}
+details.ovd .ovbody{padding:0 12px 12px}
+details.ovd .ovbody>.card{box-shadow:none;border:0;margin:0;padding:4px}
+.chart.xls .legend{justify-content:center}
+.chart.xls .legend i{width:11px;height:11px;border-radius:0}
+.chart.xls .gl{stroke:#d9d9d9}
+@media print{details.ovd .ovbody{display:block}}
