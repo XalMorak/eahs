@@ -737,9 +737,9 @@ function loginForm(role){
 }
 
 /* ======================= АЖИЛТАН ======================= */
-/* ---------- Цагаан дэвтэр / жилийн шинжилгээ: төлөв ---------- */
+/* ---------- Цагаан дэвтэр: төлөв (жилийн үзлэгийг ХН хариуцдаг болсон тул сайтаас хассан; хуучин өгөгдөл хэвээр) ---------- */
 const HB = {book:{l:"Цагаан дэвтэр", exp:"bookExp", iss:"bookIss", ic:"book"}, exam:{l:"Жилийн шинжилгээ", exp:"exam", iss:"examIss", ic:"clipboard"}};
-const HB_KINDS = ["book","exam"];
+const HB_KINDS = ["book"];
 const H_SOON = 30;   // ≤30 хоног → «Дуусах дөхсөн»
 const H_ST = {ok:["Хүчинтэй","b-ok"], soon:["Дуусах дөхсөн","b-wait"], exp:["Дууссан","b-bad"], none:["Бүртгэлгүй","b-new"]};
 function hState(d){ if(!d) return "none"; const left = daysBetween(today(), d); return left<0 ? "exp" : left<=H_SOON ? "soon" : "ok"; }
@@ -760,10 +760,10 @@ function healthAlerts(alba){
 const wpLink = (w, txt) => `<button type="button" class="lnk" data-wp="${esc(w.sap)}">${esc(txt==null?w.name:txt)}</button>`;
 function healthCard(alba){
   const al = healthAlerts(alba); const ex = al.filter(a=>a.st==="exp").length, so = al.length-ex;
-  return `<div class="card" id="hbcard"><div class="ctitle">${ic("book")}<h3>Цагаан дэвтэр / шинжилгээ — анхаарах</h3>
+  return `<div class="card" id="hbcard"><div class="ctitle">${ic("book")}<h3>Цагаан дэвтэр — анхаарах</h3>
       <span class="row-gap hbsum"><span class="badge b-bad">Дууссан: ${ex}</span><span class="badge b-wait">Дуусах дөхсөн: ${so}</span></span></div>
     ${al.length ? tbl(["Ажилтан","Алба","Баримт","Дуусах","Үлдсэн","Төлөв"], al.map(a=>`<tr class="click" data-wp="${esc(a.w.sap)}"><td>${wpLink(a.w)}<div class="muted sm">SAP ${esc(a.w.sap)}</div></td><td>${esc(albaN(a.w.alba))}</td><td>${esc(HB[a.kind].l)}</td><td class="nowrap">${esc(a.exp)}</td><td class="nowrap">${esc(hLeftTxt(a.exp))}</td><td>${hBadge(a.exp)}</td></tr>`))
-      : `<p class="muted">${ic("check","sm")} Бүх ажилтны цагаан дэвтэр, жилийн шинжилгээ хүчинтэй (${H_SOON}-аас дээш хоног).</p>`}
+      : `<p class="muted">${ic("check","sm")} Бүх ажилтны цагаан дэвтэр хүчинтэй (${H_SOON}-аас дээш хоног).</p>`}
   </div>`;
 }
 /* Дуусах дөхсөн / дууссан → мэдэгдэл (эрүүл ахуйч + тухайн албаны ахлах). id тогтмол тул давхардахгүй. */
@@ -864,7 +864,7 @@ function workerHome(){
     </div>
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
-      ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтэр / шинжилгээний хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
+      ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
       <div class="docs">
         ${HB_KINDS.map(kind=>{ const H=HB[kind], d=u[H.exp]||"", st=hState(d);
           return `<div class="doc hst-${st}" data-doc="${kind}"><span>${esc(H.l)}${d?" · дуусах":""}</span><b>${d?esc(d):"Огноо оруулаагүй"}</b>${hBadge(d)}
@@ -1409,7 +1409,7 @@ function supervisorHome(){
     ${healthCard(u.alba)}
     ${labAlertCard(true)}
     <div class="card" id="svstaff"><div class="ctitle">${ic("users")}<h3>Албаны ажилтнууд (${aw.length})</h3></div>
-      ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр","Шинжилгээ"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td>${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
+      ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
   app.addEventListener("click", e=>{ const d=e.target.closest("[data-udel]"); if(d){ e.preventDefault(); e.stopImmediatePropagation(); if(delUhaan(d.dataset.udel)) supervisorHome(); } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba);
     const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); } });
@@ -1483,7 +1483,7 @@ function hygieneHome(){
         ${phead("Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
         <div class="kpis ovk">
           <div class="kpi k-blu click" data-ovopen="ov-uhaan" id="kpi-uhaan"><i>${ic("checks")}</i><div>УХААН өнөөдөр<b>${uT.length}</b><span class="muted">хүлээгдэж буй: ${uPend}</span></div></div>
-          <div class="kpi k-red ${hExp?"hot":""} click" data-hbjump id="kpi-hbexp"><i>${ic("book")}</i><div>Дэвтэр/үзлэг дууссан<b>${hExp}</b><span class="muted">дөхсөн (≤${H_SOON} хоног): ${hSoon}</span></div></div>
+          <div class="kpi k-red ${hExp?"hot":""} click" data-hbjump id="kpi-hbexp"><i>${ic("book")}</i><div>Цагаан дэвтэр дууссан<b>${hExp}</b><span class="muted">дөхсөн (≤${H_SOON} хоног): ${hSoon}</span></div></div>
           <div class="kpi k-org ${odz?"hot":""} click" data-nav="аюул" data-hzod id="kpi-hz"><i>${ic("alert")}</i><div>Нээлттэй аюул<b>${hzOpen}</b><span class="muted">хэтэрсэн: ${odz} · шинэ: ${neu}</span></div></div>
           <div class="kpi k-red ${hi?"hot":""} click" data-nav="ядаргаа" id="kpi-fat"><i>${ic("battery")}</i><div>Өндөр ядаргаа<b>${hi}</b><span class="muted">өнөөдөр · 7 хоногт: ${fHiAll}</span></div></div>
           <div class="kpi k-grn click" data-nav="ариун"><i>${ic("drop")}</i><div>Ариун цэвэр өнөөдөр<b>${due.done}/${due.total}</b><span class="muted">бүртгэсэн / бүртгэх</span></div></div>
@@ -1493,12 +1493,12 @@ function hygieneHome(){
           ${todo.length ? todo.slice(0,8).join("") : `<p class="muted">${ic("check","sm")} Өнөөдөр анхаарах зүйл алга.</p>`}
         </div>
         ${det("ov-hyg","drop","Ариун цэврийн хяналт — алба тус бүр", null, hygDueCard(null))}
-        ${det("ov-hb","book","Цагаан дэвтэр / шинжилгээ — бүх анхааруулга", hal.length, healthCard(null))}
+        ${det("ov-hb","book","Цагаан дэвтэр — бүх анхааруулга", hal.length, healthCard(null))}
         ${det("ov-lab","flask","Бүтээгдэхүүний шинжилгээ — анхааруулга", labs.length, labAlertCard())}
         ${det("ov-hz","alert","Сүүлийн аюулын мэдээлэл", Math.min(6,hzN.length), `<div class="row-gap" style="justify-content:flex-end"><button class="btn ghost sm" data-nav="аюул">Бүгд ${ic("chev","sm")}</button></div>`+(hzN.slice(0,6).map(x=>`<div class="hzrow click" data-hzd="${esc(x.id)}"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")))}
-        ${det("ov-workers","users","Ажилтнуудын тойм", ws.length, tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр","Шинжилгээ"], ws.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(w=>{
+        ${det("ov-workers","users","Ажилтнуудын тойм", ws.length, tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр"], ws.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(w=>{
             const last=f.find(x=>x.sap===w.sap);
-            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td><td class="nowrap">${esc(w.exam||"—")} ${expBadge(w.exam)}</td></tr>`;
+            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?esc(last.level+" ("+last.score+")"):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td></tr>`;
           })))}
         ${det("ov-uhaan","checks","УХААН — сүүлийн бүртгэл", Math.min(12,u.length), tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td>${stU(x)}</td></tr>`)))}`));
   app.addEventListener("click", e=>{ const k=e.target.closest("[data-ovopen]"); if(k){ const d=$("#"+k.dataset.ovopen); if(d){ d.open=true; d.scrollIntoView({behavior:"smooth", block:"start"}); } } }, true);
@@ -1594,7 +1594,7 @@ function workerProfile(sap){
     <section class="card wphead">
       <span class="avatar lg" aria-hidden="true">${esc(initials(w.name))}</span>
       <div class="wpmain"><h3>${esc(w.name)}</h3><div class="muted">${esc(roleName(w.role))}${w.job?" · "+esc(w.job):""}</div>
-        <div class="row-gap wrap">${HB_KINDS.map(k=>{ const st=hState(w[HB[k].exp]); return `<span class="badge ${H_ST[st][1]}">${k==="book"?"Дэвтэр":"Шинжилгээ"}: ${H_ST[st][0]}</span>`; }).join("")}
+        <div class="row-gap wrap">${HB_KINDS.map(k=>{ const st=hState(w[HB[k].exp]); return `<span class="badge ${H_ST[st][1]}">Дэвтэр: ${H_ST[st][0]}</span>`; }).join("")}
           ${sup?'<span class="badge b-closed">Зөвхөн харах</span>':""}</div></div>
       <dl class="wpinfo">
         <div><dt>SAP</dt><dd>${esc(w.sap)}</dd></div>
@@ -1605,7 +1605,7 @@ function workerProfile(sap){
       </dl>
     </section>
     <div class="hbgrid">${HB_KINDS.map(k=>hbCardHtml(w, k, canEdit, canEdit && WP.open===k)).join("")}</div>
-    ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтэр, шинжилгээний сунгалт, файлыг эрүүл ахуйч бүртгэнэ.</p>`:""}
+    ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтрийн сунгалт, файлыг эрүүл ахуйч бүртгэнэ.</p>`:""}
     ${wbCardHtml(w, canEdit)}
     <div class="wpgrid">
       ${sec("checks","Сүүлийн УХААН", tbl(["Огноо","Ажил","Төлөв"], uh.map(x=>`<tr class="click" data-u="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td></tr>`), "УХААН бүртгэл алга"))}
@@ -1891,17 +1891,17 @@ let BOOKF = "";
 function bookPage(){
   if(!requireRole("hygiene")) return;
   view(bookPage, true);
-  const minExp = w=> [w.bookExp, w.exam].filter(Boolean).sort()[0] || "9999";
+  const minExp = w=> w.bookExp || "9999";
   const all = hbPeople().sort((a,b)=>minExp(a).localeCompare(minExp(b)) || a.name.localeCompare(b.name));
   const worst = w=> { const ss = HB_KINDS.map(k=>hState(w[HB[k].exp])); return ss.includes("exp")?"exp":ss.includes("soon")?"soon":ss.includes("none")?"none":"ok"; };
   const cnt = st=> all.filter(w=>worst(w)===st).length;
   const ws = BOOKF ? all.filter(w=>worst(w)===BOOKF) : all;
   const chip = (k,l)=>`<button type="button" class="chip ${BOOKF===k?"on":""}" data-bookf="${k}">${esc(l)}</button>`;
   const cell = (w,kind)=>{ const H=HB[kind], d=w[H.exp]; return `<td class="nowrap">${esc(d||"—")} ${expBadge(d)}${d?`<div class="muted sm">${esc(hLeftTxt(d))}</div>`:""}</td>`; };
-  const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр / жилийн шинжилгээ", "Дуусах хугацаагаар эрэмбэлсэн · мөр дээр дарж хувийн хуудсыг нээж сунгана")}
+  const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр", "Дуусах хугацаагаар эрэмбэлсэн · мөр дээр дарж хувийн хуудсыг нээж сунгана")}
     <div class="chips" role="group" aria-label="Төлөвөөр шүүх">${chip("","Бүгд ("+all.length+")")}${chip("exp","Дууссан ("+cnt("exp")+")")}${chip("soon","Дуусах дөхсөн ("+cnt("soon")+")")}${chip("ok","Хүчинтэй ("+cnt("ok")+")")}${chip("none","Бүртгэлгүй ("+cnt("none")+")")}</div>
     <div class="card">
-    ${tbl(["Нэр","SAP","Алба","Дэвтэр","Шинжилгээ",""], ws.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td>${cell(w,"book")}${cell(w,"exam")}<td><button class="btn ghost sm" data-wp="${esc(w.sap)}">${ic("history","sm")} Сунгах</button></td></tr>`))}</div>`));
+    ${tbl(["Нэр","SAP","Алба","Дэвтэр",""], ws.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td>${cell(w,"book")}<td><button class="btn ghost sm" data-wp="${esc(w.sap)}">${ic("history","sm")} Сунгах</button></td></tr>`))}</div>`));
   bindNav(app, e=>{ const c=e.target.closest("[data-bookf]"); if(c){ BOOKF=c.dataset.bookf; bookPage(); } });
 }
 function rosterPage(){
@@ -1955,7 +1955,6 @@ function usersPage(editSap){
         <div><label class="f" for="uphone">Утас</label><input id="uphone" type="tel" inputmode="tel" maxlength="30" value="${esc(ed?.phone||"")}"/></div>
         <div><label class="f" for="upin">${ed?"Нууц үг шинэчлэх (хоосон бол хэвээр)":"Нууц үг *"} ${CLOUD_AUTH?"· ≥6":""}</label><input id="upin" type="password" autocomplete="new-password" ${ed?"":"required"} minlength="${CLOUD_AUTH?6:4}"/></div>
         <div><label class="f" for="ubook">Цагаан дэвтэр дуусах</label><input type="date" id="ubook" value="${esc(ed?.bookExp||"")}"/></div>
-        <div><label class="f" for="uexam">Жилийн шинжилгээ дуусах</label><input type="date" id="uexam" value="${esc(ed?.exam||"")}"/></div>
       </div>
       <div class="gap"></div>
       <div class="row-gap"><button class="btn" type="submit">Хадгалах</button>${ed?'<button class="btn ghost" type="button" id="ucancel">Болих</button>':""}</div>
@@ -1966,7 +1965,7 @@ function usersPage(editSap){
       <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
     </div>
     <div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
-      <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр, Шинжилгээ</p>
+      <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр</p>
       <button class="btn ghost" id="tmpl" type="button">${ic("download")} Загвар татах</button>
       <div class="gap"></div>
       <input type="file" id="ximp" accept=".xlsx"/>
@@ -1985,7 +1984,7 @@ function usersPage(editSap){
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
     const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:(ed && albaN(ed.alba)===$("#ualba").value) ? ed.alba : $("#ualba").value, gender:$("#ugender").value,
-      job:$("#ujob").value.trim(), phone:$("#uphone").value.trim().slice(0,30), bookExp:$("#ubook").value, exam:$("#uexam").value};
+      job:$("#ujob").value.trim(), phone:$("#uphone").value.trim().slice(0,30), bookExp:$("#ubook").value};
     if(!rec.phone) delete rec.phone;
     delete rec.pin;
     if(!CLOUD_AUTH){
@@ -2018,8 +2017,8 @@ function usersPage(editSap){
   $("#tmpl").onclick=async ()=>{
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     const wb=new ExcelJS.Workbook(); const s=wb.addWorksheet("Ажилтан");
-    s.addRow(["SAP","Нэр","Алба","Хүйс","Ажил","Нууц үг","Цагаан дэвтэр","Шинжилгээ"]);
-    s.addRow(["50019999","Жишээ Нэр","Бар","Эр","Тогооч","","2026-12-31","2026-11-01"]);
+    s.addRow(["SAP","Нэр","Алба","Хүйс","Ажил","Нууц үг","Цагаан дэвтэр"]);
+    s.addRow(["50019999","Жишээ Нэр","Бар","Эр","Тогооч","","2026-12-31"]);
     downloadWb(wb, "EAHS_ajiltan_zagvar.xlsx");
   };
   $("#ximp").onchange=async e=>{
@@ -2040,7 +2039,7 @@ function usersPage(editSap){
       if(CLOUD_AUTH && (pin.length<6 || !authSapOk(sap))){ errs.push(i+"-р мөр: "+(!authSapOk(sap)?"SAP латин үсэг/тоо биш":"нууц үг 6-аас богино")+" — алгасна"); return; }
       if(!pin) errs.push(i+"-р мөр: Нууц үг хоосон — «1234» болно, солиулна уу");
       rows.push({sap,name,role:"worker",alba:alba?albaN(alba):"Оффис",gender:gender==="Эм"?"Эм":"Эр",job,pin:pin||"1234",
-        bookExp:excelDate(row.getCell(7).value),exam:excelDate(row.getCell(8).value)});
+        bookExp:excelDate(row.getCell(7).value)});
     });
     pending=rows;
     $("#ximperr").innerHTML = (errs.length?("<div class='warnbox'>"+errs.map(esc).join("<br>")+"</div>"):"<div class='muted'>Алдаагүй.</div>")+"<div class='muted'>"+rows.length+" мөр бэлэн.</div>";
@@ -2115,7 +2114,7 @@ function hbars(items){
   const max = Math.max(1, ...items.map(i=>i.v));
   return `<div class="hbars">${items.map(i=>`<div class="hb"><span>${esc(i.k)}</span><i><b style="width:${(100*i.v/max).toFixed(1)}%;background:${i.color||CH_COL.blue}"></b></i><em>${i.v}</em></div>`).join("")}</div>`;
 }
-/* Excel маягийн бүлэглэсэн багана (цагаан дэвтэр / жилийн үзлэг) */
+/* Excel маягийн бүлэглэсэн багана */
 function svgCols(cats, series, opt={}){
   const W=640, H=opt.h||240, pl=34, pr=10, pt=14, pb=30, iw=W-pl-pr, ih=H-pt-pb;
   const max = Math.max(1, ...series.flatMap(s=>s.data)); const step = Math.max(1, Math.ceil(max/5)); const top = step*Math.ceil(max/step);
@@ -2128,10 +2127,10 @@ function svgCols(cats, series, opt={}){
     b+=`<text x="${cx}" y="${H-pb+18}" class="ax xl" text-anchor="middle">${esc(c.l)}</text>`; });
   return `<figure class="chart xls"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.title||"")}"><line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="#bfbfbf"/>${g}${b}</svg><figcaption class="legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</figcaption></figure>`;
 }
-/* Сар бүр цагаан дэвтэр / жилийн үзлэг хийлгэсэн (олгосон/сунгасан) ажилтны тоо.
+/* Сар бүр цагаан дэвтэр хийлгэсэн (олгосон/сунгасан) ажилтны тоо.
    Эх сурвалж: сунгалтын бүртгэл (iss, эсвэл бүртгэсэн огноо) + ажилтны одоогийн олгосон огноо. Нэг ажилтан нэг сард нэг удаа тоологдоно. */
 function hbMonthly(from, to, alba){
-  const per = periodList(from, to, "m"), seen = {book:new Set(), exam:new Set()}, out = {per, book:per.map(()=>0), exam:per.map(()=>0)};
+  const per = periodList(from, to, "m"), seen = {book:new Set()}, out = {per, book:per.map(()=>0)};
   const add = (sap, kind, d, a)=>{ if(!sap || !d || !seen[kind] || (alba && albaN(a)!==alba)) return; d=String(d).slice(0,10); if(d<from || d>to) return;
     const i = per.indexOf(d.slice(0,7)), k = sap+"|"+d.slice(0,7); if(i<0 || seen[kind].has(k)) return; seen[kind].add(k); out[kind][i]++; };
   const ws = {}; workers().forEach(w=>ws[w.sap]=w);
@@ -2173,7 +2172,7 @@ function reportsPage(){
   inf.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; (vS.find(s=>s.key===(x.verdict||"huleegdej"))||vS[2]).data[i]++; });
   const sum = (a)=>a.reduce((s,v)=>s+v,0);
   const rows = sum(hFail)+sum(hOk)+sum(hInc);
-  // Цагаан дэвтэр / шинжилгээ: одоогийн төлөв (алба шүүлтүүрээр) + хугацаанд хийсэн сунгалт
+  // Цагаан дэвтэр: одоогийн төлөв (алба шүүлтүүрээр) + хугацаанд хийсэн сунгалт
   const hp = hbPeople().filter(w=>!F.alba || albaN(w.alba)===F.alba);
   const hCnt = kind=> ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:hp.filter(w=>hState(w[HB[kind].exp])===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
   const hBad = hp.filter(w=>HB_KINDS.some(k=>["soon","exp"].includes(hState(w[HB[k].exp])))).length;
@@ -2182,9 +2181,9 @@ function reportsPage(){
   const labBad = labAll.filter(c=>["soon","exp"].includes(hState(c.exp))).length;
   const labExpN = labAll.filter(c=>hState(c.exp)==="exp").length;
   const labCnt = ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:labAll.filter(c=>hState(c.exp)===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
-  const rn = list("renew").filter(inR);
+  const rn = list("renew").filter(x=>inR(x) && HB[x.kind||"book"] && (x.kind||"book")!=="exam");
   const rnS = HB_KINDS.map((k,j)=>({name:HB[k].l, color:j?CH_COL.vio:CH_COL.blue, data:zero()}));
-  rn.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; rnS[x.kind==="exam"?1:0].data[i]++; });
+  rn.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; rnS[0].data[i]++; });
   const kpi = (cls,icn,t,v,s)=>`<div class="kpi ${cls}"><i>${ic(icn)}</i><div>${t}<b>${v}</b><span class="muted">${s}</span></div></div>`;
   const sec = (icn,t,body,extra="")=>`<section class="card rsec"><div class="ctitle">${ic(icn)}<h3>${t}</h3>${extra}</div>${body}</section>`;
   const app = mount(shell("тайлан", `
@@ -2206,7 +2205,7 @@ function reportsPage(){
       ${kpi("k-blu","battery","Ядаргааны асуумж",fa.length,`өндөр: ${sum(fHi)}`)}
       ${kpi("k-grn","drop","Ариун цэврийн шалгалт",rows,`ажиллахгүй: ${sum(hFail)}${rows?` (${Math.round(100*sum(hFail)/rows)}%)`:""}`)}
       ${kpi("k-vio","virus","Халдварын асуумж",inf.length,`оруулахгүй: ${sum(vS[1].data)}`)}
-      ${kpi("k-red "+(hExpN?"hot":""),"book","Дэвтэр/шинжилгээ анхаарах",hBad,`дууссан: ${hExpN} · сунгасан: ${rn.length}`)}
+      ${kpi("k-red "+(hExpN?"hot":""),"book","Цагаан дэвтэр анхаарах",hBad,`дууссан: ${hExpN} · сунгасан: ${rn.length}`)}
       ${kpi("k-red "+(labExpN?"hot":""),"flask","Бүтээгдэхүүний шинжилгээ",labBad,`дууссан: ${labExpN} · бүртгэл: ${labAll.length}`)}
     </div>
     ${sec("alert","Аюулын мэдээлэл — эрсдлийн түвшингээр", hz.length? svgBars(cats, [...riskSeries, ...(sum(noRisk.data)?[noRisk]:[])], {title:"Аюул эрсдлээр"}) : emptyState("Энэ хугацаанд аюулын мэдээлэл алга","","alert"))}
@@ -2221,12 +2220,11 @@ function reportsPage(){
     ${sec("virus","Халдварын асуумжийн дүгнэлт", inf.length? svgBars(cats, vS, {title:"Халдвар"}) : emptyState("Халдварын асуумж алга","","virus"))}
     ${(()=>{ const to=today(), d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-(HBMN-1)); const m=hbMonthly(ymd(d), to, F.alba);
       const cs=m.per.map(k=>({k, l:(+k.slice(5,7))+"сар"}));
-      return sec("chart","Цагаан дэвтэр, жилийн үзлэг — сараар", svgCols(cs, [{name:"Цагаан дэвтэр", color:"#4472C4", data:m.book},{name:"Жилийн үзлэг", color:"#ED7D31", data:m.exam}], {title:"Цагаан дэвтэр, жилийн үзлэг сараар"})
-        + `<p class="muted sm">Тухайн сард цагаан дэвтэр олгосон/сунгасан, жилийн үзлэгт орсон ажилтны тоо${F.alba?" · "+esc(F.alba):""}.</p>`,
+      return sec("chart","Цагаан дэвтэр — сараар", svgCols(cs, [{name:"Цагаан дэвтэр", color:"#4472C4", data:m.book}], {title:"Цагаан дэвтэр сараар"})
+        + `<p class="muted sm">Тухайн сард цагаан дэвтэр олгосон/сунгасан ажилтны тоо${F.alba?" · "+esc(F.alba):""}.</p>`,
         `<select id="hbmn" class="noprint" aria-label="Хугацаа" style="margin-left:auto;width:auto">${[3,6,12].map(n=>`<option value="${n}" ${HBMN===n?"selected":""}>Сүүлийн ${n} сар</option>`).join("")}</select>`).replace('class="card rsec"','class="card rsec" id="hbmon"'); })()}
     <div class="rgrid" id="rep-hb">
       ${sec("book","Цагаан дэвтэр — одоогийн төлөв", hbars(hCnt("book")))}
-      ${sec("clipboard","Жилийн шинжилгээ — одоогийн төлөв", hbars(hCnt("exam")))}
     </div>
     ${sec("history","Сунгалт (хугацаанд)", rn.length? svgBars(cats, rnS, {h:170, title:"Сунгалт"}) : emptyState("Энэ хугацаанд сунгалт бүртгээгүй","","history"))}
     ${hBad? sec("alert","Дуусах дөхсөн / дууссан ажилтнууд", tbl(["Ажилтан","SAP","Алба","Баримт","Дуусах","Төлөв"], healthAlerts(F.alba||null).map(a=>`<tr><td>${esc(a.w.name)}</td><td>${esc(a.w.sap)}</td><td>${esc(albaN(a.w.alba))}</td><td>${esc(HB[a.kind].l)}</td><td>${esc(a.exp)} <span class="muted">(${esc(hLeftTxt(a.exp))})</span></td><td>${hBadge(a.exp)}</td></tr>`))) : ""}
@@ -2310,7 +2308,7 @@ async function qrPrint(items){
 const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
 function notifList(){
   const u = me(); if(!u || u.role==="worker") return [];
-  return list("notifs").filter(n=> n && n.id && (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba))).sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
 function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
@@ -2728,12 +2726,12 @@ function dataUrlToBlob(d){
   const bin = atob(b64||""); const u8 = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
   return new Blob([u8], {type});
 }
-const WB_KIND = {book:"Цагаан дэвтэр", exam:"Жилийн шинжилгээ"};
+const WB_KIND = {book:"Цагаан дэвтэр", exam:"Цагаан дэвтэр"};   // хуучин «exam» файлууд цагаан дэвтэр гэж харагдана
 function wbCardHtml(w, canEdit){
   const fs = list("wbfiles").filter(f=>f.sap===w.sap).sort((a,b)=>(b.ts||0)-(a.ts||0));
   return `<section class="card wbcard" id="wbcard"><div class="ctitle">${ic("clip")}<h3>Цагаан дэвтэр — файл</h3><span class="muted">${fs.length}</span></div>
     ${canEdit?`<div class="wbup">
-      <select id="wbkind" aria-label="Файлын төрөл"><option value="book">Цагаан дэвтэр</option><option value="exam">Жилийн шинжилгээ</option></select>
+      <input type="hidden" id="wbkind" value="book"/>
       <label class="btn sm" for="wbfile">${ic("upload","sm")} Файл оруулах</label><input type="file" id="wbfile" accept="image/*,application/pdf" class="vh"/>
       <label class="btn ghost sm" for="wbcam">${ic("camera","sm")} Зураг авах</label><input type="file" id="wbcam" accept="image/*" capture="environment" class="vh"/>
       <span class="muted sm">Зураг автоматаар шахагдана (~300 КБ хүртэл) · PDF 1 МБ хүртэл</span>
@@ -2743,7 +2741,7 @@ function wbCardHtml(w, canEdit){
         <button type="button" class="wbth ${pdf?"pdf":""}" data-wbview="${esc(f.id)}" aria-label="Харах: ${esc(f.name)}">${pdf?`${ic("file")}<span>PDF</span>`:`<span class="muted sm">Ачаалж байна…</span>`}</button>
         <figcaption><b title="${esc(f.name)}">${esc(f.name)}</b><span>${esc(WB_KIND[f.kind]||WB_KIND.book)} · ${esc(fmtSize(f.size||0))}</span><span>${esc(f.date||"")} · ${esc(f.by||"")}</span></figcaption>
         <div class="wbact"><button type="button" class="btn ghost sm" data-wbview="${esc(f.id)}">${ic("eye","sm")} Харах</button><button type="button" class="btn ghost sm" data-wbdl="${esc(f.id)}">${ic("download","sm")} Татах</button>${canEdit?`<button type="button" class="btn warn sm" data-wbdel="${esc(f.id)}" aria-label="Устгах">${ic("trash","sm")}</button>`:""}</div>
-      </figure>`; }).join("")}</div>`:`<p class="muted">Файл оруулаагүй байна${canEdit?" — цагаан дэвтэр, шинжилгээний хариуны зураг эсвэл PDF-ийг оруулна уу":""}.</p>`}
+      </figure>`; }).join("")}</div>`:`<p class="muted">Файл оруулаагүй байна${canEdit?" — цагаан дэвтрийн зураг эсвэл PDF-ийг оруулна уу":""}.</p>`}
   </section>`;
 }
 function wbBind(w, u, canEdit, rerender){
@@ -2759,7 +2757,7 @@ function wbBind(w, u, canEdit, rerender){
     const ts = Date.now(), id = keyOf(`${w.sap}_${ts.toString(36)}`);
     const base = String(file.name||"файл").replace(/[\u0000-\u001f]/g,"").slice(0,120) || "файл";
     const name = r.type==="image/jpeg" && !/\.jpe?g$/i.test(base) ? base.replace(/\.[^.]*$/,"")+".jpg" : base;
-    const meta = {id, sap:w.sap, kind: $("#wbkind").value==="exam" ? "exam" : "book", name, type:r.type, size:r.size, by:u.name, bySap:u.sap, ts, at:nowStr(), date:today(),
+    const meta = {id, sap:w.sap, kind: "book", name, type:r.type, size:r.size, by:u.name, bySap:u.sap, ts, at:nowStr(), date:today(),
       ...(r.w?{w:r.w, h:r.h}:{}), ...(r.orig?{orig:r.orig}:{})};
     write({["wbfiles/"+id]: meta, ["wbdata/"+id]: r.data});
     toast(`Файл хадгалагдлаа (${fmtSize(r.size)})`);
@@ -3576,7 +3574,7 @@ function reportPage(){
       <label class="chk"><input type="checkbox" id="x-ayul" checked/> Аюул (зурагтай)</label>
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
-      <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр / жилийн шинжилгээ (одоогийн төлөв + сунгалтын түүх)</label>
+      <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр (одоогийн төлөв + сунгалтын түүх)</label>
       <label class="chk"><input type="checkbox" id="x-lab" checked/> Бүтээгдэхүүний шинжилгээний бичиг</label>
       <div class="gap"></div>
       <button class="btn" type="submit" id="xl">${ic("download")} Татах</button>
@@ -3704,22 +3702,22 @@ async function exportExcel(from,to,kinds){
   await downloadWb(wb, `EAHS_${kinds.join("-")}_${from}_${to}.xlsx`);
 }
 
-/* Цагаан дэвтэр / шинжилгээ: одоогийн төлөв (огнооноос үл хамаарна) + хугацаан дахь сунгалтын түүх */
+/* Цагаан дэвтэр: одоогийн төлөв (огнооноос үл хамаарна) + хугацаан дахь сунгалтын түүх */
 function addBookSheets(wb, inR){
   const FILL = {exp:"FFFDE2E2", soon:"FFFFF1D6", ok:"FFE3F4E8", none:"FFF1F3F7"};
   const head = r=>{ r.font={bold:true}; r.eachCell(c=>{ c.fill={type:"pattern", pattern:"solid", fgColor:{argb:"FFDCE5FB"}}; c.border={bottom:{style:"thin"}}; }); };
   const s = wb.addWorksheet("Цагаан дэвтэр");
-  head(s.addRow(["SAP","Нэр","Алба","Албан тушаал","Утас","Дэвтэр олгосон","Дэвтэр дуусах","Дэвтэр төлөв","Дэвтэр үлдсэн хоног","Шинжилгээ өгсөн","Шинжилгээ дуусах","Шинжилгээ төлөв","Шинжилгээ үлдсэн хоног"]));
+  head(s.addRow(["SAP","Нэр","Алба","Албан тушаал","Утас","Дэвтэр олгосон","Дэвтэр дуусах","Дэвтэр төлөв","Дэвтэр үлдсэн хоног"]));
   hbPeople().sort((a,b)=>albaN(a.alba).localeCompare(albaN(b.alba)) || a.name.localeCompare(b.name)).forEach(w=>{
     const v = kind=>{ const H=HB[kind], d=w[H.exp]||"", st=hState(d); return [w[H.iss]||"", d, H_ST[st][0], d?daysBetween(today(), d):""]; };
-    const r = s.addRow([w.sap, w.name, albaN(w.alba), w.job||"", w.phone||"", ...v("book"), ...v("exam")]);
-    [[8,"book"],[12,"exam"]].forEach(([col,kind])=>{ r.getCell(col).fill={type:"pattern", pattern:"solid", fgColor:{argb:FILL[hState(w[HB[kind].exp])]}}; });
+    const r = s.addRow([w.sap, w.name, albaN(w.alba), w.job||"", w.phone||"", ...v("book")]);
+    [[8,"book"]].forEach(([col,kind])=>{ r.getCell(col).fill={type:"pattern", pattern:"solid", fgColor:{argb:FILL[hState(w[HB[kind].exp])]}}; });
   });
-  s.columns.forEach((c,i)=>{ c.width = [12,24,10,20,14,14,14,15,12,15,15,15,12][i]||14; });
+  s.columns.forEach((c,i)=>{ c.width = [12,24,10,20,14,14,14,15,12][i]||14; });
   s.views = [{state:"frozen", ySplit:1}];
   const h = wb.addWorksheet("Сунгалтын түүх");
   head(h.addRow(["Бүртгэсэн огноо","SAP","Нэр","Алба","Баримт","Олгосон","Шинэ дуусах","Өмнөх дуусах","Тэмдэглэл","Зураг","Бүртгэсэн"]));
-  list("renew").filter(x=>inR(x.date||"")).sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(x=>h.addRow([x.at||x.date, x.sap, x.name||"", albaN(x.alba), HB[x.kind]?.l||x.kind, x.iss||"", x.exp, x.prevExp||"", x.note||"", x.photo?"Тийм":"", x.by||""]));
+  list("renew").filter(x=>inR(x.date||"") && x.kind!=="exam").sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(x=>h.addRow([x.at||x.date, x.sap, x.name||"", albaN(x.alba), HB[x.kind]?.l||x.kind, x.iss||"", x.exp, x.prevExp||"", x.note||"", x.photo?"Тийм":"", x.by||""]));
   h.columns.forEach((c,i)=>{ c.width = [17,12,24,10,18,13,13,13,36,8,20][i]||14; });
   h.views = [{state:"frozen", ySplit:1}];
 }
