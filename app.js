@@ -107,6 +107,8 @@ function esc(v){
 }
 function clone(v){ return v==null?v:JSON.parse(JSON.stringify(v)); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+/* SAP нэвтрэх түлхүүр: NFKC (бүтэн өргөнтэй тоо), хоосон зай хасна, жижиг үсэг */
+function sapKey(s){ return keyOf(String(s==null?"":s).normalize("NFKC").replace(/\s+/g,"")).toLowerCase(); }
 function keyOf(s){ return String(s==null?"":s).trim().replace(/[.#$\[\]\/]/g,"_"); }
 function validKey(s){ return !!s && !/[.#$\[\]\/]/.test(s); }
 const pad = n => String(n).padStart(2,"0");
@@ -459,12 +461,12 @@ async function onAuth(user){
   if(user && !user.isAnonymous){
     if(AUTH.uid===user.uid) return;
     const em = sapFromEmail(user.email);              // email нь жижиг үсэгтэй
-    const sap = session ? keyOf(session.sap) : "";
+    const sap = session ? sapKey(session.sap) : "";
     if(session && sap.toLowerCase()===em){
       await afterLogin(sap, session.role, user.uid);   // офлайнд ч ажиллана (кэшилсэн үүрэг)
       try{
         const r = (await _fb.ref(ROOT+"/roles/"+user.uid).once("value")).val();
-        if(!r || r.sap!==sap){ toast("Эрх олдсонгүй — дахин нэвтэрнэ үү"); landing(); return; }
+        if(!r || sapKey(r.sap)!==sap){ toast("Эрх олдсонгүй — дахин нэвтэрнэ үү"); landing(); return; }
         if(r.role!==session.role){ await afterLogin(sap, r.role, user.uid); homeFor(me()); }
       }catch(e){ console.warn("roles", e && e.code); }
     } else { await _auth.signOut(); }
@@ -515,11 +517,13 @@ async function rememberOffline(sap, role, pw){
   const lv = lsGet(LS+"lv", {}) || {}; lv[sap] = {role, h: await hashPin("lv:"+sap, pw)}; lsSet(LS+"lv", lv);
 }
 async function cloudLogin(role, sapIn, pw){
-  const k = keyOf(sapIn);
+  const k = sapKey(sapIn);
   if(!authSapOk(k)) return {err:"Энэ SAP-аар нэвтрэх боломжгүй (зөвхөн латин үсэг, тоо). Эрүүл ахуйчид хандана уу"};
   _loggingIn = true;
   try{
-    const gen = (await readOrNull(ROOT+"/authgen/"+k)).v;
+    const ag = await readOrNull(ROOT+"/authgen/"+k);
+    if(!ag.ok) return {err:"Сервертэй холбогдож чадсангүй. Интернэтээ шалгаад дахин оролдоно уу"};
+    const gen = ag.v;
     const email = authEmail(k, gen);
     let migrated = false;
     try{ await _auth.signInWithEmailAndPassword(email, fbPw(pw)); }
@@ -532,8 +536,11 @@ async function cloudLogin(role, sapIn, pw){
       migrated = true;
     }
     const uid = _auth.currentUser.uid;
-    const r = (await readOrNull(ROOT+"/roles/"+uid)).v;
-    if(!r || r.sap!==k){ await _auth.signOut(); return {err:"Эрх олдсонгүй — эрүүл ахуйчид хандана уу"}; }
+    let rr = await readOrNull(ROOT+"/roles/"+uid);
+    for(let i=0;i<3 && (!rr.ok || !rr.v);i++){ await new Promise(r=>setTimeout(r,400*(i+1))); rr = await readOrNull(ROOT+"/roles/"+uid); }   // шинэ токен RTDB-д хүрэх хүртэл
+    if(!rr.ok){ await _auth.signOut(); return {err:"Эрхийн мэдээлэл уншиж чадсангүй (сүлжээ). Дахин оролдоно уу"}; }
+    const r = rr.v;
+    if(!r || sapKey(r.sap)!==k){ console.warn("roles mismatch", uid, r && r.sap, k); await _auth.signOut(); return {err:"Эрх олдсонгүй — эрүүл ахуйчид хандана уу"}; }
     if(r.role!==role){ await _auth.signOut(); return {err:`Энэ SAP «${roleName(r.role)}» эрхтэй. Тухайн цэсээр нэвтэрнэ үү`}; }
     await rememberOffline(k, r.role, pw);
     await afterLogin(k, r.role, uid);
@@ -551,8 +558,10 @@ async function migrateAccount(role, k, sapRaw, pw, email){
     throw e;
   }
   try{
-    const proof = await hashPin(sapRaw, pw);
     const u = await readOrNull(ROOT+"/users/"+k);       // шилжилтийн дүрэмд уншиж болно → урьдчилж шалгана
+    const cands = [...new Set([u.v && u.v.sap, sapRaw, String(sapRaw).trim(), k].filter(x=>x!=null).map(String))];
+    let proof = await hashPin(cands[0], pw);
+    if(u.ok && u.v) for(const c of cands){ const h = await hashPin(c, pw); if(h===u.v.pinHash){ proof = h; break; } }
     if(u.ok && (!u.v || u.v.pinHash!==proof || u.v.role!==role)) throw new Error("bad pin");
     await _fb.ref(ROOT).update({["roles/"+cred.user.uid]: {sap:k, role, proof, at:Date.now()}});
     await _fb.ref(ROOT).update({["users/"+k+"/uid"]: cred.user.uid, ["users/"+k+"/pinHash"]: null, ...(String(pw).length<6?{["users/"+k+"/mustChange"]: true}:{})});
@@ -684,7 +693,7 @@ function loginForm(role){
     <div class="loginbox">
       <form class="card" id="lf" autocomplete="on">
         <div class="lhead"><span class="mi">${ic(role==="worker"?"user":role==="supervisor"?"clipboard":"shield","lg")}</span><div><h3>${esc(roleName(role))} нэвтрэх</h3><p>SAP дугаар болон нууц үгээ оруулна уу</p></div></div>
-        <label class="f" for="sap">SAP / нэвтрэх нэр</label><input id="sap" name="username" autocomplete="username" required/>
+        <label class="f" for="sap">SAP / нэвтрэх нэр</label><input id="sap" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required/>
         <label class="f" for="pin">Нууц үг</label><input id="pin" name="password" type="password" autocomplete="current-password" required/>
         <div id="lerr" class="errtxt" role="alert"></div>
         <button class="btn" type="submit">${ic("key")} Нэвтрэх</button>
@@ -697,7 +706,7 @@ function loginForm(role){
   $("[data-hback]").onclick = landing;
   app.onsubmit = async e=>{
     e.preventDefault();
-    const sap = $("#sap").value.trim(), pin = $("#pin").value.trim();
+    const sap = sapKey($("#sap").value), pin = $("#pin").value.trim();
     const btn = $("#lf button[type=submit]"); const err = m=>{ $("#lerr").textContent = m; };
     if(!sap || !pin) return err("SAP болон нууц үгээ оруулна уу");
     if(CLOUD_AUTH){
@@ -718,7 +727,7 @@ function loginForm(role){
       } finally { const b=$("#lf button[type=submit]"); if(b) b.disabled=false; }
     }
     // Firebase ачаалагдаагүй (бүрэн офлайн) — локал горим
-    const u = DB.users[keyOf(sap)];
+    const u = DB.users[keyOf(sap)] || Object.values(DB.users||{}).find(x=>x && sapKey(x.sap)===sap);
     let ok = false;
     if(u && u.role===role){
       if(u.pinHash) ok = (await hashPin(u.sap, pin)) === u.pinHash;
@@ -1946,7 +1955,7 @@ function usersPage(editSap){
     <form class="card" id="uf">
       <div class="ctitle">${ic(ed?"edit":"plus")}<h3>${ed?"Засах: "+esc(ed.name):"Шинэ ажилтан"}</h3></div>
       <div class="g3">
-        <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
+        <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" autocapitalize="none" autocorrect="off" spellcheck="false" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
         <div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Эрүүл ахуйч"]], ed?.role||"worker")}</select></div>
         <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>
@@ -1980,7 +1989,7 @@ function usersPage(editSap){
   if($("#ucancel")) $("#ucancel").onclick = ()=>usersPage();
   app.onsubmit = async e=>{
     e.preventDefault();
-    const sap=$("#usap").value.trim(), pin=$("#upin").value.trim();
+    const sap=ed ? String(ed.sap) : sapKey($("#usap").value), pin=$("#upin").value.trim();
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
     const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:(ed && albaN(ed.alba)===$("#ualba").value) ? ed.alba : $("#ualba").value, gender:$("#ugender").value,
@@ -2030,7 +2039,7 @@ function usersPage(editSap){
     const cell = (row,i)=>{ const v=row.getCell(i).value; return v&&typeof v==="object"&&"text" in v? String(v.text).trim() : String(v==null?"":v).trim(); };
     sh.eachRow((row,i)=>{
       if(i===1) return;
-      const sap=cell(row,1), name=cell(row,2), alba=cell(row,3), gender=cell(row,4), job=cell(row,5), pin=cell(row,6);
+      const sap=sapKey(cell(row,1)), name=cell(row,2), alba=cell(row,3), gender=cell(row,4), job=cell(row,5), pin=cell(row,6);
       if(!sap) { errs.push(i+"-р мөр: SAP хоосон"); return; }
       if(!validKey(sap)) { errs.push(i+"-р мөр: SAP буруу тэмдэгттэй"); return; }
       if(!name) { errs.push(i+"-р мөр: Нэр хоосон"); return; }
