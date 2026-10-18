@@ -370,7 +370,7 @@ async function migrateLegacyCloud(){
 }
 async function seedIfEmpty(localOnly){
   if(Object.keys(DB.users).length) return;
-  const admin = {sap:"admin", name:"Эрүүл ахуйч", role:"hygiene", alba:"Оффис", gender:"Эм", job:"Эрүүл ахуйч",
+  const admin = {sap:"admin", name:"Аюулгүй ажиллагаа, эрүүл ахуйч", role:"hygiene", alba:"Оффис", gender:"Эм", job:"Аюулгүй ажиллагаа, эрүүл ахуйч",
                  pinHash: await hashPin("admin","1234"), mustChange:true};
   const set = {fatigueDays:7, blockExpired:false};
   if(localOnly){ applyLocal("users/admin", admin); applyLocal("settings/main", set); persist(["users","settings"]); }
@@ -518,7 +518,7 @@ async function rememberOffline(sap, role, pw){
 }
 async function cloudLogin(role, sapIn, pw){
   const k = sapKey(sapIn);
-  if(!authSapOk(k)) return {err:"Энэ SAP-аар нэвтрэх боломжгүй (зөвхөн латин үсэг, тоо). Эрүүл ахуйчид хандана уу"};
+  if(!authSapOk(k)) return {err:"Энэ SAP-аар нэвтрэх боломжгүй (зөвхөн латин үсэг, тоо). Аюулгүй ажиллагаа, эрүүл ахуйчид хандана уу"};
   _loggingIn = true;
   try{
     const ag = await readOrNull(ROOT+"/authgen/"+k);
@@ -540,7 +540,7 @@ async function cloudLogin(role, sapIn, pw){
     for(let i=0;i<3 && (!rr.ok || !rr.v);i++){ await new Promise(r=>setTimeout(r,400*(i+1))); rr = await readOrNull(ROOT+"/roles/"+uid); }   // шинэ токен RTDB-д хүрэх хүртэл
     if(!rr.ok){ await _auth.signOut(); return {err:"Эрхийн мэдээлэл уншиж чадсангүй (сүлжээ). Дахин оролдоно уу"}; }
     const r = rr.v;
-    if(!r || sapKey(r.sap)!==k){ console.warn("roles mismatch", uid, r && r.sap, k); await _auth.signOut(); return {err:"Эрх олдсонгүй — эрүүл ахуйчид хандана уу"}; }
+    if(!r || sapKey(r.sap)!==k){ console.warn("roles mismatch", uid, r && r.sap, k); await _auth.signOut(); return {err:"Эрх олдсонгүй — аюулгүй ажиллагаа, эрүүл ахуйчид хандана уу"}; }
     if(r.role!==role){ await _auth.signOut(); return {err:`Энэ SAP «${roleName(r.role)}» эрхтэй. Тухайн цэсээр нэвтэрнэ үү`}; }
     await rememberOffline(k, r.role, pw);
     await afterLogin(k, r.role, uid);
@@ -571,7 +571,7 @@ async function migrateAccount(role, k, sapRaw, pw, email){
     return {err:BAD_LOGIN};
   }
 }
-/* Эрүүл ахуйч шинэ хэрэглэгчийн Auth бүртгэл үүсгэнэ — 2 дахь Firebase app ашиглана (өөрөө нэвтэрсэн хэвээр) */
+/* Аюулгүй ажиллагаа, эрүүл ахуйч шинэ хэрэглэгчийн Auth бүртгэл үүсгэнэ — 2 дахь Firebase app ашиглана (өөрөө нэвтэрсэн хэвээр) */
 async function createAuthAccount(k, pw){
   let app2 = firebase.apps.find(a=>a.name==="eahs-admin");
   if(!app2){ app2 = firebase.initializeApp(FB_CONFIG, "eahs-admin"); if(EMU) app2.auth().useEmulator(EMU.authUrl); }
@@ -629,7 +629,7 @@ const byNew = (a,b)=> String(b.date||"").localeCompare(String(a.date||"")) || St
 const users = ()=> list("users");
 const workers = ()=> users().filter(u=>u.role==="worker");
 const settings = ()=> ({fatigueDays:7, blockExpired:false, ...(DB.settings.main||{})});
-function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", hygiene:"Эрүүл ахуйч"}[r]||""; }
+function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", hygiene:"Аюулгүй ажиллагаа, эрүүл ахуйч"}[r]||""; }
 
 /* Сесс: зөвхөн SAP + үүрэг (нууц үг хадгалахгүй) */
 let session = null;
@@ -666,7 +666,7 @@ function landing(){
             <div class="menu-h">Нэвтрэх</div>
             <button class="menu-btn" data-g="worker"><span class="mi">${ic("user")}</span><span><b>Ажилтан</b><small>УХААН, ядаргаа, халдварын асуумж</small></span>${ic("chev","chev")}</button>
             <button class="menu-btn" data-g="supervisor"><span class="mi">${ic("clipboard")}</span><span><b>Ахлах</b><small>УХААН батлах, ариун цэврийн хяналт</small></span>${ic("chev","chev")}</button>
-            <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
+            <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Аюулгүй ажиллагаа, эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
             <hr/>
             <button class="menu-btn alt" data-g="hazard"><span class="mi">${ic("alert")}</span><span><b>Аюулыг мэдээлэх</b><small>Нэвтрэхгүйгээр шууд илгээнэ</small></span>${ic("chev","chev")}</button>
           </nav>
@@ -775,7 +775,7 @@ function healthCard(alba){
       : `<p class="muted">${ic("check","sm")} Бүх ажилтны цагаан дэвтэр хүчинтэй (${H_SOON}-аас дээш хоног).</p>`}
   </div>`;
 }
-/* Дуусах дөхсөн / дууссан → мэдэгдэл (эрүүл ахуйч + тухайн албаны ахлах). id тогтмол тул давхардахгүй. */
+/* Дуусах дөхсөн / дууссан → мэдэгдэл (аюулгүй ажиллагаа, эрүүл ахуйч + тухайн албаны ахлах). id тогтмол тул давхардахгүй. */
 let _hbGenKey = "";
 function ensureHealthNotifs(u){
   if(!u || (u.role!=="hygiene" && u.role!=="supervisor")) return;
@@ -843,7 +843,7 @@ function workerHome(){
   let fatTxt = needF ? "Бөглөх хугацаа болсон" : (lastF ? `Сүүлийн: ${lastF.date} · ${lastF.level||"—"}` : "Дараагийн бөглөлт хүлээгдэж байна");
   // v15: ээлжийн хуваарь шаардахгүй — асуумжийг хүссэн үедээ бөглөнө
   let infTxt = roster ? "Өнөөдөр талбарт ирэх хуваарьтай — бөглөнө үү" : "Шинж тэмдэг илэрвэл хүссэн үедээ бөглөнө";
-  if(infect && (!infect.verdict || infect.verdict==="huleegdej")) infTxt = "Бөглөсөн · эрүүл ахуйч шийдээгүй";
+  if(infect && (!infect.verdict || infect.verdict==="huleegdej")) infTxt = "Бөглөсөн · аюулгүй ажиллагаа, эрүүл ахуйч шийдээгүй";
   if(infect && infect.verdict==="orjbolno") infTxt = "Шийдвэр: орж болно";
   if(infect && infect.verdict==="ersdel") infTxt = "Шийдвэр: ажилд оруулахгүй";
   // Ариун цэврийн хяналт — өнөөдрийн хуудсанд байгаа эсэх
@@ -873,14 +873,14 @@ function workerHome(){
     </div>
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
-      ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
+      ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — аюулгүй ажиллагаа, эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
       <div class="docs">
         ${HB_KINDS.map(kind=>{ const H=HB[kind], d=u[H.exp]||"", st=hState(d);
           return `<div class="doc hst-${st}" data-doc="${kind}"><span>${esc(H.l)}${d?" · дуусах":""}</span><b>${d?esc(d):"Огноо оруулаагүй"}</b>${hBadge(d)}
-            <small class="muted">${d?esc(hLeftTxt(d)):"Эрүүл ахуйчид хандана уу"}${u[H.iss]?" · Олгосон: "+esc(u[H.iss]):""}</small></div>`; }).join("")}
+            <small class="muted">${d?esc(hLeftTxt(d)):"Аюулгүй ажиллагаа, эрүүл ахуйчид хандана уу"}${u[H.iss]?" · Олгосон: "+esc(u[H.iss]):""}</small></div>`; }).join("")}
       </div>
     </div>
-    <div class="card advhome" id="advhome"><div class="ctitle">${ic("chat")}<h3>Эрүүл ахуйчийн зөвлөмж</h3>${advNew?`<span class="badge b-wait">Шинэ: ${advNew}</span>`:""}</div>
+    <div class="card advhome" id="advhome"><div class="ctitle">${ic("chat")}<h3>Аюулгүй ажиллагаа, эрүүл ахуйчийн зөвлөмж</h3>${advNew?`<span class="badge b-wait">Шинэ: ${advNew}</span>`:""}</div>
       ${advMine.slice(0,2).map(a=>`<button type="button" class="advmini" data-wadvopen="${esc(a.id)}">${advPrio(a.prio)}<span><b>${esc(a.title||"")}</b><small class="muted">${esc(a.date||"")}${advImgList(a).length?` · ${advImgList(a).length} зураг`:""}${advAck(a.id,u.sap)?" · танилцсан":" · танилцаагүй"}</small></span>${ic("chev","sm")}</button>`).join("") || `<p class="muted">Одоогоор зөвлөмж алга.</p>`}
       ${advMine.length?`<button class="btn ghost sm" id="advall">${ic("chat","sm")} Бүх зөвлөмж (${advMine.length})</button>`:""}
     </div>
@@ -960,7 +960,7 @@ function uhaanForm(){
     const id = uid();
     write({["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), job:$("#job").value, date:today(), time:nowStr(), a,b,c,
       risk:$("#risk").value, ctrl:$("#ctrl").value, stop, status: stop?"zogsooson":"huleegdej", supervisor:null}});
-    alert(stop?"Ажлаа зогсоо. Ахлах болон эрүүл ахуйчид мэдэгдлээ.":"Илгээгдлээ. Ахлах болон эрүүл ахуйч харна.");
+    alert(stop?"Ажлаа зогсоо. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйчид мэдэгдлээ.":"Илгээгдлээ. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйч харна.");
     workerHome();
   };
 }
@@ -1055,7 +1055,7 @@ function fatigueForm(){
     qs.forEach(q=>{ rec[q.id] = picked[q.id]; });
     rec.ans = qs.map(q=>({q:q.title, a:picked[q.id]}));
     write({["fatigue/"+id]: rec});
-    alert(`${level} оноо: ${score}/${max||12}`+(level==="Өндөр"?" — ахлах/эрүүл ахуйчид мэдэгдлээ":""));
+    alert(`${level} оноо: ${score}/${max||12}`+(level==="Өндөр"?" — ахлах/аюулгүй ажиллагаа, эрүүл ахуйчид мэдэгдлээ":""));
     workerHome();
   };
 }
@@ -1085,7 +1085,7 @@ function infectForm(){
     const id = uid();
     write({["infect/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:today(), ts:Date.now(), ...($("#arrive").value?{arrive:$("#arrive").value}:{}),
       ans: qs.map(q=>({q:q.title, a:optVal(q.id)})), verdict:"huleegdej"}});
-    toast("Илгээгдлээ. Үр дүнг эрүүл ахуйч гаргана.");
+    toast("Илгээгдлээ. Үр дүнг аюулгүй ажиллагаа, эрүүл ахуйч гаргана.");
     workerHome();
   };
 }
@@ -1098,7 +1098,7 @@ function surveyEditPage(kind){
   const scored = kind==="fatigue";
   const qs = surveyDraft.qs;
   const app = mount(`
-    ${appbar(kind==="fatigue"?"Ядаргааны асуулт":"Халдварын асуулт", "Эрүүл ахуйч засаж янзална. Ажилтан шинэ асуумж дээр үүнийг бөглөнө.", true)}
+    ${appbar(kind==="fatigue"?"Ядаргааны асуулт":"Халдварын асуулт", "Аюулгүй ажиллагаа, эрүүл ахуйч засаж янзална. Ажилтан шинэ асуумж дээр үүнийг бөглөнө.", true)}
     <main class="fwrap">
       <p class="muted">${scored?"Сонголт бүрийн оноо нийлж түвшин гарна. Эхний сонголт бага оноотой байх нь тохиромжтой.":"Асуулт, сонголтын текст. Үр дүнг (орж болно / оруулахгүй) жагсаалтаас гаргана."}</p>
       ${qs.map((q,i)=>`<div class="card" data-qi="${i}">
@@ -1362,7 +1362,7 @@ const NAV = {
 const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
-  const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Эрүүл ахуйчийн самбар";
+  const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
   return `<div class="dash">
     <aside class="side">
       <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
@@ -1458,7 +1458,7 @@ function viewUhaan(id){
   if(no) no.onclick=()=>{ const n=prompt("Шалтгаан")||""; write({["uhaan/"+id+"/status"]:"butsaasan", ["uhaan/"+id+"/supervisor"]:u.name+" "+nowStr(), ["uhaan/"+id+"/note"]:n}); back(); };
 }
 
-/* ======================= ЭРҮҮЛ АХУЙЧ ======================= */
+/* ======================= АЮУЛГҮЙ АЖИЛЛАГАА, ЭРҮҮЛ АХУЙЧ ======================= */
 function stH(s){
   s = HZ_ST_OLD[s] || s || "Шинэ";
   if(s==="Шинэ") return `<span class="badge b-new">Шинэ</span>`;
@@ -1521,7 +1521,7 @@ function hygieneHome(){
 }
 
 /* ======================= АЖИЛТНЫ ХУВИЙН ХУУДАС ======================= */
-/* Эрүүл ахуйч: бүх ажилтан, сунгалт бүртгэнэ. Ахлах: зөвхөн өөрийн албаных, зөвхөн харна. */
+/* Аюулгүй ажиллагаа, эрүүл ахуйч: бүх ажилтан, сунгалт бүртгэнэ. Ахлах: зөвхөн өөрийн албаных, зөвхөн харна. */
 let WP = {sap:null, open:null, from:null};
 function openProfile(sap){
   if(!VIEW.fn || !VIEW.fn._wp) WP.from = VIEW.fn;
@@ -1614,7 +1614,7 @@ function workerProfile(sap){
       </dl>
     </section>
     <div class="hbgrid">${HB_KINDS.map(k=>hbCardHtml(w, k, canEdit, canEdit && WP.open===k)).join("")}</div>
-    ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтрийн сунгалт, файлыг эрүүл ахуйч бүртгэнэ.</p>`:""}
+    ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтрийн сунгалт, файлыг аюулгүй ажиллагаа, эрүүл ахуйч бүртгэнэ.</p>`:""}
     ${wbCardHtml(w, canEdit)}
     <div class="wpgrid">
       ${sec("checks","Сүүлийн УХААН", tbl(["Огноо","Ажил","Төлөв"], uh.map(x=>`<tr class="click" data-u="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td></tr>`), "УХААН бүртгэл алга"))}
@@ -1957,7 +1957,7 @@ function usersPage(editSap){
       <div class="g3">
         <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" autocapitalize="none" autocorrect="off" spellcheck="false" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
-        <div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Эрүүл ахуйч"]], ed?.role||"worker")}</select></div>
+        <div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Аюулгүй ажиллагаа, эрүүл ахуйч"]], ed?.role||"worker")}</select></div>
         <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>
         <div><label class="f" for="ugender">Хүйс</label><select id="ugender">${opt([["Эр","Эр"],["Эм","Эм"]], ed?.gender||"Эр")}</select></div>
         <div><label class="f" for="ujob">Албан тушаал / ажил</label><input id="ujob" value="${esc(ed?.job||"")}"/></div>
@@ -2384,7 +2384,7 @@ function notifPage(){
   });
 }
 
-/* ======================= ЗӨВЛӨМЖ (эрүүл ахуйч → ажилтан) ======================= */
+/* ======================= ЗӨВЛӨМЖ (аюулгүй ажиллагаа, эрүүл ахуйч → ажилтан) ======================= */
 /* advice/{id} = {title,text,date,prio,target:{type:all|alba|workers, alba, saps:{sap:true}},by,bySap,ts,updatedAt,updatedBy,log/{lid}}
    adviceIdx/{id} = {t,a,date,ts} (ажилтан өөрт хамаарахыг олох; текстгүй) · adviceTo/{sap}/{id} = ts (сонгосон ажилтан)
    adviceAck/{sap}/{id} = {ts,at,name} (ажилтан зөвхөн өөрийнхийг нэг удаа бичнэ) */
@@ -2650,7 +2650,7 @@ function showAdviceModal(u, a, total){
   const m = document.createElement("div");
   m.id = "advmodal"; m.className = "modal-bg";
   m.innerHTML = `<div class="modal prio-${esc(a.prio||"normal")}" role="dialog" aria-modal="true" aria-labelledby="advmt">
-    <div class="mhead"><span class="mic">${ic("chat")}</span><div><small>Эрүүл ахуйчийн зөвлөмж<span id="advctr">${total>1?` · 1 / ${total}`:""}</span></small><h3 id="advmt">${esc(a.title||"")}</h3></div></div>
+    <div class="mhead"><span class="mic">${ic("chat")}</span><div><small>Аюулгүй ажиллагаа, эрүүл ахуйчийн зөвлөмж<span id="advctr">${total>1?` · 1 / ${total}`:""}</span></small><h3 id="advmt">${esc(a.title||"")}</h3></div></div>
     <div class="row-gap">${advPrio(a.prio)}<span class="muted sm">${esc(a.date||"")} · ${esc(a.by||"")}</span></div>
     <div class="mbody advtext">${esc(a.text||"")}</div>
     ${advImgsHtml(a,"pop")}
@@ -2678,13 +2678,13 @@ function workerAdvicePage(){
   const all = myAdvice(u);
   const app = mount(`${appbar("Зөвлөмж", esc(u.name), true)}
     <main class="page">
-    <p class="muted">Эрүүл ахуйчаас танд ирсэн зөвлөмжүүд (${all.length})</p>
+    <p class="muted">Аюулгүй ажиллагаа, эрүүл ахуйчаас танд ирсэн зөвлөмжүүд (${all.length})</p>
     ${all.map(a=>{ const ack = advAck(a.id, u.sap); return `<article class="card advitem prio-${esc(a.prio||"normal")}" data-wadv="${esc(a.id)}">
       <div class="row-gap">${advPrio(a.prio)}<span class="muted sm">${esc(a.date||"")} · ${esc(a.by||"")}</span></div>
       <h3 class="advt">${esc(a.title||"")}</h3><p class="advtext">${esc(a.text||"")}</p>
       ${advImgsHtml(a)}
       ${ack?`<p class="muted sm">${ic("check","sm")} Танилцсан: ${esc(ack.at||"")}</p>`:`<button class="btn sm" data-wack="${esc(a.id)}">${ic("check","sm")} Танилцлаа</button>`}
-    </article>`; }).join("") || `<div class="card">${emptyState("Зөвлөмж алга","Эрүүл ахуйч зөвлөмж илгээхэд энд харагдана","chat")}</div>`}
+    </article>`; }).join("") || `<div class="card">${emptyState("Зөвлөмж алга","Аюулгүй ажиллагаа, эрүүл ахуйч зөвлөмж илгээхэд энд харагдана","chat")}</div>`}
     <button class="btn ghost" id="wab">${ic("back","sm")} Буцах</button></main>`);
   const back = ()=>{ workerHome(); window.scrollTo(0,0); };
   $("#wab").onclick = back; $("[data-hback]").onclick = back;
@@ -2797,7 +2797,7 @@ async function wbAction(e, canEdit, rerender){
 
 
 /* ======================= БҮТЭЭГДЭХҮҮНИЙ ШИНЖИЛГЭЭНИЙ БИЧИГ ======================= */
-/* Firebase Storage-гүй: meta labcerts/{id}, файл labdata/{id} (base64). Эрүүл ахуйч CRUD; ахлах зөвхөн харна. */
+/* Firebase Storage-гүй: meta labcerts/{id}, файл labdata/{id} (base64). Аюулгүй ажиллагаа, эрүүл ахуйч CRUD; ахлах зөвхөн харна. */
 async function getLabData(id){
   if(LABFILES[id]) return LABFILES[id];
   if(!_fb) return null;
@@ -2847,7 +2847,7 @@ function labPage(editId, focusId){
       </div>
       <div class="gap"></div>
       <div class="row-gap"><button class="btn" type="submit">${ic("check","sm")} ${ed?"Хадгалах":"Бүртгэх"}</button>${ed?'<button class="btn ghost" type="button" id="lbcancel">Болих</button>':""}</div>
-    </form>` : `<div class="card"><p class="muted">${ic("lock","sm")} Шинжилгээний бичгийг эрүүл ахуйч бүртгэнэ. Та зөвхөн харах / татах эрхтэй.</p></div>`;
+    </form>` : `<div class="card"><p class="muted">${ic("lock","sm")} Шинжилгээний бичгийг аюулгүй ажиллагаа, эрүүл ахуйч бүртгэнэ. Та зөвхөн харах / татах эрхтэй.</p></div>`;
   const row = c=>{
     const st = hState(c.exp); const has = !!(c.fileName||c.fileType);
     return `<article class="card labitem st-${st}${focusId===c.id?" on":""}" data-lab="${esc(c.id)}">
@@ -2868,7 +2868,7 @@ function labPage(editId, focusId){
     ${form}
     <div class="chips" role="group" aria-label="Шүүлтүүр">${chip("","Бүгд",all.length)}${chip("exp","Дууссан",cnt("exp"))}${chip("soon","Дуусах дөхсөн",cnt("soon"))}${chip("ok","Хүчинтэй",cnt("ok"))}${chip("none","Огноогүй",cnt("none"))}${chip("file","Файлтай",cnt("file"))}</div>
     <div class="card filters"><label class="f" for="labq">Хайх</label><input type="search" id="labq" value="${esc(q)}" placeholder="Нэр, бичгийн дугаар, тэмдэглэл…"/></div>
-    <div class="labitems" id="labitems">${filtered.map(row).join("") || `<div class="card">${emptyState("Шинжилгээний бичиг алга", canEdit?"Дээрх маягтаар бүртгэнэ үү":"Эрүүл ахуйч бүртгэхэд энд харагдана","flask")}</div>`}</div>`));
+    <div class="labitems" id="labitems">${filtered.map(row).join("") || `<div class="card">${emptyState("Шинжилгээний бичиг алга", canEdit?"Дээрх маягтаар бүртгэнэ үү":"Аюулгүй ажиллагаа, эрүүл ахуйч бүртгэхэд энд харагдана","flask")}</div>`}</div>`));
   let pendingFile = null, clearFile = false;
   const setProg = t=>{ const el=$("#lbprog"); if(el) el.textContent = t||""; };
   if(canEdit){
