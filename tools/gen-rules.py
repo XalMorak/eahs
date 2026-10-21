@@ -68,7 +68,7 @@ NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"
-# v8: Цагаан дэвтэр / жилийн шинжилгээний сунгалтын түүх ( бичлэг бүр тусдаа; зураг нь photos/rn_<id>)
+# v8: Цагаан дэвтэр / жилийн шинжилгээний сунгалтын түүх (бичлэг бүр тусдаа; зураг нь photos/rn_<id>)
 RENEW_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('kind').val().matches(/^(book|exam)$/)"
                   " && newData.child('exp').isString() && newData.child('exp').val().matches(" + DATE_RE + ")"
                   " && (!newData.child('iss').exists() || (newData.child('iss').isString() && newData.child('iss').val().matches(" + DATE_RE + ")))"
@@ -134,7 +134,6 @@ def strict():
                   "$id": {".write": f"({SUP} && data.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},  # v14: ахлах өөрийн албаны УХААН-ыг устгаж болно
         "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
-        "sleepfood": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -181,7 +180,7 @@ def transition():
         "authgen": AUTHGEN,
         "users": {"$sap": {".write": ANY, ".validate": USER_VALIDATE}},
         "settings": {".write": ANY},
-        "uhaan": {".indexOn": ["sap"], "$id": w}, "fatigue": {".indexOn": ["sap"], "$id": w}, "infect": {".indexOn": ["sap"], "$id": w}, "sleepfood": {".indexOn": ["sap"], "$id": w},
+        "uhaan": {".indexOn": ["sap"], "$id": w}, "fatigue": {".indexOn": ["sap"], "$id": w}, "infect": {".indexOn": ["sap"], "$id": w},
         "roster": {"$id": w}, "hygcheck": {"$id": w},
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},
         "photos": {"$id": w},
