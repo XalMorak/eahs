@@ -891,7 +891,7 @@ function workerHome(){
     <div class="row-gap"><button class="btn ghost" id="haz">${ic("alert")} Аюул мэдэгдэх</button><button class="btn ghost" id="wpw">${ic("key")} Нууц үг солих</button></div></main>`);
   $("#out").onclick = landing;
   $("#uhaan").onclick = uhaanForm;
-  $("#fat").onclick = ()=> needF ? fatigueForm() : (lastF && lastF.v===2 ? fatigueResult(lastF) : toast("Одоо бөглөх шаардлагагүй"));
+  $("#fat").onclick = ()=> needF ? fatigueForm() : (lastF && fatLvIdx(lastF.level)>=0 ? fatigueResult(lastF) : toast("Одоо бөглөх шаардлагагүй"));
   $("#inf").onclick = ()=> infectForm();
   $("#slp").onclick = ()=> sleepForm();
   $("#haz").onclick = ()=>hazardForm();
@@ -1109,14 +1109,19 @@ function fatResultHtml(x){
       return `<div class="item inl fqa fqr ${r<0?"":"rk"+r+"l"}"><p>${i+1}. ${esc(a.q)}</p><span class="fqv"><b>${esc(a.a==null?"—":a.a)}</b>${r<0?"":rkChip(r, FAT_RK[r])}</span></div>`; }).join("")}</div>
     ${fatCtrlHtml(wi, true)}`;
 }
+/* v20: Ажилтны асуумж хуучин хэлбэрээрээ (сонголтот асуулт, оноо: 0–3 Бага, 4–7 Дунд, 8+ Өндөр) + дууссаны дараа 3 өнгийн стикер, анхааруулга */
+const FAT_MSG = {
+  "Бага": {t:"Ядаргаа бага", m:"Сайн байна, аюулгүй ажиллаарай."},
+  "Дунд": {t:"Анхаар! Дунд зэргийн ядаргаа", m:"Завсарлага авч, ус ууж, хянагчдаа мэдэгдээрэй."},
+  "Өндөр": {t:"Аюултай! Ядаргаа өндөр", m:"Ажлаа зогсоож, хянагч / аюулгүй ажиллагаа, эрүүл ахуйчид нэн даруй мэдэгдэнэ үү."}
+};
 function fatigueForm(){
   const u = me(); if(!u || u.role!=="worker") return u? homeFor(u) : landing();
+  const qs = surveyQs("fatigue");
   view(fatigueForm, false);
-  const knownG = u.gender==="Эр"||u.gender==="Эм" ? u.gender : "";
-  const qn = (q,i)=> `${i+1}. ${q.title}`;
-  const legend = (q,g)=> q.num ? `<div class="rkleg">${q.rows(g).map((t,r)=>`<span class="rk rk${r}">${esc(t)}</span>`).join("")}</div>` : "";
+  const g = u.gender==="Эм" ? "ЭМ" : "ЭР";
   const app = mount(`
-    ${appbar("Алжаал ядаргааны үнэлгээ", "Асуулт бүрийн хариултаар эрсдэлийг тооцно", true)}
+    ${appbar("Алжаал ядаргааны үнэлгээ", "Олон нийтийн эрүүл мэндийн үнэлгээний хэрэгсэл", true)}
     <main class="fwrap" id="fatform">
       <div class="lockgrid">
         <div class="cell"><span>${ic("lock")}SAP</span><b>${esc(u.sap)}</b></div>
@@ -1126,63 +1131,42 @@ function fatigueForm(){
       </div>
       <div class="qcard" id="qloc"><h3>Байршил <span class="req">*</span></h3>
         <div class="opts two" role="radiogroup">${LOCS.map(l=>`<button type="button" class="opt" role="radio">${esc(l)}</button>`).join("")}</div></div>
-      ${knownG ? "" : `<div class="qcard" id="qg"><h3>Хүйс</h3><p class="muted">Согтууруулах ундааны үнэлгээ хүйсээс хамаарна</p>
-        <div class="opts two" role="radiogroup"><button type="button" class="opt" role="radio">Эр</button><button type="button" class="opt" role="radio">Эм</button></div></div>`}
-      ${FAT2.map((q,i)=> q.num
-        ? `<div class="qcard fatq" id="${q.id}"><h3>${esc(qn(q,i))}${q.gender?` <span class="muted" data-gl>${knownG?"— "+esc(knownG):""}</span>`:""}</h3>${q.sub?`<p class="muted">${esc(q.sub)}</p>`:""}
-            <div class="numrow"><input type="number" inputmode="decimal" min="0" max="${q.max}" step="${q.step}" id="in_${q.id}" aria-label="${esc(q.title)}" placeholder="0"/><span class="unit">${esc(q.unit)}</span><span class="rkout" data-rk="${q.id}"></span></div>
-            <div data-leg="${q.id}">${legend(q, knownG||"Эр")}</div></div>`
-        : `<div class="qcard fatq" id="${q.id}"><h3>${esc(qn(q,i))}</h3>
-            <div class="opts ${q.opts.length===2?"two":""}" role="radiogroup">${q.opts.map(o=>`<button type="button" class="opt" role="radio">${esc(o[0])}</button>`).join("")}</div>
-            <div class="numrow"><span class="rkout" data-rk="${q.id}"></span></div></div>`).join("")}
+      ${qs.map((q,i)=>qblock(q.id, `${i+1}. ${q.title}${q.id==="q8"?" — "+g:""}`, q.sub||"", q.opts.map(o=>o.t))).join("")}
       <div id="fterr" class="errtxt" role="alert"></div>
-      <div class="actions"><button class="btn" id="calc">Үнэлэх ${ic("chev")}</button>
+      <div class="actions"><button class="btn" id="calc">Илгээх ${ic("chev")}</button>
       <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
-  const gender = ()=> knownG || optVal("qg") || "";
-  const vals = ()=>{ const v={}; FAT2.forEach(q=>{ v[q.id] = q.num ? $("#in_"+q.id).value : optVal(q.id); }); return v; };
-  const refresh = ()=>{
-    if(!document.getElementById("fatform")) return;
-    const g = gender(), v = vals();
-    FAT2.forEach(q=>{
-      const r = fatRisk(q, v[q.id], g||"Эр"), el = document.querySelector(`[data-rk="${q.id}"]`);
-      const bad = q.num && String(v[q.id]||"").trim()!=="" && r==null;
-      el.innerHTML = bad ? `<span class="rk rkn">0–${q.max} ${esc(q.unit)}</span>` : (r==null || (q.gender && !g)) ? "" : rkChip(r);
-      document.getElementById(q.id).classList.toggle("done", r!=null);
-    });
-    if(!knownG){ const gl=document.querySelector("[data-gl]"); if(gl) gl.textContent = g ? "— "+g : ""; const lg=document.querySelector('[data-leg="q8"]'); if(lg) lg.innerHTML = legend(FAT2.find(q=>q.id==="q8"), g||"Эр"); }
-  };
   bindOpts(app);
-  const optClick = app.onclick;           // mount-ийн үндэс тогтмол тул onclick/oninput-оор (дараагийн хуудсанд үлдэхгүй)
-  app.onclick = e=>{ optClick(e); if(e.target.closest(".opt")) refresh(); };
-  app.oninput = refresh;
   $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#calc").onclick = ()=>{
-    const g = gender(), v = vals(), miss = [], loc = optVal("qloc")||"";
+    const loc = optVal("qloc")||"", miss = [];
     if(!LOCS.includes(loc)) miss.push("байршил");
-    if(!g) miss.push("хүйс");
-    FAT2.forEach((q,i)=>{ if(fatRisk(q, v[q.id], g||"Эр")==null) miss.push(String(i+1)); });
-    if(miss.length){ $("#fterr").textContent = "Бөглөнө үү: "+miss.join(", ")+" (тоо 0 ба түүнээс их)"; toast("Бүх асуултад хариулна уу"); return; }
-    if(fatNum(v.q6) < fatNum(v.q5)){ $("#fterr").textContent = "48 цагт унтсан цаг 24 цагийнхаас бага байж болохгүй"; return; }
-    const A = fatigueAssess(v, g);
+    qs.forEach((q,i)=>{ if(!optVal(q.id)) miss.push(String(i+1)); });
+    if(miss.length){ $("#fterr").textContent = "Бөглөнө үү: "+miss.join(", "); toast("Бүх асуултыг сонгоно уу"); return; }
+    const picked = {}; qs.forEach(q=>picked[q.id]=optVal(q.id));
+    const {score, max, level} = fatigueLevel(qs, picked);
     const id = uid();
-    const rec = {id, v:2, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, gender:g, date:today(), time:nowStr(), ts:Date.now(),
-      score:A.score, max:A.max, level:A.level, act:A.act, risk:{}, num:{}};
-    FAT2.forEach(q=>{ const r=A.risk[q.id];
-      rec.risk[q.id] = FAT_RK[r];
-      if(q.num){ rec.num[q.id] = fatNum(v[q.id]); rec[q.id] = q.fmt(fatNum(v[q.id])); } else rec[q.id] = v[q.id]; });
-    rec.ans = FAT2.map(q=>({q:q.title, a:rec[q.id], r:rec.risk[q.id]}));
+    const rec = {id, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, gender:u.gender||"", date:today(), time:nowStr(), ts:Date.now(), score, level, max};
+    qs.forEach(q=>{ rec[q.id] = picked[q.id]; });
+    rec.ans = qs.map(q=>({q:q.title, a:picked[q.id]}));
     write({["fatigue/"+id]: rec});
     fatigueResult(rec);
   };
 }
+/* Ажилтанд харуулах стикер + анхааруулга (оноо харуулахгүй) */
+function fatStickerHtml(level){
+  const i = Math.max(0, fatLvIdx(level)), L = FAT_LV[i], M = FAT_MSG[L];
+  return `<div class="fres fsticker fl${i}" id="fres" data-lv="${esc(L)}">${fatFace(L, 150)}
+      <div class="fres-l">${esc(M.t)}</div>
+      ${i ? `<div class="fwarn fw${i}" role="alert"><span class="fwarn-i" aria-hidden="true">⚠</span><span>${esc(M.m)}</span></div>` : `<p class="fres-a fok">${esc(M.m)}</p>`}
+    </div>`;
+}
 function fatigueResult(rec){
   view(()=>fatigueResult(rec), false);
-  const hi = rec.level==="Өндөр";
   mount(`${appbar("Ядаргааны үнэлгээний дүн", esc(rec.date), true)}
     <main class="fwrap" id="fatres">
-      ${fatResultHtml(rec)}
-      ${hi?`<p class="muted" id="fhint">Таны үнэлгээ аюулгүй ажиллагаа, эрүүл ахуйчийн самбарт «Их» эрсдэлээр харагдана.</p>`:""}
+      ${fatStickerHtml(rec.level)}
+      ${rec.v===2 && rec.act ? `<p class="muted">${esc(rec.act)}</p>` : ""}
       <div class="actions"><button class="btn" id="fdone">Болсон</button></div>
     </main>`);
   $("#fdone").onclick = workerHome; $("[data-hback]").onclick = workerHome;
@@ -1916,12 +1900,9 @@ function fatDots(x){
   return fatFace(x.level, 26)+` <span class="rkdots" title="${esc(FAT2.map((q,i)=>(i+1)+": "+(x.risk[q.id]||"—")).join(", "))}">${FAT2.map(q=>{ const r=FAT_RK.indexOf(x.risk[q.id]); return `<i class="${r<0?"rkn":"rk"+r}"></i>`; }).join("")}</span>`;
 }
 function fatCritHtml(){
-  const th = `<tr><th>Үнэлгээ</th><th class="rk0">Бага эрсдэл</th><th class="rk1">Дунд эрсдэл</th><th class="rk2">Их эрсдэл</th></tr>`;
-  const row = (t,c)=>`<tr><td>${esc(t)}</td>${c.map((v,r)=>`<td class="rk${r}">${esc(v)}</td>`).join("")}</tr>`;
-  const body = FAT2.map(q=> q.gender ? row(q.title+" — Эр", q.rows("Эр"))+row(q.title+" — Эм", q.rows("Эм"))
-    : q.num ? row(q.title, q.rows()) : row(q.title, [0,1,2].map(r=>q.opts.filter(o=>o[1]===r).map(o=>o[0]).join(" / "))) ).join("");
-  return `<div class="tblwrap"><table class="fcrit">${th}${body}</table></div>
-    <table class="fcrit"><tr><th>Үнэлгээ</th><th>Авах арга хэмжээ</th></tr>${[["Бүгд бага бол","Бага"],["Бага болон дунд","Дунд"],["Их — 1 болон түүнээс олон бол","Өндөр"]].map(([t,l],r)=>`<tr><td class="rk${r}">${esc(t)}</td><td>${esc(FAT_ACT[l])}</td></tr>`).join("")}</table>${fatCtrlHtml(-1)}`;
+  const rows = [["Бага","0–3 оноо"],["Дунд","4–7 оноо, эсвэл эм / анхаарал төвлөрөл 2 оноотой"],["Өндөр","8 ба түүнээс дээш оноо, эсвэл архи 2 + 24 цагийн нойр 2 оноотой"]];
+  return `<table class="fcrit"><tr><th></th><th>Түвшин</th><th>Шалгуур</th><th>Ажилтанд харуулах</th></tr>${rows.map(([l,t],i)=>`<tr><td>${fatFace(l,26)}</td><td class="rk${i}">${esc(fatLvTxt(l))}</td><td>${esc(t)}</td><td>${esc(FAT_MSG[l].t+". "+FAT_MSG[l].m)}</td></tr>`).join("")}</table>
+    <p class="muted">2026-10-21-ний 7 асуулттай хувилбараар бөглөсөн бичлэгүүд асуулт бүрийн эрсдэлээрээ (өнгөт цэг) харагдана.</p>`;
 }
 function fatigueListPage(){
   if(!requireRole("hygiene")) return;
@@ -1931,7 +1912,7 @@ function fatigueListPage(){
   const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl) && (!FTF.loc||(FTF.loc==="—"?!LOCS.includes(x.loc):x.loc===FTF.loc)));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
   const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
-    
+    <div class="row-gap noprint"><button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button></div>
     <div class="card filters noprint" id="ftfilt"><div class="frow">
       <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option value="${l}" ${FTF.lvl===l?"selected":""}>${fatLvTxt(l)}</option>`).join("")}</select>
@@ -1942,12 +1923,13 @@ function fatigueListPage(){
       <p class="muted" id="ftcnt">${f.length} / ${all.length} бүртгэл</p></div>
     <div class="card">
     ${tbl(["Огноо","Нэр","SAP","Тасаг","Байршил","Дүн / хариулт","Түвшин",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${fatDots(x)}</td><td>${fLvlB(x.level)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>
-    <details class="card noprint" id="fcrit"><summary><b>Үнэлгээний хүснэгт</b> <span class="muted">— асуулт бүрийн эрсдэл</span></summary>${fatCritHtml()}</details>`));
+    <details class="card noprint" id="fcrit"><summary><b>Үнэлгээний шалгуур</b> <span class="muted">— нийт оноогоор</span></summary>${fatCritHtml()}</details>`));
   app.addEventListener("click", e=>{ const r=e.target.closest("[data-fv]"); if(r){ e.preventDefault(); e.stopImmediatePropagation(); fatigueView(r.dataset.fv); window.scrollTo(0,0); } }, true);
   bindNav(app);
   const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, loc:$("#ftloc").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
   ["#ftwho","#ftlvl","#ftloc","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
   $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:"",loc:""}; fatigueListPage(); };
+  $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
 }
 function fatigueView(id){
   if(!requireRole("hygiene")) return;
@@ -1964,7 +1946,7 @@ function fatigueView(id){
       <div class="cell" id="floc"><span>Байршил</span><b>${esc(locTxt(x))}</b></div>
     </div>
     ${x.v===2 ? `<p class="muted">Хүйс: ${esc(x.gender||"—")}${x.time?" · "+esc(x.time):""}</p>${fatResultHtml(x)}` : `
-    <p><b>Оноо:</b> ${esc(x.score)}${x.max?"/"+esc(x.max):""} · <b>Түвшин:</b> ${fLvlB(x.level)}</p>
+    <p class="fvlv">${fatFace(x.level,40)} <b>Оноо:</b> ${esc(x.score)}${x.max?"/"+esc(x.max):""} · <b>Түвшин:</b> ${fLvlB(x.level)}${x.time?' <span class="muted">· '+esc(x.time)+'</span>':""}</p>
     <h4>Асуулт, хариулт</h4>
     ${ans.length?ans.map((a,i)=>`<div class="item inl fqa"><p>${i+1}. ${esc(a.q)}</p><b>${esc(a.a==null?"—":a.a)}</b></div>`).join(""):'<p class="muted">Хариултын дэлгэрэнгүй хадгалагдаагүй байна.</p>'}`}
     <div class="actions"><button class="btn ghost" id="back">Буцах</button></div>
