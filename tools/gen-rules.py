@@ -114,6 +114,12 @@ ADV_IMG_META_VALIDATE = ("!newData.exists() || (newData.child('size').isNumber()
                          " && (!newData.child('w').exists() || newData.child('w').isNumber()) && (!newData.child('h').exists() || newData.child('h').isNumber()))")
 ADV_IMG_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
 
+# v19: Нойрны судалгаа
+SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
+                  " && (!newData.child('hours').exists() || (newData.child('hours').isNumber() && newData.child('hours').val() >= 0 && newData.child('hours').val() <= 24))"
+                  " && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/))"
+                  " && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200)))")
+
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
         ".read": HYG,
@@ -134,6 +140,8 @@ def strict():
                   "$id": {".write": f"({SUP} && data.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},  # v14: ахлах өөрийн албаны УХААН-ыг устгаж болно
         "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
+        # v19: Нойрны чанарын судалгаа — ажилтан өөрийн sap-аар шинээр үүсгэнэ/уншина; эрүүл ахуйч бүгдийг уншина/устгана
+        "sleep": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE, ".validate": SLEEP_VALIDATE}},
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -182,6 +190,7 @@ def transition():
         "settings": {".write": ANY},
         "uhaan": {".indexOn": ["sap"], "$id": w}, "fatigue": {".indexOn": ["sap"], "$id": w}, "infect": {".indexOn": ["sap"], "$id": w},
         "roster": {"$id": w}, "hygcheck": {"$id": w},
+        "sleep": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": SLEEP_VALIDATE}},
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},

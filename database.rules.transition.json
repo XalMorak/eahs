@@ -67,6 +67,15 @@
             ".write": "auth != null"
           }
         },
+        "sleep": {
+          ".indexOn": [
+            "sap"
+          ],
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('hours').exists() || (newData.child('hours').isNumber() && newData.child('hours').val() >= 0 && newData.child('hours').val() <= 24)) && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/)) && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200)))"
+          }
+        },
         "hazards": {
           "$id": {
             ".write": "auth != null",

@@ -200,6 +200,11 @@ label.f,.f{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margi
 .qcard > .muted{margin:2px 0 0}
 .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .opts.two{grid-template-columns:1fr 1fr}
+.opts.one{grid-template-columns:1fr}
+#sleepf .qcard > input{margin-top:10px}
+td b.bad{color:var(--danger)}
+.sltw .tw table{min-width:0}
+.sltw .tw th{white-space:normal}
 .opt{position:relative;border:1.5px solid var(--line-2);border-radius:var(--r-sm);padding:12px 10px;min-height:48px;text-align:center;cursor:pointer;background:var(--surface);font:inherit;font-size:13.5px;font-weight:550;color:var(--ink-2);transition:all .15s var(--ease)}
 .opt:hover{border-color:var(--brand-200);background:var(--brand-50)}
 .opt.on{border-color:var(--brand);background:var(--brand-50);color:var(--brand-900);font-weight:700;box-shadow:inset 0 0 0 1px var(--brand)}

@@ -89,7 +89,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -141,6 +141,7 @@ const ICONS = {
   alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v6M9 11h6"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   battery:'<rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 11v2"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
   virus:'<circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
@@ -400,7 +401,7 @@ function setCloud(state, msg){
 let SUBS = [];
 const SYNCED = new Set();   // үүлнээс анх ачаалагдсан цуглуулгууд
 function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; SYNCED.clear(); Object.values(ADV_SUBS).forEach(f=>{ try{ f(); }catch(e){} }); ADV_SUBS = {}; }
-const OWN_COLS = ["uhaan","fatigue","infect"];
+const OWN_COLS = ["uhaan","fatigue","infect","sleep"];
 function syncPlan(role){
   if(role==="hygiene") return COLS;
   if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts"];
@@ -858,6 +859,7 @@ function workerHome(){
     </div>`;
   }
   const infTodo = !!roster && !infect;
+  const lastS = list("sleep").filter(x=>x.sap===u.sap).sort(byNew)[0];
   const advMine = myAdvice(u), advNew = advMine.filter(a=>!advAck(a.id, u.sap)).length;
   const task = (id, icon, title, sub, state, stTxt) => `<button class="home-btn ${state}" id="${id}"><span class="mi">${ic(icon)}</span><span><b>${title}</b><span class="muted">${esc(sub)}</span></span><span class="st">${stTxt}</span></button>`;
   const app = mount(`
@@ -870,6 +872,7 @@ function workerHome(){
     ${task("uhaan","checks","УХААН", uhaan.length?"Өнөөдөр бөглөсөн":"Өнөөдөр бөглөөгүй — ажил эхлэхийн өмнө", uhaan.length?"done":"todo", uhaan.length?"Бөглөсөн":"Бөглөх")}
     ${task("fat","battery","Ядаргаа"+(lastF&&fatFace(lastF.level)?" "+fatFace(lastF.level,22):""), fatTxt, needF?"todo":"done", needF?"Бөглөх":"Хийгдсэн")}
     ${task("inf","virus","Халдварын асуумж", infTxt, infTodo?"todo":infect?"done":"idle", infect?"Дахин бөглөх":"Бөглөх")}
+    ${task("slp","moon","Нойрны чанарын судалгаа", lastS?`Сүүлийн: ${lastS.date}${lastS.hours!=null?" · "+lastS.hours+" цаг":""}`:"Хүссэн үедээ бөглөнө", lastS&&lastS.date===today()?"done":"idle", lastS&&lastS.date===today()?"Дахин бөглөх":"Бөглөх")}
     </div>
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
@@ -890,6 +893,7 @@ function workerHome(){
   $("#uhaan").onclick = uhaanForm;
   $("#fat").onclick = ()=> needF ? fatigueForm() : (lastF && lastF.v===2 ? fatigueResult(lastF) : toast("Одоо бөглөх шаардлагагүй"));
   $("#inf").onclick = ()=> infectForm();
+  $("#slp").onclick = ()=> sleepForm();
   $("#haz").onclick = ()=>hazardForm();
   $("#wpw").onclick = workerPwPage;
   if($("#advall")) $("#advall").onclick = ()=>{ workerAdvicePage(); window.scrollTo(0,0); };
@@ -1214,6 +1218,88 @@ function infectForm(){
     workerHome();
   };
 }
+/* v19: Нойрны чанарын судалгаа — ажилтан хүссэн үедээ бөглөнө; аюулгүй ажиллагаа, эрүүл ахуйч бүгдийг харна */
+const SLEEP_Q = {bed:"Та өнгөрсөн шөнө хэдэн цагт унтаж амарсан бэ?", wake:"Та өглөө хэдэн цагт сэрсэн бэ?", hours:"Та хэдэн цаг унтаж амарсан бэ?",
+  bf:"Та өглөөний цайнд орсон уу?", food:"Хэрэв орсон бол юу иддэг вэ?", reason:"Хэрэв ороогүй бол яагаад ороогүй вэ?"};
+const SLEEP_REASONS = ["Нойроо дийлдэггүй","Тойруу замаар хол явдаг","Угаасаа ордоггүй"];
+function sleepHours(bed, wake){
+  const m = t=>{ const r=/^(\d{1,2}):(\d{2})$/.exec(t||""); return r? (+r[1])*60 + (+r[2]) : null; };
+  const a=m(bed), b=m(wake); if(a==null || b==null) return null;
+  return Math.round(((b - a + 1440) % 1440) / 6) / 10;   // шөнө дундыг давна; 0.1 цагийн нарийвчлал
+}
+function sleepForm(){
+  const u = me(); if(!u || u.role!=="worker") return u? homeFor(u) : landing();
+  view(sleepForm, false);
+  const app = mount(`
+    ${appbar("Нойрны чанарын судалгаа", esc(u.name), true)}
+    <main class="fwrap" id="sleepf">
+      <div class="lockgrid two">
+        <div class="cell">Овог нэр<b>${esc(u.name)}</b></div>
+        <div class="cell">SAP / алба<b>${esc(u.sap)} · ${esc(albaN(u.alba))}</b></div>
+      </div>
+      <div class="qcard"><h3>1. ${esc(SLEEP_Q.bed)}</h3><input type="time" id="s-bed" aria-label="Унтсан цаг"/></div>
+      <div class="qcard"><h3>2. ${esc(SLEEP_Q.wake)}</h3><input type="time" id="s-wake" aria-label="Сэрсэн цаг"/></div>
+      <div class="qcard"><h3>3. ${esc(SLEEP_Q.hours)}</h3><p class="muted">1, 2-р асуултаас автоматаар бодогдоно, засаж болно.</p>
+        <input type="number" id="s-hours" min="0" max="24" step="0.1" inputmode="decimal" placeholder="Цаг" aria-label="Унтсан хугацаа (цаг)"/></div>
+      <div class="qcard" id="s-bf"><h3>4. ${esc(SLEEP_Q.bf)}</h3>
+        <div class="opts two" role="radiogroup"><button type="button" class="opt" role="radio">Тийм</button><button type="button" class="opt" role="radio">Үгүй</button></div></div>
+      <div class="qcard" id="s-foodq" hidden><h3>5. ${esc(SLEEP_Q.food)}</h3><input type="text" id="s-food" maxlength="200" placeholder="Жишээ: талх, сүүтэй цай"/></div>
+      <div class="qcard" id="s-reason" hidden><h3>6. ${esc(SLEEP_Q.reason)}</h3>
+        <div class="opts one" role="radiogroup">${SLEEP_REASONS.map(o=>`<button type="button" class="opt" role="radio">${esc(o)}</button>`).join("")}</div></div>
+      <div class="actions"><button class="btn" id="send">${ic("send")} Илгээх</button>
+      <button class="btn ghost" id="back">Буцах</button></div>
+    </main>`);
+  bindOpts(app);
+  const optClick = app.onclick;
+  const sync = ()=>{ const bf = optVal("s-bf"); $("#s-foodq").hidden = bf!=="Тийм"; $("#s-reason").hidden = bf!=="Үгүй"; };
+  app.onclick = e=>{ optClick(e); sync(); };
+  const hrs = $("#s-hours");
+  hrs.oninput = ()=>{ hrs.dataset.touched = hrs.value ? "1" : ""; };
+  const auto = ()=>{ if(hrs.dataset.touched) return; const h = sleepHours($("#s-bed").value, $("#s-wake").value); if(h!=null) hrs.value = h; };
+  $("#s-bed").onchange = auto; $("#s-wake").onchange = auto; $("#s-bed").oninput = auto; $("#s-wake").oninput = auto;
+  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+  $("#send").onclick = ()=>{
+    const bed=$("#s-bed").value, wake=$("#s-wake").value, h=parseFloat(hrs.value), bf=optVal("s-bf");
+    if(!bed || !wake){ toast("Унтсан, сэрсэн цагаа оруулна уу"); return; }
+    if(!(h>=0 && h<=24)){ toast("Унтсан хугацааг (0-24 цаг) оруулна уу"); return; }
+    if(!bf){ toast("4-р асуултад хариулна уу"); return; }
+    const food = $("#s-food").value.trim(), reason = optVal("s-reason");
+    if(bf==="Тийм" && !food){ toast("Юу иддэгээ бичнэ үү"); return; }
+    if(bf==="Үгүй" && !reason){ toast("Ороогүй шалтгаанаа сонгоно уу"); return; }
+    const id = uid(), hours = Math.round(h*10)/10;
+    const rec = {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:today(), ts:Date.now(), bed, wake, hours, bf,
+      ...(bf==="Тийм"?{food}:{reason}),
+      ans:[{q:SLEEP_Q.bed,a:bed},{q:SLEEP_Q.wake,a:wake},{q:SLEEP_Q.hours,a:hours+" цаг"},{q:SLEEP_Q.bf,a:bf},
+        bf==="Тийм"?{q:SLEEP_Q.food,a:food}:{q:SLEEP_Q.reason,a:reason}]};
+    write({["sleep/"+id]: rec});
+    toast("Илгээгдлээ. Баярлалаа.");
+    workerHome();
+  };
+}
+let SLF = {who:"", from:"", to:"", bf:""};
+function sleepListPage(){
+  if(!requireRole("hygiene")) return;
+  view(sleepListPage, true);
+  const all=list("sleep").sort((a,b)=>byNew(a,b) || (b.ts||0)-(a.ts||0));
+  const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  const f=all.filter(x=>(!SLF.who||x.sap===SLF.who) && (!SLF.from||(x.date||"")>=SLF.from) && (!SLF.to||(x.date||"")<=SLF.to) && (!SLF.bf||x.bf===SLF.bf));
+  const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
+  const avg = f.filter(x=>typeof x.hours==="number"); const avgH = avg.length ? Math.round(avg.reduce((s,x)=>s+x.hours,0)/avg.length*10)/10 : null;
+  const app = mount(shell("нойр", `${phead("Нойрны чанарын судалгаа", "Хэн, хэзээ, юу гэж бөглөснийг харна.")}
+    <div class="card filters noprint" id="slfilt"><div class="frow">
+      <select id="slwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${SLF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
+      <select id="slbf" aria-label="Өглөөний цай"><option value="">Өглөөний цай: бүгд</option>${["Тийм","Үгүй"].map(l=>`<option ${SLF.bf===l?"selected":""}>${l}</option>`).join("")}</select>
+      <label class="fdate">Эхлэх <input type="date" id="slfrom" value="${esc(SLF.from)}"/></label>
+      <label class="fdate">Дуусах <input type="date" id="slto" value="${esc(SLF.to)}"/></label>
+      <button class="btn ghost sm" id="slclr">Цэвэрлэх</button></div>
+      <p class="muted" id="slcnt">${f.length} / ${all.length} бүртгэл${avgH!=null?` · Дундаж нойр: ${avgH} цаг`:""}</p></div>
+    <div class="card sltw">
+    ${tbl(["Ажилтан / огноо","Нойр","Өглөөний цай"], f.map(x=>`<tr><td><b>${esc(x.name||"")}</b><br><small class="muted">${esc(x.sap)} · ${esc(dept(x))}<br>${esc(x.date)}</small></td><td>${esc(x.bed||"?")}–${esc(x.wake||"?")}<br>${x.hours!=null?`<b class="${x.hours<6?"bad":""}">${esc(x.hours)} цаг</b>`:"—"}</td><td>${x.bf==="Тийм"?'<span class="badge b-ok">Тийм</span>':x.bf==="Үгүй"?'<span class="badge b-wait">Үгүй</span>':"—"}<br><small>${esc(x.bf==="Тийм"?(x.food||""):(x.reason||""))}</small></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Нойрны судалгаа бөглөөгүй байна")}</div>`));
+  bindNav(app);
+  const upd=()=>{ SLF={who:$("#slwho").value, bf:$("#slbf").value, from:$("#slfrom").value, to:$("#slto").value}; sleepListPage(); };
+  ["#slwho","#slbf","#slfrom","#slto"].forEach(k=>$(k).onchange=upd);
+  $("#slclr").onclick=()=>{ SLF={who:"",from:"",to:"",bf:""}; sleepListPage(); };
+}
 let surveyDraft = null;
 function surveyEditPage(kind){
   const hyg = requireRole("hygiene"); if(!hyg) return;
@@ -1503,10 +1589,10 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
   supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
   const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
@@ -1528,7 +1614,7 @@ function bindNav(app, extra){
     const nav=e.target.closest("[data-nav]")?.dataset.nav;
     if(nav){
       const sup = me()?.role==="supervisor";
-      ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "аюул":hazardListPage, "халдвар":infectListPage,
+      ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
         "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
@@ -3747,6 +3833,7 @@ function reportPage(){
       <label class="chk"><input type="checkbox" id="x-ayul" checked/> Аюул (зурагтай)</label>
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
+      <label class="chk"><input type="checkbox" id="x-sleep" checked/> Нойрны чанарын судалгаа</label>
       <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр (одоогийн төлөв + сунгалтын түүх)</label>
       <label class="chk"><input type="checkbox" id="x-lab" checked/> Бүтээгдэхүүний шинжилгээний бичиг</label>
       <div class="gap"></div>
@@ -3755,7 +3842,7 @@ function reportPage(){
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
-    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
+    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-sleep","sleep"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
     if(!kinds.length){ toast("Дор хаяж нэг тайлан сонгоно уу"); return; }
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     $("#xl").disabled=true; $("#xl").textContent="Бэлдэж байна…";
@@ -3869,6 +3956,11 @@ async function exportExcel(from,to,kinds){
     const s3=wb.addWorksheet("Ядаргаа");
     s3.addRow(["Огноо","SAP","Нэр","Алба","Байршил","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Шөнийн ээлжийн өмнө амарсан","Төвлөрөл","Оноо","Түвшин"]);
     list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,albaN(x.alba),locTxt(x),x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q12||"",x.q11,x.score,fatLvTxt(x.level)]));
+  }
+  if(kinds.includes("sleep")){
+    const s4=wb.addWorksheet("Нойр");
+    s4.addRow(["Огноо","SAP","Нэр","Алба","Унтсан цаг","Сэрсэн цаг","Нойр (цаг)","Өглөөний цай","Юу иддэг","Ороогүй шалтгаан"]);
+    list("sleep").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s4.addRow([x.date,x.sap,x.name,albaN(x.alba),x.bed||"",x.wake||"",x.hours??"",x.bf||"",x.food||"",x.reason||""]));
   }
   if(kinds.includes("book")) addBookSheets(wb, inR);
   if(kinds.includes("lab")) addLabSheet(wb);
