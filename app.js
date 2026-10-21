@@ -1415,7 +1415,7 @@ async function hazardPrint(id){
   const band = `<div class="pband"><div><h1>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h1><h2>RECORD AN OBSERVED HAZARD</h2></div><img src="/logo.png" alt="Ерөө говь ХХК"/></div>`;
   const foot = n=>`<div class="pfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span>Page ${n} of 2</span></div>`;
   const app = mount(`
-    <div class="printbar noprint"><button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} Аюулын жагсаалт</button></div>
+    <div class="printbar noprint"><button class="btn sm" id="pdl">${ic("download","sm")} PDF татах</button><button class="btn ghost sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} Аюулын жагсаалт</button></div>
     <div class="sheet-wrap"><div class="hzsheet">
       <section class="ppage">${band}
         <table class="pt"><colgroup><col style="width:24%"/><col style="width:26%"/><col style="width:24%"/><col style="width:26%"/></colgroup>
@@ -1445,9 +1445,31 @@ async function hazardPrint(id){
   fit(); window.onresize = fit;
   $("#pp").onclick = ()=>window.print();
   $("#pb").onclick = hazardListPage;
+  $("#pdl").onclick = ()=>hazardPdf(x);
   const ps = await getPhotos(id);
   const el = $("#pph");
   if(el && ps.length) el.innerHTML = `<div class="pphead">Хавсралт: зураг (${ps.length})</div><div class="ppgrid">${ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt=""/>`).join("")}</div>`;
+}
+/* Хэвлэх хуудсыг (2 × A4) яг харагдаж буйгаар нь PDF файл болгон татах */
+const loadJs = src => new Promise((ok,no)=>{ if(document.querySelector(`script[src="${src}"]`)) return ok(); const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>no(new Error("load "+src)); document.head.appendChild(s); });
+async function hazardPdf(x){
+  const b=$("#pdl"); if(b){ b.disabled=true; b.textContent="PDF бэлдэж байна…"; }
+  const sh=$(".hzsheet"), z=sh?sh.style.zoom:"";
+  try{
+    await loadJs("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+    await loadJs("https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js");
+    if(sh) sh.style.zoom="";
+    await Promise.all($$(".hzsheet img").map(i=>i.complete?0:new Promise(r=>{ i.onload=i.onerror=r; })));
+    const pdf = new window.jspdf.jsPDF({unit:"mm", format:"a4", orientation:"portrait", compress:true});
+    const pages = $$(".hzsheet .ppage");
+    for(let i=0;i<pages.length;i++){
+      const c = await window.html2canvas(pages[i], {scale:2, backgroundColor:"#fff", useCORS:true, logging:false, windowWidth:900});
+      if(i) pdf.addPage();
+      pdf.addImage(c.toDataURL("image/jpeg",0.92), "JPEG", 0, 0, 210, 297);
+    }
+    pdf.save(`Aiuul_${String(x.date||today())}_${String(x.id||"").slice(-6)}.pdf`);
+  }catch(err){ console.warn(err); toast("PDF үүсгэж чадсангүй — «Хэвлэх» → «Save as PDF» ашиглана уу"); }
+  finally{ if(sh) sh.style.zoom=z; const bb=$("#pdl"); if(bb){ bb.disabled=false; bb.innerHTML=`${ic("download","sm")} PDF татах`; } }
 }
 function fileToData(f){
   return new Promise((res,rej)=>{
@@ -1918,7 +1940,7 @@ function hazardListPage(){
       <div class="row-gap">
         <select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
         <button class="btn sm" data-hzd="${esc(x.id)}">${ic("history","sm")} Хянах / түүх${x.log?` (${Object.keys(x.log).length})`:""}</button>
-        <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("printer","sm")} Хэвлэх</button>
+        <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("download","sm")} Хэвлэх / PDF</button>
         ${hyg?`<button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>`:""}
       </div>
     </div>`).join("") || `<div class="card">${emptyState(all.length?"Шүүлтүүрт тохирох бүртгэл алга":"Аюулын мэдээлэл алга", all.length?"Шүүлтүүрээ өөрчилж үзнэ үү":"Ажилтнууд «Аюулыг мэдээлэх» маягтаар илгээнэ","alert")}</div>`);
@@ -1955,7 +1977,7 @@ async function hazardDetail(id){
   const LOGIC = {status:"check", assign:"userCheck", due:"calendar", corr:"edit", note:"file"};
   const app = mount(shell("аюул", `
     <div class="row-between wrap"><div>${phead(esc(x.area||"Аюул"), `${esc(x.date)} · Мэдээлэгч: ${esc(x.reporter||"—")}${x.via==="qr"?" · QR кодоор":""}`)}</div>
-      <div class="row-gap noprint"><button class="btn ghost sm" id="hb">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" id="hp">${ic("printer","sm")} Маягт хэвлэх</button></div></div>
+      <div class="row-gap noprint"><button class="btn ghost sm" id="hb">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" id="hp">${ic("download","sm")} Маягт хэвлэх / PDF</button></div></div>
     <div class="hzgrid">
       <div class="card hzcard ${hzOverdue(x)?"overdue":""}">
         <div class="row-between"><span class="row-gap">${stH(x.status)}${dueTxt(x)}</span>${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}</div>
@@ -2433,7 +2455,7 @@ async function qrPrint(items){
   view(()=>qrPrint(items), false);
   const pages = []; for(let i=0;i<items.length;i+=8) pages.push(items.slice(i,i+8));
   const app = mount(`
-    <div class="printbar noprint"><button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} QR код</button><span class="muted">${items.length} стикер · ${pages.length} хуудас</span></div>
+    <div class="printbar noprint"><button class="btn sm" id="pdl">${ic("download","sm")} PDF татах</button><button class="btn ghost sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button><button class="btn ghost sm" id="pb">${ic("back","sm")} QR код</button><span class="muted">${items.length} стикер · ${pages.length} хуудас</span></div>
     <div class="sheet-wrap"><div class="qrsheet">${pages.map(p=>`<section class="qrpage">${p.map(a=>`<div class="qrst">
       <div class="qrst-h"><img src="/logo.png" alt="Ерөө говь ХХК"/><div><b>АЮУЛЫГ МЭДЭЭЛ</b><span>Report a hazard</span></div></div>
       <div class="qrst-b">${qrSvg(qrUrl(a), "qrsvg big")}<div class="qrst-t"><small>Талбай / Area</small><b>${esc(a)}</b><p>Утасныхаа камераар уншуулж, харсан аюулаа шууд мэдээлнэ үү.</p><i>Нэвтрэх шаардлагагүй · OT-03</i></div></div>

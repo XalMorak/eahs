@@ -532,13 +532,13 @@ table.hyg td.acts .btn{margin:2px}
 .po .bx{font-size:12px;line-height:1;flex:none}
 .po b{display:block}.po i{display:block;color:#222}
 .pg.risk .po i.in{display:inline}
-.pt tr.tall td{height:200px}
-.pt tr.tall2 td{height:240px}
+.pt tr.tall td{height:250px}
+.pt tr.tall2 td{height:255px}
 .pfoot{margin-top:auto}
 .pphotos{margin-top:12px}
 .pphead{font-weight:700;font-size:12px;margin-bottom:6px}
 .ppgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.ppgrid img{width:100%;height:120px;object-fit:cover;border:1px solid var(--otb)}
+.ppgrid img{width:100%;height:118px;object-fit:cover;border:1px solid var(--otb)}
 @page hz{size:A4 portrait;margin:8mm}
 @media print{
   .hzsheet{width:auto;zoom:1 !important}
