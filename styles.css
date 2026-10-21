@@ -1052,3 +1052,49 @@ details.ovd .ovbody>.card{box-shadow:none;border:0;margin:0;padding:4px}
 .chart.xls .legend i{width:11px;height:11px;border-radius:0}
 .chart.xls .gl{stroke:#d9d9d9}
 @media print{details.ovd .ovbody{display:block}}
+/* v19: Алжаал ядаргааны эрсдэлийн үнэлгээ (хүснэгтийн өнгө: ногоон / цайвар улбар / улаан) */
+:root{--rk0:#2FD84A;--rk0-ink:#0B3D14;--rk0-50:#E3FBE6;--rk1:#FCD5B4;--rk1-ink:#7A3A06;--rk1-50:#FFF1E6;--rk2:#E81E1E;--rk2-ink:#fff;--rk2-50:#FDE7E7}
+.rk{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12.5px;font-weight:700;line-height:1.35;white-space:nowrap}
+.rk0{background:var(--rk0);color:var(--rk0-ink)}.rk1{background:var(--rk1);color:var(--rk1-ink)}.rk2{background:var(--rk2);color:var(--rk2-ink)}
+.rkn{background:var(--line);color:var(--mut)}
+.numrow{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.numrow input{width:110px;font-size:18px;font-weight:700;text-align:center}
+.numrow .unit{color:var(--mut);font-weight:600}
+.numrow:empty,.numrow:has(.rkout:empty):not(:has(input)){display:none}
+.rkleg{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rkleg .rk{font-weight:600;font-size:12px;opacity:.9}
+.qcard.fatq.done{border-color:var(--brand-100)}
+.fres{border-radius:var(--r-lg);padding:var(--s4);margin:var(--s3) 0;border:2px solid transparent}
+.rk0b{background:var(--rk0-50);border-color:var(--rk0)}.rk1b{background:var(--rk1-50);border-color:var(--rk1)}.rk2b{background:var(--rk2-50);border-color:var(--rk2)}
+.fres .rk{font-size:15px;padding:6px 14px}
+.fres-a{margin:10px 0 0;font-size:15px;font-weight:600;line-height:1.5;color:var(--ink)}
+.fqal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:0 12px}
+.fqr{border-left:5px solid var(--line);padding-left:10px;margin-left:-12px}
+.rk0l{border-left-color:var(--rk0)}.rk1l{border-left-color:var(--rk1)}.rk2l{border-left-color:var(--rk2)}
+.fqv{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none;max-width:45%;text-align:right}
+.fctrl{margin:var(--s4) 0;border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.fctrl-h{background:#7F7F7F;color:#fff;font-weight:700;padding:8px 12px}
+.fctrl-b{border:0;border-radius:0;padding:10px 12px;margin:0}
+.fctrl-b.rk1b{background:var(--rk1)}.fctrl-b.rk2b{background:var(--rk2);color:#fff}
+.fctrl-b.rk2b b{color:#fff}
+.fctrl-b.cur{box-shadow:inset 0 0 0 3px var(--ink)}
+.fctrl-t{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(0,0,0,.15);padding-bottom:6px;margin-bottom:6px}
+.fctrl-b p{margin:4px 0;font-size:14px;line-height:1.45}
+.rkdots{display:inline-flex;gap:3px;vertical-align:middle}
+.rkdots i{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+#fcrit summary{cursor:pointer;padding:4px 0}
+table.fcrit{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+table.fcrit th,table.fcrit td{border:1px solid #9aa3b2;padding:6px 8px;vertical-align:middle}
+table.fcrit th{background:#D9D9D9;text-align:left}
+table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,table.fcrit th.rk1,table.fcrit th.rk2{text-align:center;font-weight:600}
+/* v19b: түвшний царай (дүнд оноо харуулахгүй) */
+.fface{display:inline-block;vertical-align:middle;flex:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}
+.fres{text-align:center}
+.fres .fface{display:block;margin:6px auto 10px}
+.fres-l{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.fl0{background:#E6FBE6;border-color:#22DD22}.fl0 .fres-l{color:#0C6B0C}
+.fl1{background:#FFFBD6;border-color:#FFEB00}.fl1 .fres-l{color:#7A6A00}
+.fl2{background:#FDE7E8;border-color:#E8202A}.fl2 .fres-l{color:#B5121A}
+.fres-h{margin:12px 0 2px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.fres-a{text-align:left}
+.home-btn b .fface{margin-left:6px;vertical-align:-5px}
