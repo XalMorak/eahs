@@ -1098,3 +1098,4 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .fres-h{margin:12px 0 2px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
 .fres-a{text-align:left}
 .home-btn b .fface{margin-left:6px;vertical-align:-5px}
+.req{color:var(--danger)}

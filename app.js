@@ -926,6 +926,9 @@ function collectTri(prefix, n){
   return o;
 }
 
+/* v19: Байршил — УХААН, ядаргааны асуумж (хяналтын хуудасны SV_TPL oyut/manlai-тай ижил 2 газар) */
+const LOCS = ["Манлай бар","Оюут бар"];
+const locTxt = x => (x && LOCS.includes(x.loc)) ? x.loc : (x && x.loc) || "—";
 function uhaanForm(){
   const u = me(); if(!u) return landing();
   view(uhaanForm, false);
@@ -934,6 +937,8 @@ function uhaanForm(){
     <div class="paper"><div class="formcard">
       <h3>Ямагт ажил эхлэхийн өмнө УХААН-ы тохирлыг шалгадаг байх</h3>
       <p class="muted">${esc(u.name)} · ${esc(u.sap)} · ${today()} · ${esc(albaN(u.alba))}</p>
+      <label class="f" for="loc">Байршил <span class="req">*</span></label>
+      <select id="loc" aria-required="true"><option value="">— Сонгоно уу —</option>${LOCS.map(l=>`<option>${esc(l)}</option>`).join("")}</select>
       <label class="f" for="job">Миний ажил</label><input id="job" value="${esc(u.job||"")}"/>
       <h4>Урьдаар ажлаа нарийн тооц</h4>
       ${U1.map((t,i)=>triRow("a"+i,t)).join("")}
@@ -954,11 +959,13 @@ function uhaanForm(){
   bindTri(app);
   $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#send").onclick = ()=>{
+    const loc=$("#loc").value;
+    if(!LOCS.includes(loc)){ toast("Байршлаа сонгоно уу"); $("#loc").focus(); $("#loc").scrollIntoView({block:"center"}); return; }
     const a=collectTri("a",U1.length), b=collectTri("b",U2.length), c=collectTri("c",U3.length);
     if(Object.values({...a,...b,...c}).some(v=>!v)){ toast("Бүх мөрийг ✓ / — / ✕-ээр тэмдэглэнэ үү"); return; }
     const stop = b.b3==="no" || Object.values(c).some(v=>v==="ok");
     const id = uid();
-    write({["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), job:$("#job").value, date:today(), time:nowStr(), a,b,c,
+    write({["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, job:$("#job").value, date:today(), time:nowStr(), a,b,c,
       risk:$("#risk").value, ctrl:$("#ctrl").value, stop, status: stop?"zogsooson":"huleegdej", supervisor:null}});
     alert(stop?"Ажлаа зогсоо. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйчид мэдэгдлээ.":"Илгээгдлээ. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйч харна.");
     workerHome();
@@ -1113,6 +1120,8 @@ function fatigueForm(){
         <div class="cell"><span>${ic("lock")}Огноо</span><b>${today()}</b></div>
         <div class="cell"><span>${ic("lock")}Тасаг / Нэгж</span><b>${esc(albaN(u.alba))}</b></div>
       </div>
+      <div class="qcard" id="qloc"><h3>Байршил <span class="req">*</span></h3>
+        <div class="opts two" role="radiogroup">${LOCS.map(l=>`<button type="button" class="opt" role="radio">${esc(l)}</button>`).join("")}</div></div>
       ${knownG ? "" : `<div class="qcard" id="qg"><h3>Хүйс</h3><p class="muted">Согтууруулах ундааны үнэлгээ хүйсээс хамаарна</p>
         <div class="opts two" role="radiogroup"><button type="button" class="opt" role="radio">Эр</button><button type="button" class="opt" role="radio">Эм</button></div></div>`}
       ${FAT2.map((q,i)=> q.num
@@ -1145,14 +1154,15 @@ function fatigueForm(){
   app.oninput = refresh;
   $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#calc").onclick = ()=>{
-    const g = gender(), v = vals(), miss = [];
+    const g = gender(), v = vals(), miss = [], loc = optVal("qloc")||"";
+    if(!LOCS.includes(loc)) miss.push("байршил");
     if(!g) miss.push("хүйс");
     FAT2.forEach((q,i)=>{ if(fatRisk(q, v[q.id], g||"Эр")==null) miss.push(String(i+1)); });
     if(miss.length){ $("#fterr").textContent = "Бөглөнө үү: "+miss.join(", ")+" (тоо 0 ба түүнээс их)"; toast("Бүх асуултад хариулна уу"); return; }
     if(fatNum(v.q6) < fatNum(v.q5)){ $("#fterr").textContent = "48 цагт унтсан цаг 24 цагийнхаас бага байж болохгүй"; return; }
     const A = fatigueAssess(v, g);
     const id = uid();
-    const rec = {id, v:2, sap:u.sap, name:u.name, alba:albaN(u.alba), gender:g, date:today(), time:nowStr(), ts:Date.now(),
+    const rec = {id, v:2, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, gender:g, date:today(), time:nowStr(), ts:Date.now(),
       score:A.score, max:A.max, level:A.level, act:A.act, risk:{}, num:{}};
     FAT2.forEach(q=>{ const r=A.risk[q.id];
       rec.risk[q.id] = FAT_RK[r];
@@ -1551,7 +1561,7 @@ function supervisorHome(){
   const app = mount(shell("тойм", `
     ${phead("УХААН шалгах", `${esc(albaN(u.alba))} · Өнөөдөр: ${today()}`)}
     ${hygDueCard(u.alba)}
-    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td class="nowrap"><button class="btn sm" data-u="${esc(x.id)}">Нээх</button> <button class="btn sm warn" data-udel="${esc(x.id)}" aria-label="Устгах" title="Устгах">${ic("trash","sm")}</button></td></tr>`), "УХААН бүртгэл алга")}</div>
+    <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Байршил","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td class="nowrap"><button class="btn sm" data-u="${esc(x.id)}">Нээх</button> <button class="btn sm warn" data-udel="${esc(x.id)}" aria-label="Устгах" title="Устгах">${ic("trash","sm")}</button></td></tr>`), "УХААН бүртгэл алга")}</div>
     ${healthCard(u.alba)}
     ${labAlertCard(true)}
     <div class="card" id="svstaff"><div class="ctitle">${ic("users")}<h3>Албаны ажилтнууд (${aw.length})</h3></div>
@@ -1576,6 +1586,7 @@ function viewUhaan(id){
   const show=(a,pref,src)=>a.map((t,i)=>`<div class="item inl"><p>${esc(t)}</p><b>${sym((src||{})[pref+i])}</b></div>`).join("");
   const app = mount(`${appbar("УХААН · "+esc(x.name), esc(x.date), true)}<div class="paper"><div class="formcard">
     <p class="muted">${esc(x.date)} ${esc(x.time||"")} · ${esc(albaN(x.alba))} · ${esc(x.job||"")}</p>
+    <p id="uloc"><b>Байршил:</b> ${esc(locTxt(x))}</p>
     ${x.stop?`<div class="warnbox bad">${ic("alert","sm")}<span>Зогсоох нөхцөл илэрсэн</span></div>`:""}
     <h4>Урьдаар тооц</h4>${show(U1,"a",x.a)}
     <h4>Хор хөнөөл</h4>${show(U2,"b",x.b)}
@@ -1646,7 +1657,7 @@ function hygieneHome(){
             const last=f.find(x=>x.sap===w.sap);
             return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?fatFace(last.level,20)+" "+esc(fatLvTxt(last.level)):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td></tr>`;
           })))}
-        ${det("ov-uhaan","checks","УХААН — сүүлийн бүртгэл", Math.min(12,u.length), tbl(["Огноо","Нэр","Алба","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td>${stU(x)}</td></tr>`)))}`));
+        ${det("ov-uhaan","checks","УХААН — сүүлийн бүртгэл", Math.min(12,u.length), tbl(["Огноо","Нэр","Алба","Байршил","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${stU(x)}</td></tr>`)))}`));
   app.addEventListener("click", e=>{ const k=e.target.closest("[data-ovopen]"); if(k){ const d=$("#"+k.dataset.ovopen); if(d){ d.open=true; d.scrollIntoView({behavior:"smooth", block:"start"}); } } }, true);
   app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
@@ -1754,7 +1765,7 @@ function workerProfile(sap){
     ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтрийн сунгалт, файлыг аюулгүй ажиллагаа, эрүүл ахуйч бүртгэнэ.</p>`:""}
     ${wbCardHtml(w, canEdit)}
     <div class="wpgrid">
-      ${sec("checks","Сүүлийн УХААН", tbl(["Огноо","Ажил","Төлөв"], uh.map(x=>`<tr class="click" data-u="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td></tr>`), "УХААН бүртгэл алга"))}
+      ${sec("checks","Сүүлийн УХААН", tbl(["Огноо","Байршил","Ажил","Төлөв"], uh.map(x=>`<tr class="click" data-u="${esc(x.id)}"><td>${esc(x.date)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td></tr>`), "УХААН бүртгэл алга"))}
       ${sup?"":sec("battery","Ядаргаа", tbl(["Огноо","Дүн","Түвшин"], fa.map(x=>`<tr><td>${esc(x.date)}</td><td>${fatFace(x.level,24)||esc(x.score)}</td><td>${fLvl(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга"))}
       ${sup?"":sec("virus","Халдварын асуумж", tbl(["Огноо","Дүгнэлт"], inf.map(x=>`<tr><td>${esc(x.date)}</td><td>${vBadge(x.verdict)}</td></tr>`), "Халдварын асуумж алга"))}
       ${sec("calendar","Талбарын хуваарь", tbl(["Ирэх","Гарах","Төлөв"], ro.map(x=>`<tr><td>${esc(x.arrive)}</td><td>${esc(x.leave||"—")}</td><td>${roSt(x)}</td></tr>`), "Хуваарь алга"))}
@@ -1806,7 +1817,7 @@ async function saveRenew(w, kind, u, form){
   workerProfile(w.sap);
 }
 
-let FTF = {who:"", from:"", to:"", lvl:""};
+let FTF = {who:"", from:"", to:"", lvl:"", loc:""};
 const fLvlB = l => l==="Өндөр"?'<span class="badge b-bad">Их</span>':l==="Дунд"?'<span class="badge b-wait">Дунд</span>':l==="Бага"?'<span class="badge b-ok">Бага</span>':esc(l||"—");
 function fatigueAnswers(x){
   if(Array.isArray(x.ans) && x.ans.length) return x.ans.filter(a=>a&&a.q).map(a=>({q:a.q, a:a.a}));
@@ -1831,25 +1842,26 @@ function fatigueListPage(){
   view(fatigueListPage, true);
   const all=list("fatigue").sort(byNew);
   const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
-  const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl));
+  const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl) && (!FTF.loc||(FTF.loc==="—"?!LOCS.includes(x.loc):x.loc===FTF.loc)));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
   const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
     
     <div class="card filters noprint" id="ftfilt"><div class="frow">
       <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option value="${l}" ${FTF.lvl===l?"selected":""}>${fatLvTxt(l)}</option>`).join("")}</select>
+      <select id="ftloc" aria-label="Байршил"><option value="">Бүх байршил</option>${[...LOCS,"—"].map(l=>`<option value="${esc(l)}" ${FTF.loc===l?"selected":""}>${l==="—"?"Байршилгүй (хуучин)":esc(l)}</option>`).join("")}</select>
       <label class="fdate">Эхлэх <input type="date" id="ftfrom" value="${esc(FTF.from)}"/></label>
       <label class="fdate">Дуусах <input type="date" id="ftto" value="${esc(FTF.to)}"/></label>
       <button class="btn ghost sm" id="ftclr">Цэвэрлэх</button></div>
       <p class="muted" id="ftcnt">${f.length} / ${all.length} бүртгэл</p></div>
     <div class="card">
-    ${tbl(["Огноо","Нэр","SAP","Тасаг","Дүн / хариулт","Түвшин",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td>${fatDots(x)}</td><td>${fLvlB(x.level)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>
+    ${tbl(["Огноо","Нэр","SAP","Тасаг","Байршил","Дүн / хариулт","Түвшин",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${fatDots(x)}</td><td>${fLvlB(x.level)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>
     <details class="card noprint" id="fcrit"><summary><b>Үнэлгээний хүснэгт</b> <span class="muted">— асуулт бүрийн эрсдэл</span></summary>${fatCritHtml()}</details>`));
   app.addEventListener("click", e=>{ const r=e.target.closest("[data-fv]"); if(r){ e.preventDefault(); e.stopImmediatePropagation(); fatigueView(r.dataset.fv); window.scrollTo(0,0); } }, true);
   bindNav(app);
-  const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
-  ["#ftwho","#ftlvl","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
-  $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:""}; fatigueListPage(); };
+  const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, loc:$("#ftloc").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
+  ["#ftwho","#ftlvl","#ftloc","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
+  $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:"",loc:""}; fatigueListPage(); };
 }
 function fatigueView(id){
   if(!requireRole("hygiene")) return;
@@ -1863,6 +1875,7 @@ function fatigueView(id){
       <div class="cell"><span>SAP</span><b>${esc(x.sap)}</b></div>
       <div class="cell"><span>Тасаг / Нэгж</span><b>${esc(albaN(x.alba||w.alba))}</b></div>
       <div class="cell"><span>Огноо</span><b>${esc(x.date)}</b></div>
+      <div class="cell" id="floc"><span>Байршил</span><b>${esc(locTxt(x))}</b></div>
     </div>
     ${x.v===2 ? `<p class="muted">Хүйс: ${esc(x.gender||"—")}${x.time?" · "+esc(x.time):""}</p>${fatResultHtml(x)}` : `
     <p><b>Оноо:</b> ${esc(x.score)}${x.max?"/"+esc(x.max):""} · <b>Түвшин:</b> ${fLvlB(x.level)}</p>
@@ -3854,8 +3867,8 @@ async function exportExcel(from,to,kinds){
   }
   if(kinds.includes("fat")){
     const s3=wb.addWorksheet("Ядаргаа");
-    s3.addRow(["Огноо","SAP","Нэр","Алба","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Шөнийн ээлжийн өмнө амарсан","Төвлөрөл","Оноо","Түвшин"]);
-    list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,albaN(x.alba),x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q12||"",x.q11,x.score,fatLvTxt(x.level)]));
+    s3.addRow(["Огноо","SAP","Нэр","Алба","Байршил","Хүйс","24ц","48ц","Сэрүүн","Архи","Эм","Шөнийн ээлжийн өмнө амарсан","Төвлөрөл","Оноо","Түвшин"]);
+    list("fatigue").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s3.addRow([x.date,x.sap,x.name,albaN(x.alba),locTxt(x),x.gender,x.q5,x.q6,x.q7,x.q8,x.q10,x.q12||"",x.q11,x.score,fatLvTxt(x.level)]));
   }
   if(kinds.includes("book")) addBookSheets(wb, inR);
   if(kinds.includes("lab")) addLabSheet(wb);
