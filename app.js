@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v21 · 2026-10-23";
+const APP_VER = "v22 · 2026-10-23";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -458,6 +458,7 @@ async function afterLogin(sap, role, uid){
   await Promise.race([ready, new Promise(r=>setTimeout(r, 5000))]);
   if(role==="hygiene") migratePins().catch(e=>console.warn("pins", e && e.code));
   _wLoginShown = false; setTimeout(waterTick, 2500);
+  setTimeout(()=>pushSync(false), 1500);
 }
 async function onAuth(user){
   if(_loggingIn) return;
@@ -647,8 +648,9 @@ function setSession(u){ session = u? {sap:u.sap, role:u.role, ...(u.local?{local
 /* ======================= НҮҮР / НЭВТРЭХ ======================= */
 function signOutCloud(){
   if(CLOUD_AUTH && _auth && _auth.currentUser && !_auth.currentUser.isAnonymous){
+    const pr = pushForget();                    // v22: энэ төхөөрөмжийн push захиалгыг устгана (дараагийн хэрэглэгчид бусдын сануулга ирэхгүй)
     stopSync(); AUTH.uid = AUTH.sap = AUTH.role = null;
-    _auth.signOut().catch(e=>console.warn("signout", e && e.code));
+    pr.finally(()=>_auth.signOut().catch(e=>console.warn("signout", e && e.code)));
   }
 }
 function landing(){
@@ -4171,7 +4173,7 @@ function waterCard(u){
     <div class="wbar" role="progressbar" aria-valuemin="0" aria-valuemax="${WATER_GOAL}" aria-valuenow="${c}"><i style="width:${pct}%"></i></div>
     <div class="wglass">${Array.from({length:WATER_GOAL},(_,i)=>GLASS_SVG(i<c)).join("")}</div>
     <p class="muted wsub">${done?"Өнөөдрийн зорилго биелсэн. Сайн байна!":`Өдөрт дор хаяж ${WATER_GOAL} аяга ус ууна · дутуу: ${WATER_GOAL-c} аяга`}</p>
-    <div class="row-gap">${waterPermBtn()}${hyg?`<button type="button" class="btn ghost sm" data-nav="ус" data-wrep>${ic("chart","sm")} 7 хоногийн тайлан</button>`:""}</div>
+    ${pushBox()}<div class="row-gap">${hyg?`<button type="button" class="btn ghost sm" data-nav="ус" data-wrep>${ic("chart","sm")} 7 хоногийн тайлан</button>`:""}</div>
   </div>`;
 }
 async function waterBrowserNotif(title, body, nid){
@@ -4308,6 +4310,76 @@ document.addEventListener("click", async e=>{
   }
 });
 setInterval(waterTick, 60000);
+
+/* ======================= WEB PUSH (v22) — сайт хаалттай үед ч утсан дээр =======================
+   push/{sap}/{hash} = {endpoint, keys:{p256dh,auth}, role, sap, ua, ts}   (hash = SHA-256(endpoint)-ийн эхний 32 тэмдэгт)
+   Сервер: /api/push-water (GitHub Actions цаг тутам) — 10 аягад хүрээгүй хүмүүст «Усаа уугаарай 💧», Даваа гарагт эрүүл ахуйчид 7 хоногийн тайлан.
+   iPhone: iOS 16.4+ дээр зөвхөн «Нүүр дэлгэцэнд нэмэх»-ээр суулгасан апп-аас push ажиллана. */
+const VAPID_PUBLIC = "BNroAraZuHJ8d-dWf4cDyMDGWN1_j6qGvXfSH-iG8_8xNamXa2VE90VttLpMRpFfupZts4w58m0ZlhCoysnovAQ";
+const PUSH = {state:"init", hash:null, sap:null, busy:false};   // state: init|unsupported|ios|denied|off|on|nocloud
+const isIOS = ()=>/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+const isStandalone = ()=>!!((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone);
+const pushSupported = ()=>("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window) && !EMU_NO_SW;
+function b64uToU8(b){ const p = "=".repeat((4-b.length%4)%4), r = atob((b+p).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(r, c=>c.charCodeAt(0)); }
+async function subHash(ep){ const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ep)); return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,32); }
+async function swReg(){ if(!navigator.serviceWorker) return null; try{ return await navigator.serviceWorker.register("/sw.js"); }catch(e){ console.warn("sw", e && e.message); return null; } }
+function pushSet(st){ if(PUSH.state!==st){ PUSH.state = st; scheduleRender(); const vf = VIEW.fn; if(vf && !VIEW.live) vf(); } }
+/* ask=true — товч дарсан (зөвшөөрөл асууна). ask=false — нэвтэрсний дараа чимээгүй шалгаж, зөвшөөрсөн бол захиалгыг шинэчилнэ */
+async function pushSync(ask){
+  const u = me(); if(!u || !session) return;
+  if(!pushSupported()){ pushSet(isIOS() && !isStandalone() ? "ios" : "unsupported"); return; }
+  if(Notification.permission==="denied"){ pushSet("denied"); return; }
+  if(Notification.permission!=="granted" && !ask){ pushSet("off"); return; }
+  if(PUSH.busy) return; PUSH.busy = true;
+  try{
+    if(ask && Notification.permission!=="granted"){
+      const p = await Notification.requestPermission();
+      if(p!=="granted"){ pushSet(p==="denied"?"denied":"off"); toast("Мэдэгдэл зөвшөөрөгдсөнгүй"); return; }
+    }
+    const reg = await swReg(); if(!reg){ pushSet("unsupported"); return; }
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(sub){ const k = sub.options && sub.options.applicationServerKey;
+      if(k){ const a = new Uint8Array(k), b = b64uToU8(VAPID_PUBLIC); if(a.length!==b.length || a.some((x,i)=>x!==b[i])){ try{ await sub.unsubscribe(); }catch(_){} sub = null; } } }
+    if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(VAPID_PUBLIC)});
+    const j = sub.toJSON(), hash = await subHash(j.endpoint), sap = keyOf(u.sap);
+    if(!(_fb && CLOUD_AUTH && _auth && _auth.currentUser && !_auth.currentUser.isAnonymous)){ pushSet("nocloud"); return; }
+    const mark = LS+"push_"+sap;
+    if(ask || lsGet(mark, null)!==hash){
+      await _fb.ref(ROOT+"/push/"+sap+"/"+hash).set({endpoint:j.endpoint, keys:{p256dh:j.keys.p256dh, auth:j.keys.auth}, role:u.role||"", sap:u.sap, ua:String(navigator.userAgent).slice(0,300), ts:Date.now()});
+      lsSet(mark, hash);
+    }
+    PUSH.hash = hash; PUSH.sap = sap;
+    pushSet("on");
+    if(ask){ toast("Утсан дээрх мэдэгдэл асаалаа"); waterBrowserNotif("Мэдэгдэл асаалттай 💧", "Сайт хаалттай байсан ч ус уух сануулга энэ төхөөрөмж дээр ирнэ.", "water"); }
+  }catch(e){ console.warn("push", e && (e.code||e.message)); pushSet("off"); if(ask) toast("Мэдэгдэл асааж чадсангүй. Дахин оролдоно уу"); }
+  finally{ PUSH.busy = false; }
+}
+async function pushForget(){
+  try{
+    if(PUSH.hash && PUSH.sap && _fb){ const h = PUSH.hash, s = PUSH.sap; PUSH.hash = PUSH.sap = null; PUSH.state = "init"; lsSet(LS+"push_"+s, null);
+      await Promise.race([_fb.ref(ROOT+"/push/"+s+"/"+h).set(null), new Promise(r=>setTimeout(r, 2500))]); }
+  }catch(e){ console.warn("push forget", e && (e.code||e.message)); }
+}
+async function pushOff(){
+  await pushForget();
+  try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if(sub) await sub.unsubscribe(); }catch(_){}
+  pushSet("off"); toast("Утсан дээрх мэдэгдэл унтарлаа");
+}
+function pushBox(){
+  const st = PUSH.state;
+  if(st==="on") return `<p class="pushon">${ic("bell","sm")} Утсан дээр мэдэгдэл асаалттай — сайт хаалттай байсан ч сануулга ирнэ. <button type="button" class="linkbtn" data-pushoff>Унтраах</button></p>`;
+  if(st==="ios") return `<div class="pushhint" role="note"><b>${ic("bell","sm")} iPhone дээр мэдэгдэл авах бол:</b>
+    <ol><li>Safari-н доод талын <b>Хуваалцах</b> <span aria-hidden="true">⬆︎</span> товчийг дарна</li><li><b>«Нүүр дэлгэцэнд нэмэх»</b> (Add to Home Screen) сонгоно</li><li>Нүүр дэлгэцэн дээрх <b>ЭАХС</b> аппаас нээж нэвтрээд <b>«Мэдэгдэл асаах»</b> дарна</li></ol>
+    <small class="muted">iOS 16.4 буюу түүнээс шинэ хувилбар шаардлагатай.</small></div>`;
+  if(st==="denied") return `<p class="pushhint">Мэдэгдэл хаалттай байна. Утасныхаа тохиргоо → хөтөч/апп → <b>Мэдэгдэл</b>-ийг зөвшөөрөөд дахин нээнэ үү.</p>`;
+  if(st==="unsupported" || st==="init") return "";
+  return `<div class="row-gap"><button type="button" class="btn sm pushbtn" data-pushon ${PUSH.busy?"disabled":""}>${ic("bell","sm")} Мэдэгдэл асаах</button><small class="muted">Сайт хаалттай байсан ч утсан дээр сануулга ирнэ</small></div>`;
+}
+document.addEventListener("click", e=>{
+  if(e.target.closest("[data-pushon]")){ e.preventDefault(); pushSync(true); }
+  else if(e.target.closest("[data-pushoff]")){ e.preventDefault(); pushOff(); }
+});
 
 /* ======================= ЭХЛЭЛ ======================= */
 (function boot(){

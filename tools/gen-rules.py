@@ -126,6 +126,16 @@ SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newD
                   " && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/))"
                   " && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200)))")
 
+# v22: Web Push захиалга — push/{sap}/{hash}; хэрэглэгч зөвхөн өөрийн sap дор бичнэ/устгана/уншина; эрүүл ахуйч (сервер) бүгдийг уншина/устгана
+PUSH_VALIDATE = ("!newData.exists() || ($h.matches(/^[0-9a-f]{16,64}$/)"
+    " && newData.child('endpoint').isString() && newData.child('endpoint').val().beginsWith('https://') && newData.child('endpoint').val().length <= 1000"
+    " && newData.child('keys/p256dh').isString() && newData.child('keys/p256dh').val().length <= 200"
+    " && newData.child('keys/auth').isString() && newData.child('keys/auth').val().length <= 100"
+    " && newData.child('ts').isNumber()"
+    " && (!newData.child('ua').exists() || (newData.child('ua').isString() && newData.child('ua').val().length <= 300)))")
+PUSH_NODE = {".write": HYG, "_sent": {"$k": {".validate": "newData.isString() && newData.val().length <= 20"}}, "$sap": {".read": f"auth != null && {MYSAP} === $sap",
+                                     "$h": {".write": f"{MEMBER} && {MYSAP} === $sap", ".validate": PUSH_VALIDATE}}}
+
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
         ".read": HYG,
@@ -149,6 +159,7 @@ def strict():
         # v19: Нойрны чанарын судалгаа — ажилтан өөрийн sap-аар шинээр үүсгэнэ/уншина; эрүүл ахуйч бүгдийг уншина/устгана
         "sleep": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE, ".validate": SLEEP_VALIDATE}},
         "water": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap", "date"], ".write": HYG, "$id": {".write": WATER_WRITE, ".validate": WATER_VALIDATE}},
+        "push": PUSH_NODE,
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -197,6 +208,7 @@ def transition():
         "settings": {".write": ANY},
         "uhaan": {".indexOn": ["sap"], "$id": w}, "fatigue": {".indexOn": ["sap"], "$id": w}, "infect": {".indexOn": ["sap"], "$id": w},
         "roster": {"$id": w}, "hygcheck": {"$id": w},
+        "push": PUSH_NODE,
         "sleep": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": SLEEP_VALIDATE}},
         "water": {".indexOn": ["sap", "date"], "$id": {".write": ANY, ".validate": WATER_VALIDATE}},
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},

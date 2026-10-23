@@ -1,0 +1,9 @@
+{
+  "name": "eahs",
+  "private": true,
+  "description": "ЭАХС — статик сайт + Vercel функцууд (api/). Build шаардахгүй.",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

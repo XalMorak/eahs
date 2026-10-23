@@ -67,6 +67,21 @@
             ".write": "auth != null"
           }
         },
+        "push": {
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          "_sent": {
+            "$k": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            }
+          },
+          "$sap": {
+            ".read": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap",
+            "$h": {
+              ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap",
+              ".validate": "!newData.exists() || ($h.matches(/^[0-9a-f]{16,64}$/) && newData.child('endpoint').isString() && newData.child('endpoint').val().beginsWith('https://') && newData.child('endpoint').val().length <= 1000 && newData.child('keys/p256dh').isString() && newData.child('keys/p256dh').val().length <= 200 && newData.child('keys/auth').isString() && newData.child('keys/auth').val().length <= 100 && newData.child('ts').isNumber() && (!newData.child('ua').exists() || (newData.child('ua').isString() && newData.child('ua').val().length <= 300)))"
+            }
+          }
+        },
         "sleep": {
           ".indexOn": [
             "sap"

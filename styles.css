@@ -1161,3 +1161,11 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .wtw tr.wnone td{opacity:.7}
 .wtw th{white-space:nowrap}
 @media print{.wrem{display:none !important}}
+/* v22: Web Push */
+.card.water .pushon{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:10px 0 4px;font-size:14px;color:#0A6B3D;background:#E7F7EE;border-radius:12px;padding:8px 12px}
+.card.water .pushon svg{color:#0A8F4F}
+.linkbtn{background:none;border:0;padding:0;color:#0B5CAD;text-decoration:underline;font:inherit;cursor:pointer}
+.card.water .pushhint{margin:10px 0 4px;font-size:14px;background:#FFF7E0;border:1px solid #F4D58A;border-radius:12px;padding:10px 12px;color:#4A3B0B}
+.card.water .pushhint ol{margin:6px 0 4px 20px;padding:0}
+.card.water .pushhint li{margin:3px 0}
+.card.water .pushbtn{background:#0B84C6;border-color:#0B84C6;width:auto}
