@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v13 · 2026-10-11";
+const APP_VER = "v21 · 2026-10-23";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -89,7 +89,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -401,10 +401,10 @@ function setCloud(state, msg){
 let SUBS = [];
 const SYNCED = new Set();   // үүлнээс анх ачаалагдсан цуглуулгууд
 function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; SYNCED.clear(); Object.values(ADV_SUBS).forEach(f=>{ try{ f(); }catch(e){} }); ADV_SUBS = {}; }
-const OWN_COLS = ["uhaan","fatigue","infect","sleep"];
+const OWN_COLS = ["uhaan","fatigue","infect","sleep","water"];
 function syncPlan(role){
   if(role==="hygiene") return COLS;
-  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts"];
+  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water"];
   return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck"];
 }
 function startSync(role, sap){
@@ -416,6 +416,7 @@ function startSync(role, sap){
     let q = _fb.ref(ROOT+"/"+c), map = v=>v||{};
     if(role==="worker" && c==="users"){ q = _fb.ref(ROOT+"/users/"+k); map = v=> v? {[k]:v} : {}; }
     else if(role==="worker" && OWN_COLS.includes(c)) q = q.orderByChild("sap").equalTo(k);
+    else if(role!=="hygiene" && c==="water") q = q.orderByChild("sap").equalTo(k);
     else if(role==="worker" && (c==="adviceTo" || c==="adviceAck")){ q = _fb.ref(ROOT+"/"+c+"/"+k); map = v=> ({[k]: v||{}}); }
     const cb = snap=>{ SYNCED.add(c); DB[c] = map(snap.val()); overlayPending(c); persist([c]); if(c==="notifs") onNotifs(); if(c==="users") ready();
       if(role==="worker" && (c==="adviceIdx" || c==="adviceTo" || c==="users")) syncWorkerAdvice(k);
@@ -456,6 +457,7 @@ async function afterLogin(sap, role, uid){
   flush();
   await Promise.race([ready, new Promise(r=>setTimeout(r, 5000))]);
   if(role==="hygiene") migratePins().catch(e=>console.warn("pins", e && e.code));
+  _wLoginShown = false; setTimeout(waterTick, 2500);
 }
 async function onAuth(user){
   if(_loggingIn) return;
@@ -874,6 +876,7 @@ function workerHome(){
     ${task("inf","virus","Халдварын асуумж", infTxt, infTodo?"todo":infect?"done":"idle", infect?"Дахин бөглөх":"Бөглөх")}
     ${task("slp","moon","Нойрны чанарын судалгаа", lastS?`Сүүлийн: ${lastS.date}${lastS.hours!=null?" · "+lastS.hours+" цаг":""}`:"Хүссэн үедээ бөглөнө", lastS&&lastS.date===today()?"done":"idle", lastS&&lastS.date===today()?"Дахин бөглөх":"Бөглөх")}
     </div>
+    ${waterCard(u)}
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
       ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — аюулгүй ажиллагаа, эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
@@ -1573,10 +1576,10 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
   supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
   const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
@@ -1598,7 +1601,7 @@ function bindNav(app, extra){
     const nav=e.target.closest("[data-nav]")?.dataset.nav;
     if(nav){
       const sup = me()?.role==="supervisor";
-      ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "аюул":hazardListPage, "халдвар":infectListPage,
+      ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "ус":waterReportPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
         "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
@@ -1630,6 +1633,7 @@ function supervisorHome(){
   const aw = hbPeople().filter(w=>w.sap!==u.sap && albaN(w.alba)===albaN(u.alba)).sort((a,b)=>a.name.localeCompare(b.name));
   const app = mount(shell("тойм", `
     ${phead("УХААН шалгах", `${esc(albaN(u.alba))} · Өнөөдөр: ${today()}`)}
+    ${waterCard(u)}
     ${hygDueCard(u.alba)}
     <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Байршил","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td class="nowrap"><button class="btn sm" data-u="${esc(x.id)}">Нээх</button> <button class="btn sm warn" data-udel="${esc(x.id)}" aria-label="Устгах" title="Устгах">${ic("trash","sm")}</button></td></tr>`), "УХААН бүртгэл алга")}</div>
     ${healthCard(u.alba)}
@@ -1708,6 +1712,7 @@ function hygieneHome(){
   const det=(id,icn,t,n,body)=>`<details class="card ovd" id="${id}"><summary>${ic(icn)}<b>${t}</b>${n!=null?`<span class="badge b-new">${n}</span>`:""}<span class="muted ovmore">Дэлгэрэнгүй</span></summary><div class="ovbody">${body}</div></details>`;
   const app = mount(shell("тойм", `
         ${phead("Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
+        ${waterCard(me_)}
         <div class="kpis ovk">
           <div class="kpi k-blu click" data-ovopen="ov-uhaan" id="kpi-uhaan"><i>${ic("checks")}</i><div>УХААН өнөөдөр<b>${uT.length}</b><span class="muted">хүлээгдэж буй: ${uPend}</span></div></div>
           <div class="kpi k-red ${hExp?"hot":""} click" data-hbjump id="kpi-hbexp"><i>${ic("book")}</i><div>Цагаан дэвтэр дууссан<b>${hExp}</b><span class="muted">дөхсөн (≤${H_SOON} хоног): ${hSoon}</span></div></div>
@@ -3816,6 +3821,7 @@ function reportPage(){
       <label class="chk"><input type="checkbox" id="x-inf" checked/> Халдварын асуумж</label>
       <label class="chk"><input type="checkbox" id="x-fat" checked/> Ядаргааны үнэлгээ</label>
       <label class="chk"><input type="checkbox" id="x-sleep" checked/> Нойрны чанарын судалгаа</label>
+      <label class="chk"><input type="checkbox" id="x-water" checked/> Ус уух (өдөр бүрийн аяга)</label>
       <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр (одоогийн төлөв + сунгалтын түүх)</label>
       <label class="chk"><input type="checkbox" id="x-lab" checked/> Бүтээгдэхүүний шинжилгээний бичиг</label>
       <div class="gap"></div>
@@ -3824,7 +3830,7 @@ function reportPage(){
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
-    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-sleep","sleep"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
+    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-sleep","sleep"],["x-water","water"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
     if(!kinds.length){ toast("Дор хаяж нэг тайлан сонгоно уу"); return; }
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     $("#xl").disabled=true; $("#xl").textContent="Бэлдэж байна…";
@@ -3943,6 +3949,11 @@ async function exportExcel(from,to,kinds){
     const s4=wb.addWorksheet("Нойр");
     s4.addRow(["Огноо","SAP","Нэр","Алба","Унтсан цаг","Сэрсэн цаг","Нойр (цаг)","Өглөөний цай","Юу иддэг","Ороогүй шалтгаан"]);
     list("sleep").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s4.addRow([x.date,x.sap,x.name,albaN(x.alba),x.bed||"",x.wake||"",x.hours??"",x.bf||"",x.food||"",x.reason||""]));
+  }
+  if(kinds.includes("water")){
+    const s5=wb.addWorksheet("Ус");
+    s5.addRow(["Огноо","SAP","Нэр","Алба","Эрх","Аяга",WATER_GOAL+"+ аяга"]);
+    list("water").filter(x=>inR(x.date)).sort((a,b)=>byNew(a,b)||String(a.name||"").localeCompare(String(b.name||""))).forEach(x=>s5.addRow([x.date,x.sap,x.name||"",albaN(x.alba),roleName(x.role),+x.cups||0,(+x.cups||0)>=WATER_GOAL?"Тийм":"Үгүй"]));
   }
   if(kinds.includes("book")) addBookSheets(wb, inR);
   if(kinds.includes("lab")) addLabSheet(wb);
@@ -4119,6 +4130,185 @@ function openBugReport(){
   setTimeout(()=>tx.focus(), 30);
 }
 
+/* ======================= УС УУХ (v21) — бүх эрх =======================
+   water/{sap}_{YYYY-MM-DD} = {id,sap,name,alba,role,date,cups,ts}
+   Сануулга: сайт нээлттэй үед 07:00–22:00 цагт ~75 мин тутам (10 аяга хүртэл); хөтчийн мэдэгдэл (зөвшөөрсөн бол).
+   Аюулгүй ажиллагаа, эрүүл ахуйч: «Ус» — 7 хоногийн тайлан, Даваа гараг бүр 7 хоногийн хураангуй. */
+const WATER_GOAL = 10, WATER_MAX = 50, WATER_START = 7, WATER_END = 22;
+const WATER_GAP = 75*60000, WATER_LOGIN_GAP = 15*60000;
+const WDAYS = ["Да","Мя","Лх","Пү","Ба","Бя","Ня"];
+const waterId = (sap, d) => keyOf(sap)+"_"+(d||today());
+function waterCups(sap, d){ const r = (DB.water||{})[waterId(sap,d)]; return r && typeof r.cups==="number" ? r.cups : 0; }
+const GLASS_SVG = full => `<svg viewBox="0 0 24 24" class="wgl ${full?"full":""}" aria-hidden="true"><path d="M5 3h14l-1.6 17.2a2 2 0 0 1-2 1.8H8.6a2 2 0 0 1-2-1.8z" class="wgo"/><path d="M6.3 9h11.4l-1.1 11.1a1 1 0 0 1-1 .9H8.4a1 1 0 0 1-1-.9z" class="wgw"/></svg>`;
+function waterBehind(c){
+  const n = new Date(), h = n.getHours()+n.getMinutes()/60;
+  if(h < WATER_START) return false;
+  const exp = Math.min(WATER_GOAL, Math.floor((h-WATER_START)/(WATER_END-WATER_START)*WATER_GOAL));
+  return c < exp;
+}
+function waterAdd(delta){
+  const u = me(); if(!u) return;
+  const id = waterId(u.sap), cur = waterCups(u.sap);
+  const cups = Math.max(0, Math.min(WATER_MAX, cur+delta));
+  if(cups===cur) return;
+  write({["water/"+id]: {id, sap:u.sap, name:String(u.name||"").slice(0,100), alba:albaN(u.alba), role:u.role||"", date:today(), cups, ts:Date.now()}});
+  if(delta>0) toast(cups===WATER_GOAL ? "Баяр хүргэе! Өнөөдрийн 10 аягаа уучихлаа" : `Ус +1 аяга · ${cups}/${WATER_GOAL}`);
+  const rem = document.getElementById("wrem");
+  if(rem){ if(cups>=WATER_GOAL) closeModal("wrem"); else { const b = rem.querySelector("#wremcnt"); if(b) b.textContent = cups; } }
+}
+function waterPermBtn(){
+  if(!("Notification" in window) || Notification.permission!=="default") return "";
+  return `<button type="button" class="btn ghost sm" data-wperm>${ic("bell","sm")} Сануулгыг утсан дээр асаах</button>`;
+}
+function waterCard(u){
+  if(!u) return "";
+  const c = waterCups(u.sap), done = c>=WATER_GOAL, pct = Math.min(100, Math.round(c/WATER_GOAL*100));
+  const hyg = u.role==="hygiene";
+  return `<div class="card water ${done?"done":""}" id="watercard">
+    <div class="ctitle">${ic("drop")}<h3>Усаа уугаарай</h3><span class="muted">${today()}</span></div>
+    <div class="wrow"><div class="wbig"><b id="wcnt">${c}</b><span>/${WATER_GOAL} аяга</span>${done?`<span class="wok" aria-label="Зорилго биелсэн">${ic("check","sm")}</span>`:""}</div>
+      <div class="wbtns"><button type="button" class="btn ghost sm wminus" data-water="-1" aria-label="1 аяга хасах" ${c?"":"disabled"}>−1</button><button type="button" class="btn wplus" data-water="1">+1 аяга</button></div></div>
+    <div class="wbar" role="progressbar" aria-valuemin="0" aria-valuemax="${WATER_GOAL}" aria-valuenow="${c}"><i style="width:${pct}%"></i></div>
+    <div class="wglass">${Array.from({length:WATER_GOAL},(_,i)=>GLASS_SVG(i<c)).join("")}</div>
+    <p class="muted wsub">${done?"Өнөөдрийн зорилго биелсэн. Сайн байна!":`Өдөрт дор хаяж ${WATER_GOAL} аяга ус ууна · дутуу: ${WATER_GOAL-c} аяга`}</p>
+    <div class="row-gap">${waterPermBtn()}${hyg?`<button type="button" class="btn ghost sm" data-nav="ус" data-wrep>${ic("chart","sm")} 7 хоногийн тайлан</button>`:""}</div>
+  </div>`;
+}
+async function waterBrowserNotif(title, body, nid){
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  const opts = {body, icon:"/icon-192.png", badge:"/icon-192.png", tag:"eahs-"+nid, renotify:true, data:{url:"/?n="+nid}};
+  try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if(reg && reg.showNotification){ await reg.showNotification(title, opts); return; } }catch(e){ console.warn("sw notif", e && e.message); }
+  try{ const n = new Notification(title, opts); n.onclick = ()=>{ window.focus(); n.close(); }; }catch(e){ console.warn("notif", e && e.message); }
+}
+function showWaterReminder(u, c){
+  closeModal("wrem");
+  const m = document.createElement("div");
+  m.id = "wrem"; m.className = "wrem"; m.setAttribute("role","alertdialog"); m.setAttribute("aria-labelledby","wremt");
+  m.innerHTML = `<span class="wremi">${ic("drop")}</span><div class="wremb"><b id="wremt">Усаа уугаарай!</b><span>Өнөөдөр <b id="wremcnt">${c}</b>/${WATER_GOAL} аяга</span></div>
+    <button type="button" class="btn sm wplus" data-water="1">+1 аяга</button><button type="button" class="wremx" aria-label="Хаах">×</button>`;
+  document.body.appendChild(m);
+  m.querySelector(".wremx").onclick = ()=>closeModal("wrem");
+  clearTimeout(window._wremT); window._wremT = setTimeout(()=>closeModal("wrem"), 60000);
+}
+let _wLoginShown = false;
+function waterTick(){
+  const u = me(); if(!u || !session) return;
+  if(_fb && CLOUD_AUTH && !SYNCED.has("water")) return;          // өгөгдөл ачаалагдаагүй — буруу сануулахгүй
+  const n = new Date(), h = n.getHours();
+  if(u.role==="hygiene") waterWeeklyPopup(u);
+  if(h < WATER_START || h >= WATER_END) return;
+  const c = waterCups(u.sap); if(c >= WATER_GOAL) return;
+  const k = LS+"wlast_"+keyOf(u.sap), last = +lsGet(k, 0) || 0, since = Date.now()-last;
+  const due = since >= WATER_GAP || (!_wLoginShown && waterBehind(c) && since >= WATER_LOGIN_GAP);
+  _wLoginShown = true;
+  if(!due) return;
+  if(document.querySelector(".modal-bg")) return;                  // өөр цонх нээлттэй бол дараа
+  lsSet(k, Date.now());
+  showWaterReminder(u, c);
+  if(document.hidden || !document.hasFocus()) waterBrowserNotif("Усаа уугаарай!", `Өнөөдөр ${c}/${WATER_GOAL} аяга. Өдөрт дор хаяж ${WATER_GOAL} аяга ус ууна уу.`, "water");
+}
+/* 7 хоног (Даваа–Ням) */
+function mondayOf(d){ const dt = new Date(d+"T00:00:00"); return addDays(-((dt.getDay()+6)%7), d); }
+function waterWeek(mon, alba){
+  const days = Array.from({length:7},(_,i)=>addDays(i, mon)), sun = days[6];
+  const elapsed = Math.max(1, Math.min(7, daysBetween(mon, today())+1));
+  const recs = list("water").filter(x=>x.date>=mon && x.date<=sun);
+  const ppl = new Map();
+  users().filter(w=>w.role==="worker").forEach(w=>ppl.set(keyOf(w.sap), {sap:w.sap, name:w.name, alba:albaN(w.alba), role:w.role}));
+  recs.forEach(x=>{ const k = keyOf(x.sap); if(!ppl.has(k)){ const w = (DB.users||{})[k]; ppl.set(k, {sap:x.sap, name:(w&&w.name)||x.name||x.sap, alba:albaN((w&&w.alba)||x.alba), role:(w&&w.role)||x.role}); } });
+  const byKey = {}; recs.forEach(x=>{ byKey[keyOf(x.sap)+"_"+x.date] = +x.cups||0; });
+  const rows = [...ppl.entries()].filter(([,p])=>!alba || p.alba===alba).map(([k,p])=>{
+    const cups = days.map(d=>byKey[k+"_"+d]);
+    const sum = cups.reduce((s,v)=>s+(v||0),0), logged = cups.some(v=>v!=null);
+    return {...p, cups, sum, logged, avg: Math.round(sum/elapsed*10)/10, hit: cups.filter(v=>(v||0)>=WATER_GOAL).length};
+  }).sort((a,b)=>(b.logged-a.logged) || String(a.name).localeCompare(String(b.name)));
+  const act = rows.filter(r=>r.logged);
+  const avg = act.length ? Math.round(act.reduce((s,r)=>s+r.avg,0)/act.length*10)/10 : 0;
+  return {mon, sun, days, elapsed, rows, act:act.length, avg, met: act.filter(r=>r.avg>=WATER_GOAL).length};
+}
+function waterWeeklyPopup(u){
+  const mon = mondayOf(today()), k = LS+"wweek_"+keyOf(u.sap);
+  if(lsGet(k, null)===mon) return;
+  if(document.querySelector(".modal-bg")) return;
+  const last = addDays(-7, mon), w = waterWeek(last, "");
+  lsSet(k, mon);
+  closeModal("wweek");
+  const m = document.createElement("div");
+  m.id = "wweek"; m.className = "modal-bg";
+  m.innerHTML = `<div class="modal wweekm" role="dialog" aria-modal="true" aria-labelledby="wwt">
+    <div class="mhead"><span class="mic">${ic("drop")}</span><div><small>${esc(w.mon)} – ${esc(w.sun)}</small><h3 id="wwt">7 хоногийн усны тайлан</h3></div></div>
+    <div class="wsum">
+      <div><b>${w.act}</b><span>хүн бүртгэсэн</span></div>
+      <div><b>${w.avg}</b><span>дундаж аяга / өдөр</span></div>
+      <div class="${w.act&&w.met<w.act?"bad":"good"}"><b>${w.met}</b><span>${WATER_GOAL}+ аяга биелүүлсэн</span></div>
+    </div>
+    ${w.act&&w.act>w.met?`<p class="muted">${w.act-w.met} хүн өдөрт дунджаар ${WATER_GOAL} аягад хүрээгүй.</p>`:""}
+    <div class="mfoot"><button class="btn ghost" type="button" id="wwclose">Хаах</button><button class="btn" type="button" id="wwopen">${ic("chart","sm")} Тайлан харах</button></div>
+  </div>`;
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  m.querySelector("#wwclose").onclick = ()=>closeModal("wweek");
+  m.onkeydown = e=>{ if(e.key==="Escape") closeModal("wweek"); };
+  m.querySelector("#wwopen").onclick = ()=>{ closeModal("wweek"); WF.mon = last; waterReportPage(); window.scrollTo(0,0); };
+  if(document.hidden || !document.hasFocus()) waterBrowserNotif("7 хоногийн усны тайлан", `${w.mon}–${w.sun}: ${w.act} хүн, дундаж ${w.avg} аяга, ${w.met} хүн ${WATER_GOAL}+`, "waterweek");
+}
+let WF = {mon:null, alba:""};
+function waterReportPage(){
+  if(!requireRole("hygiene")) return;
+  view(waterReportPage, true);
+  if(!WF.mon) WF.mon = mondayOf(today());
+  const w = waterWeek(WF.mon, WF.alba), cur = WF.mon===mondayOf(today());
+  const cell = (v,d)=> d>today() ? `<td class="wc fut">·</td>` : v==null ? `<td class="wc none">—</td>` : `<td class="wc ${v>=WATER_GOAL?"ok":"lo"}">${v}</td>`;
+  const app = mount(shell("ус", `${phead("Ус уух — 7 хоногийн тайлан", `Зорилго: өдөрт дор хаяж ${WATER_GOAL} аяга · ${esc(w.mon)} – ${esc(w.sun)}${cur?" (энэ 7 хоног)":""}`)}
+    <div class="card filters noprint"><div class="frow">
+      <button class="btn ghost sm" id="wprev" aria-label="Өмнөх 7 хоног">‹ Өмнөх</button>
+      <input type="date" id="wmon" value="${esc(w.mon)}" aria-label="7 хоног сонгох"/>
+      <button class="btn ghost sm" id="wnext" ${cur?"disabled":""} aria-label="Дараах 7 хоног">Дараах ›</button>
+      <select id="walba" aria-label="Алба"><option value="">Бүх алба</option>${ALBA.map(a=>`<option ${WF.alba===a?"selected":""}>${esc(a)}</option>`).join("")}</select>
+      <button class="btn sm" id="wxl">${ic("download","sm")} Excel</button></div></div>
+    <div class="kpis wkpis">
+      <div class="kpi k-blu"><i>${ic("users")}</i><div>Бүртгэсэн хүн<b>${w.act}</b><span class="muted">нийт ${w.rows.length}</span></div></div>
+      <div class="kpi k-grn"><i>${ic("drop")}</i><div>Дундаж аяга / өдөр<b>${w.avg}</b><span class="muted">${w.elapsed} өдрөөр</span></div></div>
+      <div class="kpi ${w.act&&w.met<w.act?"k-red":"k-grn"}"><i>${ic("check")}</i><div>${WATER_GOAL}+ биелүүлсэн<b>${w.met}</b><span class="muted">бүртгэсэн ${w.act}-аас</span></div></div>
+    </div>
+    <div class="card wtw">
+    ${tbl(["Ажилтан", ...w.days.map((d,i)=>WDAYS[i]+" "+d.slice(8)), "Дундаж", `${WATER_GOAL}+ өдөр`],
+      w.rows.map(r=>`<tr class="${r.logged && r.avg<WATER_GOAL?"wlow":""} ${r.logged?"":"wnone"}"><td><b>${esc(r.name||"")}</b><br><small class="muted">${esc(r.sap)} · ${esc(r.alba)}</small></td>${r.cups.map((v,i)=>cell(v,w.days[i])).join("")}<td class="wc avg ${r.logged?(r.avg>=WATER_GOAL?"ok":"lo"):""}"><b>${r.logged?r.avg:"—"}</b></td><td class="wc">${r.hit}/${w.elapsed}</td></tr>`),
+      "Энэ 7 хоногт бүртгэл алга")}
+    <p class="muted">Улаан мөр — өдөрт дунджаар ${WATER_GOAL} аягад хүрээгүй. «—» — тухайн өдөр бүртгээгүй.</p></div>`));
+  bindNav(app);
+  const go = d=>{ WF.mon = mondayOf(d); waterReportPage(); };
+  $("#wprev").onclick = ()=>go(addDays(-7, WF.mon));
+  $("#wnext").onclick = ()=>{ if(!cur) go(addDays(7, WF.mon)); };
+  $("#wmon").onchange = e=>{ if(e.target.value) go(e.target.value); };
+  $("#walba").onchange = e=>{ WF.alba = e.target.value; waterReportPage(); };
+  $("#wxl").onclick = async ()=>{
+    if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
+    const wb = new ExcelJS.Workbook(); wb.creator = "EAHS"; addWaterSheet(wb, w);
+    await downloadWb(wb, `EAHS_us_${w.mon}_${w.sun}${WF.alba?"_"+WF.alba:""}.xlsx`);
+  };
+}
+function addWaterSheet(wb, w){
+  const s = wb.addWorksheet("Ус "+w.mon);
+  const hr = s.addRow(["SAP","Нэр","Алба", ...w.days.map((d,i)=>WDAYS[i]+" "+d), "Нийт","Дундаж", WATER_GOAL+"+ өдөр"]);
+  hr.font = {bold:true};
+  w.rows.forEach(r=>{
+    const row = s.addRow([r.sap, r.name, r.alba, ...r.cups.map(v=>v==null?"":v), r.sum, r.logged?r.avg:"", r.hit]);
+    if(r.logged && r.avg<WATER_GOAL) row.eachCell(c=>{ c.fill = {type:"pattern", pattern:"solid", fgColor:{argb:"FFFDE2E2"}}; });
+  });
+  s.addRow([]); s.addRow(["Бүртгэсэн", w.act, "", "Дундаж аяга/өдөр", w.avg, "", WATER_GOAL+"+ биелүүлсэн", w.met]);
+  s.columns.forEach((c,i)=>{ c.width = i===1 ? 24 : i<3 ? 12 : 10; });
+}
+document.addEventListener("click", async e=>{
+  const b = e.target.closest("[data-water]");
+  if(b){ e.preventDefault(); waterAdd(+b.dataset.water); return; }
+  if(e.target.closest("[data-wperm]")){
+    try{ const p = await Notification.requestPermission(); if(p==="granted"){ toast("Сануулга асаалаа"); waterBrowserNotif("Усаа уугаарай!", `Өдөрт дор хаяж ${WATER_GOAL} аяга ус ууна уу.`, "water"); } else toast("Сануулга зөвхөн сайт дотор харагдана"); }
+    catch(err){ console.warn("perm", err); }
+    scheduleRender(); const vf = VIEW.fn; if(vf && !VIEW.live) vf();
+  }
+});
+setInterval(waterTick, 60000);
+
 /* ======================= ЭХЛЭЛ ======================= */
 (function boot(){
   let started=false;
@@ -4131,12 +4321,16 @@ function openBugReport(){
     started=true;
     if(qrArea!=null) return hazardForm({area: qrArea});
     homeFor(me());
-    if(openN && me() && me().role!=="worker") openNotif(openN);
+    if(openN==="water" || openN==="waterweek"){ if(openN==="waterweek" && me() && me().role==="hygiene"){ WF.mon = addDays(-7, mondayOf(today())); waterReportPage(); } }
+    else if(openN && me() && me().role!=="worker") openNotif(openN);
   };
   if("serviceWorker" in navigator && !EMU_NO_SW){
     navigator.serviceWorker.register("/sw.js").catch(e=>console.warn("sw", e && e.message));
     navigator.serviceWorker.addEventListener("message", e=>{
-      if(e.data && e.data.type==="eahs-open"){ const id = new URL(e.data.url, location.origin).searchParams.get("n"); if(id && me()) openNotif(id); }
+      if(e.data && e.data.type==="eahs-open"){ const id = new URL(e.data.url, location.origin).searchParams.get("n");
+        if(id==="waterweek"){ if(me() && me().role==="hygiene"){ WF.mon = addDays(-7, mondayOf(today())); waterReportPage(); } }
+        else if(id==="water"){ if(me()) homeFor(me()); }
+        else if(id && me()) openNotif(id); }
     });
   }
   if(Object.keys(DB.users).length) start();       // локал өгөгдлөөр шууд харуулна

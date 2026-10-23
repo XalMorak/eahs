@@ -115,6 +115,12 @@ ADV_IMG_META_VALIDATE = ("!newData.exists() || (newData.child('size').isNumber()
 ADV_IMG_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
 
 # v19: Нойрны судалгаа
+# v21: Ус уух — water/{sap}_{YYYY-MM-DD}; бүх эрх өөрийн sap-аар үүсгэж/шинэчилнэ, эрүүл ахуйч бүгдийг уншина
+WATER_WRITE = f"({MEMBER}) && newData.child('sap').val() === {MYSAP} && (!data.exists() || data.child('sap').val() === {MYSAP})"
+WATER_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
+    " && $id === newData.child('sap').val() + '_' + newData.child('date').val()"
+    " && newData.child('cups').isNumber() && newData.child('cups').val() >= 0 && newData.child('cups').val() <= 50 && newData.child('cups').val() % 1 === 0"
+    " && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 100)))")
 SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
                   " && (!newData.child('hours').exists() || (newData.child('hours').isNumber() && newData.child('hours').val() >= 0 && newData.child('hours').val() <= 24))"
                   " && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/))"
@@ -142,6 +148,7 @@ def strict():
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         # v19: Нойрны чанарын судалгаа — ажилтан өөрийн sap-аар шинээр үүсгэнэ/уншина; эрүүл ахуйч бүгдийг уншина/устгана
         "sleep": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE, ".validate": SLEEP_VALIDATE}},
+        "water": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap", "date"], ".write": HYG, "$id": {".write": WATER_WRITE, ".validate": WATER_VALIDATE}},
         "roster": {".read": MEMBER, ".write": HYG},
         "hygcheck": {".read": MEMBER, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -191,6 +198,7 @@ def transition():
         "uhaan": {".indexOn": ["sap"], "$id": w}, "fatigue": {".indexOn": ["sap"], "$id": w}, "infect": {".indexOn": ["sap"], "$id": w},
         "roster": {"$id": w}, "hygcheck": {"$id": w},
         "sleep": {".indexOn": ["sap"], "$id": {".write": ANY, ".validate": SLEEP_VALIDATE}},
+        "water": {".indexOn": ["sap", "date"], "$id": {".write": ANY, ".validate": WATER_VALIDATE}},
         "hazards": {"$id": {".write": ANY, ".validate": HZ_VALIDATE}},
         "photos": {"$id": w},
         "notifs": {"$id": {".write": ANY, ".validate": NOTIF_VALIDATE}},

@@ -76,6 +76,16 @@
             ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('hours').exists() || (newData.child('hours').isNumber() && newData.child('hours').val() >= 0 && newData.child('hours').val() <= 24)) && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/)) && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200)))"
           }
         },
+        "water": {
+          ".indexOn": [
+            "sap",
+            "date"
+          ],
+          "$id": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && $id === newData.child('sap').val() + '_' + newData.child('date').val() && newData.child('cups').isNumber() && newData.child('cups').val() >= 0 && newData.child('cups').val() <= 50 && newData.child('cups').val() % 1 === 0 && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 100)))"
+          }
+        },
         "hazards": {
           "$id": {
             ".write": "auth != null",
