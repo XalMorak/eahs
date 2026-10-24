@@ -1169,3 +1169,8 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .card.water .pushhint ol{margin:6px 0 4px 20px;padding:0}
 .card.water .pushhint li{margin:3px 0}
 .card.water .pushbtn{background:#0B84C6;border-color:#0B84C6;width:auto}
+
+/* v23: Андроид апп татах */
+.apk-offer{display:grid;gap:6px;margin-top:2px;padding:12px 14px;border-radius:var(--r);background:var(--brand-50);border:1px solid var(--brand-100)}
+.apk-offer .apk-btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;text-decoration:none}
+.apk-offer small{font-size:12.5px;color:var(--mut);line-height:1.4}

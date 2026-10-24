@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v22 · 2026-10-23";
+const APP_VER = "v23 · 2026-10-24";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -653,6 +653,22 @@ function signOutCloud(){
     pr.finally(()=>_auth.signOut().catch(e=>console.warn("signout", e && e.code)));
   }
 }
+/* v23: Андроид апп (TWA) татах — зөвхөн Андроид хөтөч дээр, апп дотроо биш */
+const APK_URL = "/eahs.apk";
+function inAndroidApp(){
+  try{
+    if((document.referrer||"").startsWith("android-app://")) sessionStorage.setItem("eahs_twa","1");
+    if(sessionStorage.getItem("eahs_twa")==="1") return true;
+  }catch(_){}
+  return !!((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone);
+}
+function apkOffer(){
+  if(!/Android/i.test(navigator.userAgent||"") || inAndroidApp()) return "";
+  return `<div class="apk-offer" id="apkOffer">
+      <a class="btn apk-btn" href="${APK_URL}" download="EAHS.apk" type="application/vnd.android.package-archive">${ic("download")} Андроид апп татах</a>
+      <small>Татсны дараа файлыг нээж «Суулгах» дарна. Шаардвал «Энэ эх сурвалжаас суулгахыг зөвшөөрөх»-ийг асаана.</small>
+    </div>`;
+}
 function landing(){
   closeModal("advlb"); closeModal("advmodal"); closeModal("wbbox"); closeModal("labbox"); closeModal("bugmodal"); ADV_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}}; BUG_DRAFT = {text:"", img:null};
   setSession(null); signOutCloud(); view(landing, false);
@@ -674,6 +690,7 @@ function landing(){
             <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Аюулгүй ажиллагаа, эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
             <hr/>
             <button class="menu-btn alt" data-g="hazard"><span class="mi">${ic("alert")}</span><span><b>Аюулыг мэдээлэх</b><small>Нэвтрэхгүйгээр шууд илгээнэ</small></span>${ic("chev","chev")}</button>
+            ${apkOffer()}
           </nav>
         </div>
         <div class="foot-sites">© Ерөө говь ХХК · Аюулгүй ажиллагаа, эрүүл ахуйн хяналтын систем</div>
