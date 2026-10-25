@@ -8,6 +8,10 @@
  *   07:00–21:59 — өнөөдөр 10 аягад хүрээгүй, сүүлийн 50 минутад аяга нэмээгүй бүх захиалагч руу сануулга.
  *   Даваа 09:00-с хойш (7 хоногт 1 удаа) — эрүүл ахуйчид өмнөх 7 хоногийн усны тайлангийн хураангуй.
  *   404/410 буцаасан захиалгыг устгана.
+ * v25: Апп доторх мэдэгдэл (notifs: их эрсдэлтэй аюул, «Ажиллахгүй», цагаан дэвтэр, шинжилгээ) — апп/сайт хаалттай байсан ч
+ *   эрүүл ахуйч (бүгд) ба тухайн албаны хянагчид push-ээр очно. Шинэ мэдэгдэл үүсэхэд апп өөрөө ?notif=1-ийг
+ *   (Authorization: Bearer <Firebase ID token>) дууддаг + cron 10 мин тутам нөхөж шалгана. push/_sent/notif = эхлэх ts, push/_sent/n_<id> = илгээсэн тэмдэг.
+ *   Бүх push urgency:"high" (Android Doze/унтсан үед ч шууд хүргэнэ; "normal" нь дэлгэц асах хүртэл хойшлогддог).
  * Давхардал хамгаалалт (v24): GitHub Actions 10 минут тутам дууддаг. Усны сануулгын «тойрог» сүүлийн илгээлтээс
  *   ≥55 минут өнгөрсөн үед л илгээгдэнэ (push/_sent/water = ms тэмдэгт мөр). Илгээхээс ӨМНӨ ETag + if-match-аар
  *   слотоо «эзэлнэ» — зэрэг хоёр дуудлага ирвэл нэг нь л амжина (412 → skipped:'race'). 7 хоногийн тайлан ч мөн адил.
@@ -45,6 +49,25 @@ function ubNow(d = new Date()) {
 function addDays(n, ymd) { const t = new Date(ymd + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
 function mondayOf(ymd) { const dow = new Date(ymd + "T00:00:00Z").getUTCDay(); return addDays(-((dow + 6) % 7), ymd); }
 
+async function tokenOk(idToken) {
+  try {
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${API_KEY}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+    if (!r.ok) return false;
+    const j = await r.json(); return !!(j.users && j.users.length);
+  } catch (_) { return false; }
+}
+const albaN = a => { const s = String(a == null ? "" : a).trim(); if (!s) return ""; return /оффис/i.test(s) ? "Оффис" : "Бар"; };
+const NOTIF_MAX_AGE = 24 * 3600000, NOTIF_MAX = 8;
+/* notif-ийг хэн авах вэ (апп-ын notifList()-тэй ижил): эрүүл ахуйч бүгд, хянагч — алба таарвал/албагүй бол; бичсэн хүн өөрөө биш */
+function notifTo(n, u, sap) {
+  if (!u || !n) return false;
+  if (n.bySap != null && keyOf(n.bySap) === sap) return false;
+  if (n.type === "health" && n.kind === "exam") return false;
+  if (u.role === "hygiene") return true;
+  if (u.role === "supervisor") return !n.alba || albaN(n.alba) === albaN(u.alba);
+  return false;
+}
 async function signIn(env) {
   const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -78,13 +101,19 @@ async function handler(req, res, envIn) {
   const env = envIn || process.env;
   if (!env.PUSH_CRON_SECRET || !env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY || !env.EAHS_DB_EMAIL || !env.EAHS_DB_PASSWORD)
     return send(res, 503, { ok: false, error: "not_configured" });
-  const given = hdr(req, "x-push-secret") || (hdr(req, "authorization").replace(/^Bearer\s+/i, ""));
-  if (!given || !safeEq(given, env.PUSH_CRON_SECRET)) return send(res, 401, { ok: false, error: "unauthorized" });
-
   const q = new URL(req.url || "/", "http://x").searchParams;
+  const given = hdr(req, "x-push-secret") || (hdr(req, "authorization").replace(/^Bearer\s+/i, ""));
+  let notifOnly = false;
+  if (!given || !safeEq(given, env.PUSH_CRON_SECRET)) {
+    /* Апп-аас: шинэ мэдэгдэл бичсэний дараа — Firebase ID token (нэргүй нэвтрэлт ч болно) шалгаад зөвхөн notif-ыг шүүрдэнэ */
+    if (q.get("notif") !== "1" || !given || given.length > 4096 || !(await tokenOk(given))) return send(res, 401, { ok: false, error: "unauthorized" });
+    notifOnly = true;
+  }
   const dry = q.get("dry") === "1", force = q.get("force") || "", only = q.get("only") ? keyOf(q.get("only")) : "";
   const now = ubNow(), out = { ok: true, ub: `${now.date} ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")}`, dry,
-    water: { sent: 0, skippedDone: 0, skippedRecent: 0, skippedUnknown: 0, failed: 0, window: false }, weekly: { due: false, sent: 0 }, subs: 0, removed: 0 };
+    water: { sent: 0, skippedDone: 0, skippedRecent: 0, skippedUnknown: 0, failed: 0, window: false }, weekly: { due: false, sent: 0 },
+    notif: { fresh: 0, sent: 0, failed: 0 }, subs: 0, removed: 0 };
+  if (notifOnly) out.mode = "notif";
 
   webpush.setVapidDetails(env.VAPID_SUBJECT || "mailto:admin@eahs.vercel.app", env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   let db;
@@ -104,10 +133,13 @@ async function handler(req, res, envIn) {
   out.subs = targets.length;
 
   const dead = new Set();
-  async function push(t, payload) {
+  async function push(t, payload, o = {}) {
     if (dry) return true;
     try {
-      await webpush.sendNotification(t.sub, JSON.stringify(payload), { TTL: 3600, urgency: "normal", timeout: 10000 });
+      /* urgency high → FCM/APNs өндөр ач холбогдолтой: апп хаалттай, утас унтсан (Doze) үед ч шууд хүрнэ */
+      const opt = { TTL: o.ttl || 3600, urgency: "high", timeout: 10000 };
+      if (o.topic) opt.topic = o.topic;
+      await webpush.sendNotification(t.sub, JSON.stringify(payload), opt);
       return true;
     } catch (e) {
       const sc = e && e.statusCode;
@@ -117,9 +149,32 @@ async function handler(req, res, envIn) {
     }
   }
 
+  /* 0) Апп доторх шинэ мэдэгдлүүд → хянагч / эрүүл ахуйчийн утас руу.
+     Мэдэгдэл бүрийг push/_sent/n_<id>-ээр (if-match null) нэг л удаа «эзэлнэ» — оффлайн байгаад хожуу орж ирсэн ч алдагдахгүй. */
+  if (!force) try {
+    const nowMs = Date.now(), base = +meta.notif || 0;
+    if (!base) { if (!dry) await db.put("push/_sent/notif", String(nowMs)); out.notif.baseline = true; }   // анх: хуучныг илгээхгүй
+    else {
+      const all = await db.get("notifs") || {};
+      const fresh = Object.values(all).filter(n => n && n.id && typeof n.ts === "number" && n.ts > base && nowMs - n.ts < NOTIF_MAX_AGE
+        && !meta["n_" + keyOf(n.id)] && !(n.type === "health" && n.kind === "exam")).sort((a, b) => a.ts - b.ts).slice(-NOTIF_MAX);
+      out.notif.fresh = fresh.length;
+      const jobs = [];
+      for (const n of fresh) {
+        if (!dry && !(await db.putIf("push/_sent/n_" + keyOf(n.id), String(n.ts), "null_etag"))) { out.notif.race = (out.notif.race || 0) + 1; continue; }
+        for (const t of targets) if (notifTo(n, users[t.sap], t.sap))
+          jobs.push(push(t, { title: String(n.title || "ЭАХС мэдэгдэл").slice(0, 120), body: String(n.body || "").slice(0, 300), tag: "eahs-" + n.id, url: "/?n=" + encodeURIComponent(n.id) }, { ttl: 86400 })
+            .then(okk => okk ? out.notif.sent++ : out.notif.failed++));
+      }
+      await Promise.all(jobs);
+      /* 2 хоногоос хуучин тэмдэглэгээг цэвэрлэнэ */
+      if (!dry && !notifOnly) for (const [k, v] of Object.entries(meta)) if (k.startsWith("n_") && nowMs - (+v || 0) > 2 * NOTIF_MAX_AGE) await db.del("push/_sent/" + k);
+    }
+  } catch (e) { console.error("push: notif", e.message); out.notif.error = e.message; }
+
   /* 1) Ус уух сануулга */
   out.water.window = now.hour >= START && now.hour < END;
-  let doWater = out.water.window || force === "water";
+  let doWater = !notifOnly && (out.water.window || force === "water");
   if (!doWater) out.water.skipped = "outside-window";
   if (doWater) {
     /* Тойргийн слотыг эзлэх: сүүлийн илгээлтээс ≥55 мин, зэрэг дуудлагаас нэг нь л */
@@ -142,7 +197,7 @@ async function handler(req, res, envIn) {
       const r = today[t.sap], cups = r && typeof r.cups === "number" ? r.cups : 0;
       if (cups >= GOAL) { out.water.skippedDone++; continue; }
       if (r && typeof r.ts === "number" && Date.now() - r.ts < RECENT_MS && force !== "water") { out.water.skippedRecent++; continue; }
-      jobs.push(push(t, { title: "Усаа уугаарай 💧", body: `Өнөөдөр ${cups}/${GOAL} аяга. Өдөрт дор хаяж ${GOAL} аяга ус ууна уу.`, tag: "eahs-water", url: "/?n=water" })
+      jobs.push(push(t, { title: "Усаа уугаарай 💧", body: `Өнөөдөр ${cups}/${GOAL} аяга. Өдөрт дор хаяж ${GOAL} аяга ус ууна уу.`, tag: "eahs-water", url: "/?n=water" }, { topic: "eahswater" })
         .then(okk => okk ? out.water.sent++ : out.water.failed++));
     }
     await Promise.all(jobs);
@@ -150,7 +205,7 @@ async function handler(req, res, envIn) {
 
   /* 2) Даваа гарагийн 7 хоногийн тайлан — эрүүл ахуйчид */
   const mon = mondayOf(now.date);
-  out.weekly.due = force === "weekly" || (now.wd === "Mon" && now.hour >= 9 && meta.weekly !== mon);
+  out.weekly.due = !notifOnly && (force === "weekly" || (now.wd === "Mon" && now.hour >= 9 && meta.weekly !== mon));
   if (out.weekly.due && force !== "weekly") {
     /* Илгээхээс өмнө 7 хоногийн слотыг эзэлнэ — 10 мин тутмын дуудлага давхар илгээхгүй */
     try {
@@ -166,17 +221,17 @@ async function handler(req, res, envIn) {
     const w = weekSummary(recs, last);
     out.weekly.summary = w;
     const hyg = targets.filter(t => users[t.sap] && users[t.sap].role === "hygiene");
-    await Promise.all(hyg.map(t => push(t, { title: "7 хоногийн усны тайлан", body: `${w.mon}–${w.sun}: ${w.act} хүн бүртгэсэн, дундаж ${w.avg} аяга/өдөр, ${w.met} хүн ${GOAL}+ аяга`, tag: "eahs-waterweek", url: "/?n=waterweek" })
+    await Promise.all(hyg.map(t => push(t, { title: "7 хоногийн усны тайлан", body: `${w.mon}–${w.sun}: ${w.act} хүн бүртгэсэн, дундаж ${w.avg} аяга/өдөр, ${w.met} хүн ${GOAL}+ аяга`, tag: "eahs-waterweek", url: "/?n=waterweek" }, { ttl: 86400, topic: "eahswaterweek" })
       .then(okk => { if (okk) out.weekly.sent++; })));
   }
 
   /* 3) Хүчингүй болсон захиалгыг устгана */
   for (const p of dead) { if (await db.del("push/" + p)) out.removed++; }
   if (out.water.skipped && !out.weekly.due) out.skipped = out.water.skipped;
-  console.log("push-water", JSON.stringify({ ub: out.ub, subs: out.subs, water: out.water, weekly: { due: out.weekly.due, sent: out.weekly.sent }, removed: out.removed }));
+  console.log("push-water", JSON.stringify({ ub: out.ub, subs: out.subs, water: out.water, weekly: { due: out.weekly.due, sent: out.weekly.sent }, notif: out.notif, removed: out.removed }));
   return send(res, 200, out);
 }
 
 module.exports = (req, res) => handler(req, res);
 module.exports.handler = handler;
-module.exports._test = { ubNow, mondayOf, addDays, weekSummary, ROUND_MS };
+module.exports._test = { ubNow, mondayOf, addDays, weekSummary, ROUND_MS, notifTo };

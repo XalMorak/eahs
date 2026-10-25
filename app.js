@@ -296,6 +296,7 @@ async function flush(){
     }
     const batch = PENDING.filter(flushable);
     if(!batch.length) return;
+    if(batch.some(e=>e.v!=null && /^notifs\/[^/]+$/.test(e.p))) setTimeout(pushPing, 800);   // v25: шинэ мэдэгдэл → хаалттай утсанд push
     setCloud("wait","Хадгалж байна…");
     try{
       await _fb.ref(ROOT).update(coalesce(batch));
@@ -2624,7 +2625,7 @@ function notifPage(){
   const app = mount(shell("мэдэгдэл", `${phead("Мэдэгдэл", u.role==="supervisor"?`${esc(albaN(u.alba))} — их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / бүтээгдэхүүний шинжилгээ`:"Их/маш их эрсдэлтэй аюул, «Ажиллахгүй» ажилтан, цагаан дэвтэр / бүтээгдэхүүний шинжилгээ")}
     <div class="card row-between wrap nperm"><div class="row-gap">${permHtml}</div>
       <button class="btn ghost sm" id="nall" ${ns.some(n=>!r.has(n.id))?"":"disabled"}>${ic("checks","sm")} Бүгдийг уншсан</button></div>
-    <p class="muted">Апп нээлттэй (эсвэл таб далд) үед мэдэгдэл ирнэ. Апп хаалттай үед ирэх «push» мэдэгдэлд сервер шаардлагатай.</p>
+    <p class="muted">Нүүр хуудасны «Мэдэгдэл асаах» товчийг дарсан бол апп/сайт хаалттай байсан ч эдгээр мэдэгдэл утсанд ирнэ.</p>
     <div class="card nlist">${ns.map(n=>{ const L=NLEVEL[n.level]||["Мэдэгдэл","b-new","bell"]; const un=!r.has(n.id);
       return `<button class="nitem ${un?"unread":""}" data-nid="${esc(n.id)}"><span class="nic ${esc(n.level||"")}">${ic(L[2])}</span>
         <span class="nbody"><b>${esc(n.title||"")}</b><span>${esc(n.body||"")}</span><small>${esc(n.by||"")} · ${n.ts?esc(new Date(n.ts).toLocaleString("mn-MN")):""}${n.alba?" · "+esc(albaN(n.alba)):""}</small></span>
@@ -4371,6 +4372,16 @@ async function pushSync(ask){
     if(ask){ toast("Утсан дээрх мэдэгдэл асаалаа"); waterBrowserNotif("Мэдэгдэл асаалттай 💧", "Сайт хаалттай байсан ч ус уух сануулга энэ төхөөрөмж дээр ирнэ.", "water"); }
   }catch(e){ console.warn("push", e && (e.code||e.message)); pushSet("off"); if(ask) toast("Мэдэгдэл асааж чадсангүй. Дахин оролдоно уу"); }
   finally{ PUSH.busy = false; }
+}
+/* v25: шинэ мэдэгдэл (аюул, «Ажиллахгүй», ...) бичигдсэний дараа серверт мэдэгдэнэ → хянагч/эрүүл ахуйчийн утсанд push (апп хаалттай ч) */
+let _pingT = 0;
+async function pushPing(){
+  try{
+    if(!_auth || !_auth.currentUser || EMU_NO_SW || !/^https:/.test(location.protocol)) return;
+    if(Date.now()-_pingT < 3000) return; _pingT = Date.now();
+    const tok = await _auth.currentUser.getIdToken();
+    await fetch("/api/push-water?notif=1", {method:"POST", headers:{Authorization:"Bearer "+tok}, keepalive:true});
+  }catch(e){ console.warn("push ping", e && e.message); }
 }
 async function pushForget(){
   try{
