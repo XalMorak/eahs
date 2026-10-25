@@ -8,6 +8,9 @@
  *   07:00–21:59 — өнөөдөр 10 аягад хүрээгүй, сүүлийн 50 минутад аяга нэмээгүй бүх захиалагч руу сануулга.
  *   Даваа 09:00-с хойш (7 хоногт 1 удаа) — эрүүл ахуйчид өмнөх 7 хоногийн усны тайлангийн хураангуй.
  *   404/410 буцаасан захиалгыг устгана.
+ * Давхардал хамгаалалт (v24): GitHub Actions 10 минут тутам дууддаг. Усны сануулгын «тойрог» сүүлийн илгээлтээс
+ *   ≥55 минут өнгөрсөн үед л илгээгдэнэ (push/_sent/water = ms тэмдэгт мөр). Илгээхээс ӨМНӨ ETag + if-match-аар
+ *   слотоо «эзэлнэ» — зэрэг хоёр дуудлага ирвэл нэг нь л амжина (412 → skipped:'race'). 7 хоногийн тайлан ч мөн адил.
  * Орчны хувьсагч: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, PUSH_CRON_SECRET, EAHS_DB_EMAIL, EAHS_DB_PASSWORD
  *   (EAHS_DB_* = эрүүл ахуйчийн эрхтэй Firebase Auth бүртгэл — RTDB-г REST-ээр уншина)
  */
@@ -18,7 +21,7 @@ const DB_URL = "https://borluulalt-f9d70-default-rtdb.asia-southeast1.firebaseda
 const ROOT = "eahs/v2";
 const API_KEY = "AIzaSyCj0zqo31QoCw2ggpOl2Aewu8u95azL6jQ";   // Firebase вэб API түлхүүр (нийтэд ил, апп-д байгаа)
 const TZ = "Asia/Ulaanbaatar";
-const GOAL = 10, START = 7, END = 22, RECENT_MS = 50 * 60000;
+const GOAL = 10, START = 7, END = 22, RECENT_MS = 50 * 60000, ROUND_MS = 55 * 60000;
 
 function send(res, status, obj) {
   res.statusCode = status;
@@ -55,6 +58,9 @@ function dbFactory(token) {
     get: async (path, q) => { const r = await fetch(u(path, q)); if (!r.ok) throw Object.assign(new Error("db_read_" + path.split("/")[0]), { status: r.status }); return r.json(); },
     put: async (path, v) => { const r = await fetch(u(path), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }); if (!r.ok) throw new Error("db_write_" + r.status); },
     del: async path => { const r = await fetch(u(path), { method: "DELETE" }); return r.ok; },
+    /* ETag-тай уншилт ба нөхцөлт бичилт (RTDB REST): 412 → өөр дуудлага түрүүлж бичсэн */
+    getE: async path => { const r = await fetch(u(path), { headers: { "X-Firebase-ETag": "true" } }); if (!r.ok) throw Object.assign(new Error("db_read_" + path.split("/")[0]), { status: r.status }); return { val: await r.json(), etag: r.headers.get("etag") }; },
+    putIf: async (path, v, etag) => { const r = await fetch(u(path), { method: "PUT", headers: { "Content-Type": "application/json", "if-match": etag || "null_etag" }, body: JSON.stringify(v) }); if (r.status === 412) return false; if (!r.ok) throw new Error("db_write_" + r.status); return true; },
   };
 }
 const qDate = (a, b) => `orderBy=${encodeURIComponent('"date"')}&startAt=${encodeURIComponent(JSON.stringify(a))}&endAt=${encodeURIComponent(JSON.stringify(b))}`;
@@ -113,7 +119,19 @@ async function handler(req, res, envIn) {
 
   /* 1) Ус уух сануулга */
   out.water.window = now.hour >= START && now.hour < END;
-  if (out.water.window || force === "water") {
+  let doWater = out.water.window || force === "water";
+  if (!doWater) out.water.skipped = "outside-window";
+  if (doWater) {
+    /* Тойргийн слотыг эзлэх: сүүлийн илгээлтээс ≥55 мин, зэрэг дуудлагаас нэг нь л */
+    try {
+      const { val, etag } = await db.getE("push/_sent/water");
+      const last = +val || 0, nowMs = Date.now();
+      out.water.last = last || null;
+      if (last && nowMs - last < ROUND_MS && force !== "water") { doWater = false; out.water.skipped = "too-soon"; out.water.nextInMin = Math.ceil((ROUND_MS - (nowMs - last)) / 60000); }
+      else if (!dry && !(await db.putIf("push/_sent/water", String(nowMs), etag))) { doWater = false; out.water.skipped = "race"; }
+    } catch (e) { console.error("push: claim", e.message); return send(res, 502, { ok: false, error: "claim_failed" }); }
+  }
+  if (doWater) {
     let recs = {};
     try { recs = await db.get("water", qDate(now.date, now.date)) || {}; } catch (e) { console.error("push: water", e.status); return send(res, 502, { ok: false, error: "db_read_water" }); }
     const today = {};
@@ -133,6 +151,14 @@ async function handler(req, res, envIn) {
   /* 2) Даваа гарагийн 7 хоногийн тайлан — эрүүл ахуйчид */
   const mon = mondayOf(now.date);
   out.weekly.due = force === "weekly" || (now.wd === "Mon" && now.hour >= 9 && meta.weekly !== mon);
+  if (out.weekly.due && force !== "weekly") {
+    /* Илгээхээс өмнө 7 хоногийн слотыг эзэлнэ — 10 мин тутмын дуудлага давхар илгээхгүй */
+    try {
+      const { val, etag } = await db.getE("push/_sent/weekly");
+      if (val === mon) { out.weekly.due = false; out.weekly.skipped = "already-sent"; }
+      else if (!dry && !(await db.putIf("push/_sent/weekly", mon, etag))) { out.weekly.due = false; out.weekly.skipped = "race"; }
+    } catch (e) { console.error("push: wclaim", e.message); out.weekly.due = false; out.weekly.skipped = "claim_failed"; }
+  }
   if (out.weekly.due) {
     const last = addDays(-7, mon);
     let recs = {};
@@ -142,15 +168,15 @@ async function handler(req, res, envIn) {
     const hyg = targets.filter(t => users[t.sap] && users[t.sap].role === "hygiene");
     await Promise.all(hyg.map(t => push(t, { title: "7 хоногийн усны тайлан", body: `${w.mon}–${w.sun}: ${w.act} хүн бүртгэсэн, дундаж ${w.avg} аяга/өдөр, ${w.met} хүн ${GOAL}+ аяга`, tag: "eahs-waterweek", url: "/?n=waterweek" })
       .then(okk => { if (okk) out.weekly.sent++; })));
-    if (!dry && force !== "weekly") { try { await db.put("push/_sent/weekly", mon); } catch (e) { console.error("push: meta", e.message); } }
   }
 
   /* 3) Хүчингүй болсон захиалгыг устгана */
   for (const p of dead) { if (await db.del("push/" + p)) out.removed++; }
+  if (out.water.skipped && !out.weekly.due) out.skipped = out.water.skipped;
   console.log("push-water", JSON.stringify({ ub: out.ub, subs: out.subs, water: out.water, weekly: { due: out.weekly.due, sent: out.weekly.sent }, removed: out.removed }));
   return send(res, 200, out);
 }
 
 module.exports = (req, res) => handler(req, res);
 module.exports.handler = handler;
-module.exports._test = { ubNow, mondayOf, addDays, weekSummary };
+module.exports._test = { ubNow, mondayOf, addDays, weekSummary, ROUND_MS };

@@ -1,20 +1,26 @@
 name: push-water
-# Цаг тутам (UB 07:05–21:05) усны сануулга + Даваа 09:00 UB долоо хоногийн тайлан
+# 10 минут тутам (UB 06:00–22:59) дуудна. Сервер өөрөө 07:00–21:59 цонх, ≥55 мин зай,
+# ETag слот эзлэлтээр цагт ~1 удаа л усны сануулга илгээнэ (GitHub зарим ажиллалтыг алгасдаг тул олон дуудлага).
+# Даваа 09:00 UB-с хойш 7 хоногийн тайлан — 7 хоногт 1 удаа.
 on:
   schedule:
-    - cron: "5 23,0-13 * * *"
+    - cron: "*/10 22-23,0-14 * * *"
   workflow_dispatch: {}
 permissions:
   contents: read
+concurrency:
+  group: push-water
+  cancel-in-progress: false
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 2
     steps:
       - name: Call /api/push-water
         env:
           PUSH_CRON_SECRET: ${{ secrets.PUSH_CRON_SECRET }}
         run: |
-          curl -fsS --retry 2 --max-time 60 -X POST \
+          curl -fsS --retry 2 --max-time 50 -X POST \
             -H "X-Push-Secret: $PUSH_CRON_SECRET" \
             https://eahs.vercel.app/api/push-water
+          echo
