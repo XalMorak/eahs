@@ -1540,7 +1540,7 @@ async function hazardPrint(id){
             ${HZ_GRID.flat().map(c=> c? opt(has(x.cls,c[0]),c) : `<div class="po"><span class="bx">☐</span><div></div></div>`).join("")}</div></td></tr>
           <tr>${L("Эрсдлийн түвшинг өөрийн сэтгэгдлээр илэрхийлнэ үү?","What is your impression of the risk?")}<td colspan="3" class="pv"><div class="pg g4 risk">
             ${HZ_RISK.map(r=>`<div class="po"><span class="bx">${hzMark(x.risk===r[0])}</span><div>${esc(r[0])} / <i class="in">${esc(r[1])}</i></div></div>`).join("")}</div></td></tr>
-          <tr class="tall">${L("Харсан аюулаа дэлгэрэнгүй дүрсэлж бичнэ үү?","Record details of the hazard")}<td colspan="3" class="pv txt">${esc(x.det||"")}</td></tr>
+          <tr class="tall">${L("Харсан аюулаа дэлгэрэнгүй дүрсэлж бичнэ үү?","Record details of the hazard")}<td colspan="3" class="pv hzdcell"><div class="hzdbox"><div class="txt" id="hzdtx">${esc(x.det||"")}</div><div class="hzdph" id="hzdph"></div></div></td></tr>
         </table>${foot(1)}
       </section>
       <section class="ppage">${band}
@@ -1557,8 +1557,21 @@ async function hazardPrint(id){
   $("#pb").onclick = hazardListPage;
   $("#pdl").onclick = ()=>hazardPdf(x);
   const ps = await getPhotos(id);
-  const el = $("#pph");
-  if(el && ps.length) el.innerHTML = `<div class="pphead">Хавсралт: зураг (${ps.length})</div><div class="ppgrid">${ps.slice(0,8).map(p=>`<img src="${esc(p)}" alt=""/>`).join("")}</div>`;
+  hzPlacePhotos(ps);
+}
+/* Зургийг «дэлгэрэнгүй» нүдэнд тайлбарын доор багтааж байрлуулна (нүдний өндөр хэвээр); багтахгүй үлдсэнийг 2-р хуудасны хавсралтад */
+function hzPlacePhotos(ps){
+  const box=$(".hzdbox"), tx=$("#hzdtx"), cell=$("#hzdph"), el=$("#pph");
+  if(!box || !cell) return;
+  const GAP=4, MINH=50, MAXH=170;
+  const W=box.clientWidth, avail=box.clientHeight-tx.offsetHeight-(tx.textContent.trim()?6:0);
+  const fit = k=>{ let best=0, bc=1; for(let c=1;c<=k;c++){ const r=Math.ceil(k/c); const h=Math.min(MAXH,(avail-GAP*(r-1))/r,((W-GAP*(c-1))/c)*3/4); if(h>best){ best=h; bc=c; } } return {h:Math.floor(best), c:bc}; };
+  let k=ps.length, f=fit(k);
+  while(k>0 && f.h<MINH){ k--; f=k?fit(k):f; }
+  const inCell=ps.slice(0,k), rest=ps.slice(k);
+  cell.style.marginTop = (k && tx.textContent.trim()) ? "6px" : "";
+  cell.innerHTML = inCell.map(p=>`<img src="${esc(p)}" alt="" style="width:${Math.floor(f.h*4/3)}px;height:${f.h}px"/>`).join("");
+  if(el) el.innerHTML = rest.length ? `<div class="pphead">Хавсралт: нэмэлт зураг (${rest.length})</div><div class="ppgrid">${rest.slice(0,8).map(p=>`<img src="${esc(p)}" alt=""/>`).join("")}</div>` : "";
 }
 /* Хэвлэх хуудсыг (2 × A4) яг харагдаж буйгаар нь PDF файл болгон татах */
 const loadJs = src => new Promise((ok,no)=>{ if(document.querySelector(`script[src="${src}"]`)) return ok(); const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>no(new Error("load "+src)); document.head.appendChild(s); });
