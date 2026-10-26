@@ -148,7 +148,7 @@ async function strict(){
   const s=await emailUser('akhakh@eahs.local','eahs#1234'); const su=s.auth.currentUser.uid;
   await expect('sup claim correct', true, ()=>claim(s.db,su,'akhakh','supervisor','1234'));
   await expect('sup: read users/hazards/notifs/photos', true, async()=>{ for(const c of ['users','hazards','notifs','photos','uhaan','hygcheck']) await s.db.ref(V+c).once('value'); });
-  await expect('sup: read fatigue', false, ()=>s.db.ref(V+'fatigue').once('value'));
+  await expect('sup: read fatigue (v26)', true, ()=>s.db.ref(V+'fatigue').once('value'));
   await expect('sup: read roles of others', false, ()=>s.db.ref(V+'roles').once('value'));
   await expect('sup: approve uhaan own alba', true, ()=>s.db.ref(V).update({'uhaan/u1/status':'batlagdsan','uhaan/u1/supervisor':'Д'}));
   await expect('sup: approve uhaan old name «Манлай баар» → Бар (same alba)', true, ()=>s.db.ref(V+'uhaan/u2/status').set('batlagdsan'));

@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v23 · 2026-10-24";
+const APP_VER = "v26 · 2026-10-26";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -405,7 +405,7 @@ function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; SYNC
 const OWN_COLS = ["uhaan","fatigue","infect","sleep","water"];
 function syncPlan(role){
   if(role==="hygiene") return COLS;
-  if(role==="supervisor") return ["users","settings","uhaan","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water"];
+  if(role==="supervisor") return ["users","settings","uhaan","fatigue","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water"];
   return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck"];
 }
 function startSync(role, sap){
@@ -1229,6 +1229,9 @@ function infectForm(){
 const SLEEP_Q = {bed:"Та өнгөрсөн шөнө хэдэн цагт унтаж амарсан бэ?", wake:"Та өглөө хэдэн цагт сэрсэн бэ?", hours:"Та хэдэн цаг унтаж амарсан бэ?",
   bf:"Та өглөөний цайнд орсон уу?", food:"Хэрэв орсон бол юу иддэг вэ?", reason:"Хэрэв ороогүй бол яагаад ороогүй вэ?"};
 const SLEEP_REASONS = ["Нойроо дийлдэггүй","Тойруу замаар хол явдаг","Угаасаа ордоггүй"];
+/* v26: Нойрны судалгаанд ажлын байр (заавал) — хуучин бичлэгт «—» */
+const SLEEP_LOCS = ["Оюут бар","Манлай бар","Оффис"];
+const sleepLoc = x => (x && SLEEP_LOCS.includes(x.loc)) ? x.loc : "—";
 function sleepHours(bed, wake){
   const m = t=>{ const r=/^(\d{1,2}):(\d{2})$/.exec(t||""); return r? (+r[1])*60 + (+r[2]) : null; };
   const a=m(bed), b=m(wake); if(a==null || b==null) return null;
@@ -1244,6 +1247,8 @@ function sleepForm(){
         <div class="cell">Овог нэр<b>${esc(u.name)}</b></div>
         <div class="cell">SAP / алба<b>${esc(u.sap)} · ${esc(albaN(u.alba))}</b></div>
       </div>
+      <div class="qcard" id="s-loc"><h3>Ажлын байр <span class="req">*</span></h3>
+        <div class="opts one" role="radiogroup">${SLEEP_LOCS.map(o=>`<button type="button" class="opt" role="radio">${esc(o)}</button>`).join("")}</div></div>
       <div class="qcard"><h3>1. ${esc(SLEEP_Q.bed)}</h3><input type="time" id="s-bed" aria-label="Унтсан цаг"/></div>
       <div class="qcard"><h3>2. ${esc(SLEEP_Q.wake)}</h3><input type="time" id="s-wake" aria-label="Сэрсэн цаг"/></div>
       <div class="qcard"><h3>3. ${esc(SLEEP_Q.hours)}</h3><p class="muted">1, 2-р асуултаас автоматаар бодогдоно, засаж болно.</p>
@@ -1266,7 +1271,8 @@ function sleepForm(){
   $("#s-bed").onchange = auto; $("#s-wake").onchange = auto; $("#s-bed").oninput = auto; $("#s-wake").oninput = auto;
   $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
   $("#send").onclick = ()=>{
-    const bed=$("#s-bed").value, wake=$("#s-wake").value, h=parseFloat(hrs.value), bf=optVal("s-bf");
+    const bed=$("#s-bed").value, wake=$("#s-wake").value, h=parseFloat(hrs.value), bf=optVal("s-bf"), loc=optVal("s-loc")||"";
+    if(!SLEEP_LOCS.includes(loc)){ toast("Ажлын байраа сонгоно уу"); $("#s-loc").scrollIntoView({block:"center"}); return; }
     if(!bed || !wake){ toast("Унтсан, сэрсэн цагаа оруулна уу"); return; }
     if(!(h>=0 && h<=24)){ toast("Унтсан хугацааг (0-24 цаг) оруулна уу"); return; }
     if(!bf){ toast("4-р асуултад хариулна уу"); return; }
@@ -1274,38 +1280,39 @@ function sleepForm(){
     if(bf==="Тийм" && !food){ toast("Юу иддэгээ бичнэ үү"); return; }
     if(bf==="Үгүй" && !reason){ toast("Ороогүй шалтгаанаа сонгоно уу"); return; }
     const id = uid(), hours = Math.round(h*10)/10;
-    const rec = {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:today(), ts:Date.now(), bed, wake, hours, bf,
+    const rec = {id, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, date:today(), ts:Date.now(), bed, wake, hours, bf,
       ...(bf==="Тийм"?{food}:{reason}),
-      ans:[{q:SLEEP_Q.bed,a:bed},{q:SLEEP_Q.wake,a:wake},{q:SLEEP_Q.hours,a:hours+" цаг"},{q:SLEEP_Q.bf,a:bf},
+      ans:[{q:"Ажлын байр",a:loc},{q:SLEEP_Q.bed,a:bed},{q:SLEEP_Q.wake,a:wake},{q:SLEEP_Q.hours,a:hours+" цаг"},{q:SLEEP_Q.bf,a:bf},
         bf==="Тийм"?{q:SLEEP_Q.food,a:food}:{q:SLEEP_Q.reason,a:reason}]};
     write({["sleep/"+id]: rec});
     toast("Илгээгдлээ. Баярлалаа.");
     workerHome();
   };
 }
-let SLF = {who:"", from:"", to:"", bf:""};
+let SLF = {who:"", from:"", to:"", bf:"", loc:""};
 function sleepListPage(){
   if(!requireRole("hygiene")) return;
   view(sleepListPage, true);
   const all=list("sleep").sort((a,b)=>byNew(a,b) || (b.ts||0)-(a.ts||0));
   const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
-  const f=all.filter(x=>(!SLF.who||x.sap===SLF.who) && (!SLF.from||(x.date||"")>=SLF.from) && (!SLF.to||(x.date||"")<=SLF.to) && (!SLF.bf||x.bf===SLF.bf));
+  const f=all.filter(x=>(!SLF.who||x.sap===SLF.who) && (!SLF.from||(x.date||"")>=SLF.from) && (!SLF.to||(x.date||"")<=SLF.to) && (!SLF.bf||x.bf===SLF.bf) && (!SLF.loc||sleepLoc(x)===SLF.loc));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
   const avg = f.filter(x=>typeof x.hours==="number"); const avgH = avg.length ? Math.round(avg.reduce((s,x)=>s+x.hours,0)/avg.length*10)/10 : null;
   const app = mount(shell("нойр", `${phead("Нойрны чанарын судалгаа", "Хэн, хэзээ, юу гэж бөглөснийг харна.")}
     <div class="card filters noprint" id="slfilt"><div class="frow">
       <select id="slwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${SLF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="slbf" aria-label="Өглөөний цай"><option value="">Өглөөний цай: бүгд</option>${["Тийм","Үгүй"].map(l=>`<option ${SLF.bf===l?"selected":""}>${l}</option>`).join("")}</select>
+      <select id="slloc" aria-label="Ажлын байр"><option value="">Ажлын байр: бүгд</option>${[...SLEEP_LOCS,"—"].map(l=>`<option value="${esc(l)}" ${SLF.loc===l?"selected":""}>${l==="—"?"Тодорхойгүй (хуучин)":esc(l)}</option>`).join("")}</select>
       <label class="fdate">Эхлэх <input type="date" id="slfrom" value="${esc(SLF.from)}"/></label>
       <label class="fdate">Дуусах <input type="date" id="slto" value="${esc(SLF.to)}"/></label>
       <button class="btn ghost sm" id="slclr">Цэвэрлэх</button></div>
       <p class="muted" id="slcnt">${f.length} / ${all.length} бүртгэл${avgH!=null?` · Дундаж нойр: ${avgH} цаг`:""}</p></div>
     <div class="card sltw">
-    ${tbl(["Ажилтан / огноо","Нойр","Өглөөний цай"], f.map(x=>`<tr><td><b>${esc(x.name||"")}</b><br><small class="muted">${esc(x.sap)} · ${esc(dept(x))}<br>${esc(x.date)}</small></td><td>${esc(x.bed||"?")}–${esc(x.wake||"?")}<br>${x.hours!=null?`<b class="${x.hours<6?"bad":""}">${esc(x.hours)} цаг</b>`:"—"}</td><td>${x.bf==="Тийм"?'<span class="badge b-ok">Тийм</span>':x.bf==="Үгүй"?'<span class="badge b-wait">Үгүй</span>':"—"}<br><small>${esc(x.bf==="Тийм"?(x.food||""):(x.reason||""))}</small></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Нойрны судалгаа бөглөөгүй байна")}</div>`));
+    ${tbl(["Ажилтан / огноо","Ажлын байр","Нойр","Өглөөний цай"], f.map(x=>`<tr><td><b>${esc(x.name||"")}</b><br><small class="muted">${esc(x.sap)} · ${esc(dept(x))}<br>${esc(x.date)}</small></td><td class="slloc">${esc(sleepLoc(x))}</td><td>${esc(x.bed||"?")}–${esc(x.wake||"?")}<br>${x.hours!=null?`<b class="${x.hours<6?"bad":""}">${esc(x.hours)} цаг</b>`:"—"}</td><td>${x.bf==="Тийм"?'<span class="badge b-ok">Тийм</span>':x.bf==="Үгүй"?'<span class="badge b-wait">Үгүй</span>':"—"}<br><small>${esc(x.bf==="Тийм"?(x.food||""):(x.reason||""))}</small></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Нойрны судалгаа бөглөөгүй байна")}</div>`));
   bindNav(app);
-  const upd=()=>{ SLF={who:$("#slwho").value, bf:$("#slbf").value, from:$("#slfrom").value, to:$("#slto").value}; sleepListPage(); };
-  ["#slwho","#slbf","#slfrom","#slto"].forEach(k=>$(k).onchange=upd);
-  $("#slclr").onclick=()=>{ SLF={who:"",from:"",to:"",bf:""}; sleepListPage(); };
+  const upd=()=>{ SLF={who:$("#slwho").value, bf:$("#slbf").value, loc:$("#slloc").value, from:$("#slfrom").value, to:$("#slto").value}; sleepListPage(); };
+  ["#slwho","#slbf","#slloc","#slfrom","#slto"].forEach(k=>$(k).onchange=upd);
+  $("#slclr").onclick=()=>{ SLF={who:"",from:"",to:"",bf:"",loc:""}; sleepListPage(); };
 }
 let surveyDraft = null;
 function surveyEditPage(kind){
@@ -1597,7 +1604,7 @@ function fileToData(f){
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
   hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
 };
 const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
@@ -1829,7 +1836,7 @@ function workerProfile(sap){
   view(fn, !WP.open);                 // сунгах маягт нээлттэй үед дахин зурахгүй
   const canEdit = !sup;
   const uh = list("uhaan").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
-  const fa = sup ? [] : list("fatigue").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
+  const fa = list("fatigue").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
   const inf = sup ? [] : list("infect").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
   const hy = list("hygcheck").flatMap(h=>Object.entries(h.rows||{}).filter(([,r])=>r && r.sap===w.sap).map(([rk,r])=>({h, rk, r})))
     .sort((a,b)=>String(b.h.date).localeCompare(String(a.h.date))).slice(0,10);
@@ -1861,7 +1868,7 @@ function workerProfile(sap){
     ${wbCardHtml(w, canEdit)}
     <div class="wpgrid">
       ${sec("checks","Сүүлийн УХААН", tbl(["Огноо","Байршил","Ажил","Төлөв"], uh.map(x=>`<tr class="click" data-u="${esc(x.id)}"><td>${esc(x.date)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td></tr>`), "УХААН бүртгэл алга"))}
-      ${sup?"":sec("battery","Ядаргаа", tbl(["Огноо","Дүн","Түвшин"], fa.map(x=>`<tr><td>${esc(x.date)}</td><td>${fatFace(x.level,24)||esc(x.score)}</td><td>${fLvl(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга"))}
+      ${sec("battery","Ядаргаа", tbl(["Огноо","Дүн","Түвшин"], fa.map(x=>`<tr><td>${esc(x.date)}</td><td>${fatFace(x.level,24)||esc(x.score)}</td><td>${fLvl(x.level)}</td></tr>`), "Ядаргааны үнэлгээ алга"))}
       ${sup?"":sec("virus","Халдварын асуумж", tbl(["Огноо","Дүгнэлт"], inf.map(x=>`<tr><td>${esc(x.date)}</td><td>${vBadge(x.verdict)}</td></tr>`), "Халдварын асуумж алга"))}
       ${sec("calendar","Талбарын хуваарь", tbl(["Ирэх","Гарах","Төлөв"], ro.map(x=>`<tr><td>${esc(x.arrive)}</td><td>${esc(x.leave||"—")}</td><td>${roSt(x)}</td></tr>`), "Хуваарь алга"))}
     </div>
@@ -1929,15 +1936,22 @@ function fatCritHtml(){
   return `<table class="fcrit"><tr><th></th><th>Түвшин</th><th>Шалгуур</th><th>Ажилтанд харуулах</th></tr>${rows.map(([l,t],i)=>`<tr><td>${fatFace(l,26)}</td><td class="rk${i}">${esc(fatLvTxt(l))}</td><td>${esc(t)}</td><td>${esc(FAT_MSG[l].t+". "+FAT_MSG[l].m)}</td></tr>`).join("")}</table>
     <p class="muted">2026-10-21-ний 7 асуулттай хувилбараар бөглөсөн бичлэгүүд асуулт бүрийн эрсдэлээрээ (өнгөт цэг) харагдана.</p>`;
 }
+/* v26: ахлах өөрийн албаны (Бар / Оффис) ажилтнуудын ядаргааг зөвхөн харна (асуулт засах, устгах эрхгүй) */
+function fatigueMine(u){
+  const all = list("fatigue");
+  if(u.role!=="supervisor" || !albaN(u.alba)) return all;
+  return all.filter(x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba))===albaN(u.alba); });
+}
 function fatigueListPage(){
-  if(!requireRole("hygiene")) return;
+  const me_ = requireRole("hygiene","supervisor"); if(!me_) return;
+  const sup = me_.role==="supervisor";
   view(fatigueListPage, true);
-  const all=list("fatigue").sort(byNew);
+  const all=fatigueMine(me_).sort(byNew);
   const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
   const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl) && (!FTF.loc||(FTF.loc==="—"?!LOCS.includes(x.loc):x.loc===FTF.loc)));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
-  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
-    <div class="row-gap noprint"><button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button></div>
+  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", sup ? `${esc(albaN(me_.alba)||"Бүх алба")} · Ажилтнуудын бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.` : "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
+    ${sup?"":`<div class="row-gap noprint"><button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button></div>`}
     <div class="card filters noprint" id="ftfilt"><div class="frow">
       <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option value="${l}" ${FTF.lvl===l?"selected":""}>${fatLvTxt(l)}</option>`).join("")}</select>
@@ -1954,11 +1968,11 @@ function fatigueListPage(){
   const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, loc:$("#ftloc").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
   ["#ftwho","#ftlvl","#ftloc","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
   $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:"",loc:""}; fatigueListPage(); };
-  $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
+  if($("#fedit")) $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
 }
 function fatigueView(id){
-  if(!requireRole("hygiene")) return;
-  const x=(DB.fatigue||{})[id]; if(!x) return fatigueListPage();
+  const me_ = requireRole("hygiene","supervisor"); if(!me_) return;
+  const x=(DB.fatigue||{})[id]; if(!x || !fatigueMine(me_).includes(x)) return fatigueListPage();
   view(()=>fatigueView(id), false);
   const w=(DB.users||{})[keyOf(x.sap)]||{};
   const ans=fatigueAnswers(x);
@@ -3967,8 +3981,8 @@ async function exportExcel(from,to,kinds){
   }
   if(kinds.includes("sleep")){
     const s4=wb.addWorksheet("Нойр");
-    s4.addRow(["Огноо","SAP","Нэр","Алба","Унтсан цаг","Сэрсэн цаг","Нойр (цаг)","Өглөөний цай","Юу иддэг","Ороогүй шалтгаан"]);
-    list("sleep").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s4.addRow([x.date,x.sap,x.name,albaN(x.alba),x.bed||"",x.wake||"",x.hours??"",x.bf||"",x.food||"",x.reason||""]));
+    s4.addRow(["Огноо","SAP","Нэр","Алба","Ажлын байр","Унтсан цаг","Сэрсэн цаг","Нойр (цаг)","Өглөөний цай","Юу иддэг","Ороогүй шалтгаан"]);
+    list("sleep").filter(x=>inR(x.date)).sort(byNew).forEach(x=>s4.addRow([x.date,x.sap,x.name,albaN(x.alba),sleepLoc(x),x.bed||"",x.wake||"",x.hours??"",x.bf||"",x.food||"",x.reason||""]));
   }
   if(kinds.includes("water")){
     const s5=wb.addWorksheet("Ус");

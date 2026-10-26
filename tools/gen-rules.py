@@ -124,7 +124,9 @@ WATER_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newD
 SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
                   " && (!newData.child('hours').exists() || (newData.child('hours').isNumber() && newData.child('hours').val() >= 0 && newData.child('hours').val() <= 24))"
                   " && (!newData.child('bf').exists() || newData.child('bf').val().matches(/^(Тийм|Үгүй)$/))"
-                  " && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200)))")
+                  " && (!newData.child('food').exists() || (newData.child('food').isString() && newData.child('food').val().length <= 200))"
+                  # v26: ажлын байр (хуучин бичлэг/апп-д байхгүй байж болно)
+                  " && (!newData.child('loc').exists() || newData.child('loc').val().matches(/^(Оюут бар|Манлай бар|Оффис)$/)))")
 
 # v22: Web Push захиалга — push/{sap}/{hash}; хэрэглэгч зөвхөн өөрийн sap дор бичнэ/устгана/уншина; эрүүл ахуйч (сервер) бүгдийг уншина/устгана
 PUSH_VALIDATE = ("!newData.exists() || ($h.matches(/^[0-9a-f]{16,64}$/)"
@@ -154,7 +156,8 @@ def strict():
         "settings": {".read": MEMBER, ".write": HYG},
         "uhaan": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
                   "$id": {".write": f"({SUP} && data.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},  # v14: ахлах өөрийн албаны УХААН-ыг устгаж болно
-        "fatigue": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
+        # v26: ахлах ядаргааг уншина (апп өөрийн албаныхыг шүүж харуулна; УХААН-тай адил), бичих эрхгүй
+        "fatigue": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         # v19: Нойрны чанарын судалгаа — ажилтан өөрийн sap-аар шинээр үүсгэнэ/уншина; эрүүл ахуйч бүгдийг уншина/устгана
         "sleep": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE, ".validate": SLEEP_VALIDATE}},
