@@ -1418,14 +1418,18 @@ function normHazard(x){
     types = types.map(t=> t==="Аюулгүй байдал" ? "Аюулгүй ажиллагаа" : t==="Хамгаалалт" ? "Аюулгүй байдал" : t);
   }
   const cls = arr(x.cls).map(c=> HZ_CLS_OLD[c] || c);
-  const status = HZ_ST_OLD[x.status] || x.status || "Шинэ";
+  const status = hzSt(x.status);
   return {...x, types, cls, status, alba: x.alba ? albaN(x.alba) : albaOf(x.area)};
 }
 const hzMark = on => on ? "☒" : "☐";
 /* Аюулын хяналт: төлөв, хариуцагч, хугацаа, түүх */
-const HZ_ST = ["Шинэ","Хийгдэж буй","Шийдсэн","Хаасан"];
-const HZ_ST_OLD = {"Шалгаж байна":"Хийгдэж буй","Шийдвэрлэсэн":"Шийдсэн"};
-const HZ_OPEN = s => s==="Шинэ" || s==="Хийгдэж буй";
+/* v27: зөвхөн 2 төлөв. Хуучин хаагдсан төлөв (Хаасан/Шийдсэн/Шийдвэрлэсэн) → «Аюулыг бүрэн хаасан»,
+   бусад бүгд (Шинэ, Хийгдэж буй, Шалгаж байна…) → «…хүлээгдэж байгаа». Шинэ бүртгэл дүрмийн дагуу "Шинэ"-ээр үүснэ. */
+const HZ_PEND = "Хяналтын арга хэмжээ авсан (хүлээгдэж байгаа)", HZ_DONE = "Аюулыг бүрэн хаасан";
+const HZ_ST = [HZ_PEND, HZ_DONE];
+const HZ_ST_CLOSED = new Set([HZ_DONE,"Хаасан","Шийдсэн","Шийдвэрлэсэн"]);
+const hzSt = s => HZ_ST_CLOSED.has(s) ? HZ_DONE : HZ_PEND;
+const HZ_OPEN = s => hzSt(s)!==HZ_DONE;
 const HZ_HIGH = r => r==="Их" || r==="Маш их";
 /* Газрын нэрнээс алба: «оффис» → Оффис, «баар»/«бар» гэсэн үг → Бар, бусад → "" (бүх ахлахад харагдана) */
 const albaOf = area => { const s = String(area||""); return /оффис/i.test(s) ? "Оффис" : /баар|(^|[\s,.;:\/()-])бар($|[\s,.;:\/()-])/i.test(s) ? "Бар" : ""; };
@@ -1712,11 +1716,8 @@ function viewUhaan(id){
 
 /* ======================= АЮУЛГҮЙ АЖИЛЛАГАА, ЭРҮҮЛ АХУЙЧ ======================= */
 function stH(s){
-  s = HZ_ST_OLD[s] || s || "Шинэ";
-  if(s==="Шинэ") return `<span class="badge b-new">Шинэ</span>`;
-  if(s==="Хийгдэж буй") return `<span class="badge b-wait">Хийгдэж буй</span>`;
-  if(s==="Хаасан") return `<span class="badge b-closed">Хаасан</span>`;
-  return `<span class="badge b-ok">Шийдсэн</span>`;
+  return hzSt(s)===HZ_DONE ? `<span class="badge b-ok" title="${HZ_DONE}">Бүрэн хаасан</span>`
+    : `<span class="badge b-wait" title="${HZ_PEND}">Хүлээгдэж байгаа</span>`;
 }
 function hygieneHome(){
   const me_ = requireRole("hygiene"); if(!me_) return;
@@ -2011,7 +2012,7 @@ function hzStatusUpd(x, st, u){
   const upd = {["hazards/"+x.id+"/status"]: st};
   if(!HZ_OPEN(st) && HZ_OPEN(x.status)) upd["hazards/"+x.id+"/closedAt"] = today();
   if(HZ_OPEN(st)) upd["hazards/"+x.id+"/closedAt"] = null;
-  const [p,v] = hzLogEntry(x.id, u, "status", `Төлөв: ${x.status} → ${st}`); upd[p]=v;
+  const [p,v] = hzLogEntry(x.id, u, "status", `Төлөв: ${hzSt(x.status)} → ${st}`); upd[p]=v;
   return upd;
 }
 const staffList = ()=> users().filter(w=>w.role!=="worker").sort((a,b)=>a.name.localeCompare(b.name)).concat(workers().sort((a,b)=>a.name.localeCompare(b.name)));
@@ -2033,7 +2034,7 @@ function hazardListPage(){
   const assignees = [...new Map(all.filter(x=>x.assignee).map(x=>[x.assignee, x.assigneeName||x.assignee])).entries()];
   const app = mount(shell("аюул", `${phead("Аюулын мэдээлэл, хяналт", "OT-03-FRM-0001-D маягтаар ирсэн бүртгэл · хариуцагч, хугацаа, залруулах арга хэмжээ")}
     <div class="card filters noprint">
-      <div class="fchips" role="group" aria-label="Төлөв">${chip("all","Бүгд")}${chip("open","Нээлттэй")}${HZ_ST.map(s=>chip(s,s)).join("")}${chip("od","Хугацаа хэтэрсэн")}</div>
+      <div class="fchips" role="group" aria-label="Төлөв">${chip("all","Бүгд")}${HZ_ST.map(s=>chip(s,s)).join("")}${chip("od","Хугацаа хэтэрсэн")}</div>
       <div class="frow">
         <label class="fsearch">${ic("search","sm")}<input id="fq" type="search" placeholder="Хайх: газар, тайлбар, мэдээлэгч…" value="${esc(HZF.q)}" aria-label="Хайх"/></label>
         <select id="frisk" aria-label="Эрсдэл"><option value="">Бүх эрсдэл</option>${HZ_RISK.map(r=>`<option ${HZF.risk===r[0]?"selected":""}>${esc(r[0])}</option>`).join("")}</select>
@@ -2062,7 +2063,7 @@ function hazardListPage(){
         <span>${ic("userCheck","sm")} Хариуцагч: <b>${esc(x.assigneeName||"—")}</b></span><span>${ic("calendar","sm")} Хугацаа: <b>${esc(x.due||"—")}</b></span></div>
       <div class="thumbs" data-ph="${esc(x.id)}">${x.photoCount?`<span class="muted">Зураг ачаалж байна… (${esc(x.photoCount)})</span>`:""}</div>
       <div class="row-gap">
-        <select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>
+        <select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===hzSt(x.status)?"selected":""}>${s}</option>`).join("")}</select>
         <button class="btn sm" data-hzd="${esc(x.id)}">${ic("history","sm")} Хянах / түүх${x.log?` (${Object.keys(x.log).length})`:""}</button>
         <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("download","sm")} Хэвлэх / PDF</button>
         ${hyg?`<button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>`:""}
@@ -2108,13 +2109,13 @@ async function hazardDetail(id){
         <div class="hzmeta"><span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span></div>
         <p class="det">${esc(x.det||"")}</p>
         ${x.act?`<p class="muted"><b>Авсан шуурхай арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
-        <div class="people"><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах хэлтэс: <b>${esc(x.acc||"—")}</b></span>${x.closedAt?`<span>Хаасан/шийдсэн: <b>${esc(x.closedAt)}</b></span>`:""}</div>
+        <div class="people"><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах хэлтэс: <b>${esc(x.acc||"—")}</b></span>${x.closedAt?`<span>Хаасан огноо: <b>${esc(x.closedAt)}</b></span>`:""}</div>
         <div class="thumbs" id="dph"></div>
       </div>
       <form class="card" id="hzt">
         <div class="ctitle">${ic("userCheck")}<h3>Хяналт, залруулах арга хэмжээ</h3></div>
         <div class="g2">
-          <div><label class="f" for="tst">Төлөв</label><select id="tst">${HZ_ST.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select></div>
+          <div><label class="f" for="tst">Төлөв</label><select id="tst">${HZ_ST.map(s=>`<option ${s===hzSt(x.status)?"selected":""}>${s}</option>`).join("")}</select></div>
           <div><label class="f" for="tdue">Гүйцэтгэх хугацаа</label><input type="date" id="tdue" value="${esc(x.due||"")}"/></div>
         </div>
         <label class="f" for="tas">Хариуцагч</label>
@@ -2357,7 +2358,7 @@ function excelDate(v){
 /* ======================= ТАЙЛАН, ГРАФИК (inline SVG) ======================= */
 const CH_COL = {blue:"#1747C8", blue2:"#7FA0EE", ok:"#157A3E", warn:"#E08A00", bad:"#C1272D", vio:"#5B3FD1", gray:"#A9B3C4", sun:"#FCC419"};
 const RISK_COL = {"Бага":CH_COL.ok, "Дунд зэрэг":CH_COL.sun, "Их":CH_COL.warn, "Маш их":CH_COL.bad};
-const ST_COL = {"Шинэ":CH_COL.blue, "Хийгдэж буй":CH_COL.warn, "Шийдсэн":CH_COL.ok, "Хаасан":CH_COL.gray};
+const ST_COL = {[HZ_PEND]:CH_COL.warn, [HZ_DONE]:CH_COL.ok};
 let REPF = null;
 function periodKey(d, g){ if(!d) return ""; const y=d.slice(0,4), m=+d.slice(5,7); return g==="q" ? `${y} Q${Math.ceil(m/3)}` : d.slice(0,7); }
 function periodList(from, to, g){
