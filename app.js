@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v26 · 2026-10-26";
+const APP_VER = "v27 · 2026-10-26";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1138,8 +1138,10 @@ const FAT_MSG = {
   "Дунд": {t:"Анхаар! Дунд зэргийн ядаргаа", m:"Завсарлага авч, ус ууж, хянагчдаа мэдэгдээрэй."},
   "Өндөр": {t:"Аюултай! Ядаргаа өндөр", m:"Ажлаа зогсоож, хянагч / аюулгүй ажиллагаа, эрүүл ахуйчид нэн даруй мэдэгдэнэ үү."}
 };
+/* v27: ахлах ч мөн өөрөө ядаргааны асуумж бөглөнө — буцахдаа өөрийн «Ядаргаа» жагсаалт руу */
+const fatBack = u => (u && u.role==="supervisor") ? fatigueListPage : workerHome;
 function fatigueForm(){
-  const u = me(); if(!u || u.role!=="worker") return u? homeFor(u) : landing();
+  const u = me(); if(!u || !["worker","supervisor"].includes(u.role)) return u? homeFor(u) : landing();
   const qs = surveyQs("fatigue");
   view(fatigueForm, false);
   const g = u.gender==="Эм" ? "ЭМ" : "ЭР";
@@ -1160,7 +1162,8 @@ function fatigueForm(){
       <button class="btn ghost" id="back">Буцах</button></div>
     </main>`);
   bindOpts(app);
-  $("#back").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+  const back = fatBack(u);
+  $("#back").onclick = back; $("[data-hback]").onclick = back;
   $("#calc").onclick = ()=>{
     const loc = optVal("qloc")||"", miss = [];
     if(!LOCS.includes(loc)) miss.push("байршил");
@@ -1192,7 +1195,7 @@ function fatigueResult(rec){
       ${rec.v===2 && rec.act ? `<p class="muted">${esc(rec.act)}</p>` : ""}
       <div class="actions"><button class="btn" id="fdone">Болсон</button></div>
     </main>`);
-  $("#fdone").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+  const back = fatBack(me()); $("#fdone").onclick = back; $("[data-hback]").onclick = back;
   window.scrollTo(0,0);
 }
 function infectForm(){
@@ -1940,7 +1943,7 @@ function fatCritHtml(){
 function fatigueMine(u){
   const all = list("fatigue");
   if(u.role!=="supervisor" || !albaN(u.alba)) return all;
-  return all.filter(x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba))===albaN(u.alba); });
+  return all.filter(x=>{ if(x.sap===u.sap) return true; const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba))===albaN(u.alba); });
 }
 function fatigueListPage(){
   const me_ = requireRole("hygiene","supervisor"); if(!me_) return;
@@ -1951,7 +1954,7 @@ function fatigueListPage(){
   const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl) && (!FTF.loc||(FTF.loc==="—"?!LOCS.includes(x.loc):x.loc===FTF.loc)));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
   const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", sup ? `${esc(albaN(me_.alba)||"Бүх алба")} · Ажилтнуудын бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.` : "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
-    ${sup?"":`<div class="row-gap noprint"><button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button></div>`}
+    <div class="row-gap noprint">${sup?`<button class="btn" id="ffill">${ic("clip")} Асуулга бөглөх</button>`:`<button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button>`}</div>
     <div class="card filters noprint" id="ftfilt"><div class="frow">
       <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option value="${l}" ${FTF.lvl===l?"selected":""}>${fatLvTxt(l)}</option>`).join("")}</select>
@@ -1968,6 +1971,7 @@ function fatigueListPage(){
   const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, loc:$("#ftloc").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
   ["#ftwho","#ftlvl","#ftloc","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
   $("#ftclr").onclick=()=>{ FTF={who:"",from:"",to:"",lvl:"",loc:""}; fatigueListPage(); };
+  if($("#ffill")) $("#ffill").onclick = ()=>{ fatigueForm(); window.scrollTo(0,0); };
   if($("#fedit")) $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
 }
 function fatigueView(id){

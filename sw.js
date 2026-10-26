@@ -1,7 +1,7 @@
 /* ЭАХС service worker — мэдэгдэл харуулах/дарах + Web Push (v22: сайт хаалттай үед ч мэдэгдэл ирнэ).
    Fetch кэш хийхгүй (апп шинэчлэлт шууд хүрнэ). Push-ийг /api/push-water (VAPID) илгээнэ. */
 self.addEventListener("install", () => self.skipWaiting());
-const SW_VER = "v26";   // v26: ахлах ядаргаа харна, нойрны судалгаанд ажлын байр
+const SW_VER = "v27";   // v27: ахлах ядаргааны асуумж бөглөнө (v26: ахлах ядаргаа харна, нойрны ажлын байр)
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", e => {
   let d = {};
