@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v27 · 2026-10-26";
+const APP_VER = "v28 · 2026-10-29";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1624,7 +1624,7 @@ function fileToData(f){
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
   hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["тохиргоо","Тохиргоо"]]
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["ажилтан","Ажилтнууд"],["тохиргоо","Тохиргоо"]]
 };
 const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
@@ -2235,42 +2235,52 @@ function rosterPage(){
 
 /* ======================= АЖИЛТНУУД ======================= */
 function usersPage(editSap){
-  const meU = requireRole("hygiene"); if(!meU) return;
+  const meU = requireRole("hygiene","supervisor"); if(!meU) return;
+  const isSup = meU.role==="supervisor";
+  if(isSup && editSap){ toast("Ахлах засах эрхгүй"); return usersPage(); }
   view(()=>usersPage(), !editSap);
-  const all = users().sort((a,b)=>(a.role+a.name).localeCompare(b.role+b.name));
-  const ed = editSap ? DB.users[keyOf(editSap)] : null;
+  const all = isSup
+    ? workers().filter(w=>!albaN(meU.alba) || albaN(w.alba)===albaN(meU.alba)).sort((a,b)=>a.name.localeCompare(b.name))
+    : users().sort((a,b)=>(a.role+a.name).localeCompare(b.role+b.name));
+  const ed = (!isSup && editSap) ? DB.users[keyOf(editSap)] : null;
+  const fixedAlba = isSup && albaN(meU.alba) ? albaN(meU.alba) : null;
   const opt = (vals, cur) => vals.map(v=>`<option value="${esc(v[0])}" ${v[0]===cur?"selected":""}>${esc(v[1])}</option>`).join("");
-  const app = mount(shell("ажилтан", `${phead("Ажилтнууд", "Хэрэглэгч нэмэх, засах, Excel-ээр оруулах")}
+  const app = mount(shell("ажилтан", `${phead("Ажилтнууд", isSup ? (fixedAlba?`${esc(fixedAlba)} · зөвхөн ажилтан нэмнэ`:"Зөвхөн ажилтан нэмнэ (өөрийн алба)") : "Хэрэглэгч нэмэх, засах, Excel-ээр оруулах")}
     <form class="card" id="uf">
       <div class="ctitle">${ic(ed?"edit":"plus")}<h3>${ed?"Засах: "+esc(ed.name):"Шинэ ажилтан"}</h3></div>
       <div class="g3">
         <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" autocapitalize="none" autocorrect="off" spellcheck="false" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
-        <div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Аюулгүй ажиллагаа, эрүүл ахуйч"]], ed?.role||"worker")}</select></div>
-        <div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>
+        ${isSup?`<div><label class="f">Үүрэг</label><input value="Ажилтан" readonly/></div>`
+          :`<div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Аюулгүй ажиллагаа, эрүүл ахуйч"]], ed?.role||"worker")}</select></div>`}
+        ${fixedAlba?`<div><label class="f">Алба</label><input id="ualba" value="${esc(fixedAlba)}" readonly/></div>`
+          :`<div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>`}
         <div><label class="f" for="ugender">Хүйс</label><select id="ugender">${opt([["Эр","Эр"],["Эм","Эм"]], ed?.gender||"Эр")}</select></div>
         <div><label class="f" for="ujob">Албан тушаал / ажил</label><input id="ujob" value="${esc(ed?.job||"")}"/></div>
         <div><label class="f" for="uphone">Утас</label><input id="uphone" type="tel" inputmode="tel" maxlength="30" value="${esc(ed?.phone||"")}"/></div>
         <div><label class="f" for="upin">${ed?"Нууц үг шинэчлэх (хоосон бол хэвээр)":"Нууц үг *"} ${CLOUD_AUTH?"· ≥6":""}</label><input id="upin" type="password" autocomplete="new-password" ${ed?"":"required"} minlength="${CLOUD_AUTH?6:4}"/></div>
-        <div><label class="f" for="ubook">Цагаан дэвтэр дуусах</label><input type="date" id="ubook" value="${esc(ed?.bookExp||"")}"/></div>
+        ${isSup?"":`<div><label class="f" for="ubook">Цагаан дэвтэр дуусах</label><input type="date" id="ubook" value="${esc(ed?.bookExp||"")}"/></div>`}
       </div>
       <div class="gap"></div>
       <div class="row-gap"><button class="btn" type="submit">Хадгалах</button>${ed?'<button class="btn ghost" type="button" id="ucancel">Болих</button>':""}</div>
     </form>
-    <div class="card"><div class="ctitle">${ic("users")}<h3>Бүх хэрэглэгч (${all.length})</h3></div>
-    ${CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
-    ${tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
+    <div class="card"><div class="ctitle">${ic("users")}<h3>${isSup?"Албаны ажилтнууд":"Бүх хэрэглэгч"} (${all.length})</h3></div>
+    ${!isSup && CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
+    ${isSup
+      ? tbl(["Нэр","SAP","Алба","Албан тушаал"], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td></tr>`), "Ажилтан бүртгэгдээгүй")
+      : tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
       <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
     </div>
-    <div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
+    ${isSup?"":`<div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
       <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр</p>
       <button class="btn ghost" id="tmpl" type="button">${ic("download")} Загвар татах</button>
       <div class="gap"></div>
       <input type="file" id="ximp" accept=".xlsx"/>
       <div id="ximperr" class="muted"></div>
       <button class="btn" id="ximpok" type="button">Шалгаад оруулах</button>
-    </div>`));
+    </div>`}`));
   bindNav(app, e=>{
+    if(isSup) return;
     const ebtn=e.target.closest("[data-edit]"); if(ebtn){ usersPage(ebtn.dataset.edit); window.scrollTo(0,0); return; }
     const d=e.target.closest("[data-delu]");
     if(d && confirm("Хэрэглэгчийг устгах уу? ("+d.dataset.delu+")")){ const du=DB.users[keyOf(d.dataset.delu)]; write({["users/"+keyOf(d.dataset.delu)]: null, ...(du&&du.uid?{["roles/"+du.uid]: null}:{})}); toast("Устгалаа"); }
@@ -2281,9 +2291,14 @@ function usersPage(editSap){
     const sap=ed ? String(ed.sap) : sapKey($("#usap").value), pin=$("#upin").value.trim();
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
-    const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:$("#urole").value, alba:(ed && albaN(ed.alba)===$("#ualba").value) ? ed.alba : $("#ualba").value, gender:$("#ugender").value,
-      job:$("#ujob").value.trim(), phone:$("#uphone").value.trim().slice(0,30), bookExp:$("#ubook").value};
+    const albaVal = fixedAlba || $("#ualba").value;
+    const roleVal = isSup ? "worker" : $("#urole").value;
+    if(isSup && roleVal!=="worker"){ toast("Ахлах зөвхөн ажилтан нэмнэ"); return; }
+    if(isSup && fixedAlba && albaN(albaVal)!==fixedAlba){ toast("Зөвхөн өөрийн албанд нэмнэ"); return; }
+    const rec = {...(ed||{}), sap, name:$("#unm").value.trim(), role:roleVal, alba:(ed && albaN(ed.alba)===albaN(albaVal)) ? ed.alba : albaN(albaVal)||albaVal, gender:$("#ugender").value,
+      job:$("#ujob").value.trim(), phone:$("#uphone").value.trim().slice(0,30), bookExp: isSup ? (ed?.bookExp||"") : $("#ubook").value};
     if(!rec.phone) delete rec.phone;
+    if(isSup && !rec.bookExp) delete rec.bookExp;
     delete rec.pin;
     if(!CLOUD_AUTH){
       if(pin && pin.length<4){ toast("Нууц үг дор хаяж 4 тэмдэгт"); return; }
@@ -2306,11 +2321,12 @@ function usersPage(editSap){
         rec.uid = a.uid; rec.mustChange = true; delete rec.pinHash;
       }catch(ex){ console.warn("create auth", ex); toast("Нэвтрэлт үүсгэж чадсангүй: "+(ex.code||ex.message)); btn.disabled=false; btn.textContent="Хадгалах"; return; }
     } else if(!ed){ toast("Нууц үг оруулна уу"); return; }
-    else if(ed.uid && ed.role!==rec.role) upd["roles/"+ed.uid+"/role"] = rec.role;
+    else if(ed.uid && ed.role!==rec.role){ if(isSup){ toast("Ахлах үүрэг солих эрхгүй"); return; } upd["roles/"+ed.uid+"/role"] = rec.role; }
     upd["users/"+k] = rec;
     write(upd);
     toast(pin?"Хадгаллаа · нэвтрэх эрх үүслээ":"Хадгаллаа"); usersPage();
   };
+  if(isSup) return;
   let pending=null;
   $("#tmpl").onclick=async ()=>{
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }

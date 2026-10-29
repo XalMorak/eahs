@@ -13,14 +13,14 @@
         "roles": {
           "$uid": {
             ".read": "auth != null && auth.uid === $uid",
-            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && auth.uid === $uid && !data.exists() && newData.child('sap').isString() && auth.token.email === newData.child('sap').val().toLowerCase() + '@eahs.local' && root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').exists() && newData.child('proof').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').val() && newData.child('role').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val())",
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && auth.uid === $uid && !data.exists() && newData.child('sap').isString() && auth.token.email === newData.child('sap').val().toLowerCase() + '@eahs.local' && root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').exists() && newData.child('proof').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').val() && newData.child('role').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val()) || ((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && !data.exists() && newData.child('role').val() === 'worker' && newData.child('sap').isString() && root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val() === 'worker')",
             ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/))"
           }
         },
         "authgen": {
           "$sap": {
             ".read": true,
-            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+            ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || ((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && (!root.child('eahs/v2/users/'+$sap).exists() || root.child('eahs/v2/users/'+$sap+'/role').val() === 'worker'))",
             ".validate": "!newData.exists() || newData.isString() || newData.isNumber()"
           }
         },

@@ -51,11 +51,20 @@ SELF_CLAIM = ("(auth != null && auth.uid === $uid && !data.exists() && newData.c
               f" && {U}+'/pinHash').exists()"
               f" && newData.child('proof').val() === {U}+'/pinHash').val()"
               f" && newData.child('role').val() === {U}+'/role').val())")
+# v28: ахлах шинэ ажилтан (worker) нэмж болно — roles/{uid} зөвхөн шинэ, role=worker, users/{sap} ч worker
+SUP_ROLE_ADD = (f"({SUP} && !data.exists() && newData.child('role').val() === 'worker'"
+                f" && newData.child('sap').isString()"
+                f" && root.child('{V2}/users/'+newData.child('sap').val()+'/role').val() === 'worker')")
+# v28: ахлах өөрийн албаны шинэ worker бүртгэл үүсгэнэ (overwrite/delete үгүй). Алба хоосон бол Оффис/Бар сонгоно.
+SUP_HAS_ALBA = (f"(root.child('{V2}/users/'+{MYSAP}+'/alba').isString()"
+                f" && root.child('{V2}/users/'+{MYSAP}+'/alba').val().length > 0)")
+SUP_ADD_USER = (f"({SUP} && !data.exists() && newData.exists() && newData.child('role').val() === 'worker'"
+                f" && newData.child('alba').isString() && (!{SUP_HAS_ALBA} || {SAME_ALBA_NEW}))")
 ROLES = {"$uid": {
     ".read": "auth != null && auth.uid === $uid",
-    ".write": f"{HYG} || {SELF_CLAIM}",
+    ".write": f"{HYG} || {SELF_CLAIM} || {SUP_ROLE_ADD}",
     ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(" + ROLE_RE + "))"}}
-AUTHGEN = {"$sap": {".read": True, ".write": HYG, ".validate": "!newData.exists() || newData.isString() || newData.isNumber()"}}
+AUTHGEN = {"$sap": {".read": True, ".write": f"{HYG} || ({SUP} && (!root.child('eahs/v2/users/'+$sap).exists() || root.child('eahs/v2/users/'+$sap+'/role').val() === 'worker'))", ".validate": "!newData.exists() || newData.isString() || newData.isNumber()"}}
 
 HZREF = "newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val()"
 NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
@@ -148,7 +157,7 @@ def strict():
             ".read": STAFF,
             "$sap": {
                 ".read": f"auth != null && {MYSAP} === $sap",
-                ".write": HYG,
+                ".write": f"{HYG} || {SUP_ADD_USER}",
                 ".validate": USER_VALIDATE,
                 "uid": {".write": f"auth != null && {MYSAP} === $sap && !data.exists() && newData.val() === auth.uid"},
                 "pinHash": {".write": f"auth != null && {MYSAP} === $sap && !newData.exists()"},

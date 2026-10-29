@@ -165,8 +165,15 @@ async function strict(){
   await expect('sup: create new hygcheck alba «Бар»', true, ()=>s.db.ref(V+`hygcheck/${T}_Бар`).set({id:T+'_Бар',date:T,alba:'Бар',rows:{r:{sap:'1108650',name:'Б',c:['ok']}}}));
   await expect('sup: hygfail notif', true, ()=>s.db.ref(V+'notifs/hf2').set({id:'hf2',type:'hygfail',level:'fail',ts:3,title:'Ажиллахгүй: Ө',alba:'Оюут баар',ref:T+'_Оюут баар'}));
   await expect('sup: delete notif', false, ()=>s.db.ref(V+'notifs/hf2').remove());
-  await expect('sup: write users', false, ()=>s.db.ref(V+'users/2200/role').set('supervisor'));
-  await expect('sup: grant roles', false, ()=>s.db.ref(V+'roles/x').set({sap:'2200',role:'hygiene'}));
+  await expect('sup: overwrite existing user role', false, ()=>s.db.ref(V+'users/2200/role').set('supervisor'));
+  await expect('sup: grant hygiene role to arbitrary uid', false, ()=>s.db.ref(V+'roles/x').set({sap:'2200',role:'hygiene'}));
+  // v28: ахлах шинэ worker нэмж болно (өөрийн алба), supervisor/hygiene/overwrite үгүй
+  await expect('sup: add new worker own alba', true, ()=>s.db.ref(V).update({'users/snew1':{sap:'snew1',name:'Шинэ',role:'worker',alba:'Бар'},'roles/uid_snew1':{sap:'snew1',role:'worker',by:'akhakh',at:1}}));
+  await expect('sup: add worker other alba (Оффис)', false, ()=>s.db.ref(V+'users/snew2').set({sap:'snew2',name:'X',role:'worker',alba:'Оффис'}));
+  await expect('sup: add as supervisor role', false, ()=>s.db.ref(V).update({'users/snew3':{sap:'snew3',name:'X',role:'supervisor',alba:'Бар'},'roles/uid_snew3':{sap:'snew3',role:'supervisor',by:'akhakh',at:1}}));
+  await expect('sup: overwrite existing SAP', false, ()=>s.db.ref(V+'users/1108650').set({sap:'1108650',name:'Hacked',role:'worker',alba:'Бар'}));
+  await expect('sup: delete user', false, ()=>s.db.ref(V+'users/snew1').remove());
+  await expect('sup: authgen write', true, ()=>s.db.ref(V+'authgen/snew4').set('1'));
   await expect('sup: settings write', false, ()=>s.db.ref(V+'settings/main/fatigueDays').set(1));
   console.log('--- svcheck (ахлахын хяналтын хуудас)');
   const SV=V+'svcheck/';
