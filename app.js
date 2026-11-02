@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v28 · 2026-10-29";
+const APP_VER = "v29 · 2026-11-02";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1896,7 +1896,22 @@ function workerProfile(sap){
   // хавсралт зураг
   $$("[data-rnph]").forEach(async el=>{
     const ps = await getPhotos("rn_"+el.dataset.rnph);
-    if(el.isConnected) el.innerHTML = ps.length ? ps.map(p=>`<a href="${esc(p)}" target="_blank" rel="noopener"><img src="${esc(p)}" alt="Хавсралт зураг"/></a>`).join("") : `<span class="muted">Зураг ачаалагдсангүй</span>`;
+    if(!el.isConnected) return;
+    if(!ps.length){ el.innerHTML = `<span class="muted">Зураг ачаалагдсангүй</span>`; return; }
+    el.innerHTML = "";
+    ps.forEach((p,i)=>{
+      const b = document.createElement("button"); b.type="button"; b.className="rnph"; b.setAttribute("aria-label","Хавсралт зураг харах");
+      try{
+        const url = URL.createObjectURL(dataUrlToBlob(p));
+        const img = document.createElement("img"); img.alt="Хавсралт зураг"; img.src=url;
+        img.onload = ()=>setTimeout(()=>URL.revokeObjectURL(url), 30000);
+        b.appendChild(img);
+        b.onclick = ()=> openDataViewer({boxId:"rnbox", title:"Хавсралт зураг", sub:"Цагаан дэвтэр · сунгалт", data:p, type:"image/jpeg", name:`renew-${el.dataset.rnph}-${i+1}.jpg`, icon:"camera"});
+      }catch(err){
+        b.textContent = "Зураг алдаатай";
+      }
+      el.appendChild(b);
+    });
   });
   wbBind(w, u, canEdit, ()=>workerProfile(sap));
   bindNav(app, e=>{
@@ -3029,16 +3044,67 @@ async function prepWbFile(file){
   if(dataBytes(r.data) > WB_IMG_MAX*1.5) throw new Error("Зургийг хангалттай шахаж чадсангүй — өөр зураг оруулна уу.");
   return {data: r.data, type:"image/jpeg", size: dataBytes(r.data), w:r.w, h:r.h, orig:file.size};
 }
-async function getWbData(id){
-  if(FILES[id]) return FILES[id];
-  if(!_fb) return null;
-  try{ const v = (await _fb.ref(ROOT+"/wbdata/"+id).once("value")).val(); if(v) FILES[id] = v; return v; }
-  catch(e){ console.warn("wbdata", e && (e.code||e.message)); return null; }
+async function getWbData(id, force){
+  const meta = (DB.wbfiles||{})[id];
+  const cached = FILES[id];
+  const ok = d => typeof d==="string" && /^data:[^;]+;base64,/.test(d) && d.length>32
+    && (!meta || !meta.size || Math.abs(dataBytes(d)-(+meta.size||0)) <= Math.max(8192, (+meta.size||0)*0.25));
+  if(!force && ok(cached)) return cached;
+  if(!_fb) return ok(cached) ? cached : null;
+  try{
+    const v = (await _fb.ref(ROOT+"/wbdata/"+id).once("value")).val();
+    if(ok(v)){ FILES[id] = v; return v; }
+    if(ok(cached)) return cached;
+    if(typeof v==="string" && v.startsWith("data:")){ FILES[id] = v; return v; }
+    return null;
+  }catch(e){ console.warn("wbdata", e && (e.code||e.message)); return ok(cached) ? cached : null; }
 }
 function dataUrlToBlob(d){
-  const [h, b64] = String(d).split(","); const type = (h.match(/^data:([^;]+)/)||[])[1] || "application/octet-stream";
-  const bin = atob(b64||""); const u8 = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+  if(typeof d!=="string" || !d.startsWith("data:") || d.indexOf(",")<0) throw new Error("bad-data-url");
+  const i = d.indexOf(","), h = d.slice(0,i), b64 = d.slice(i+1);
+  const type = (h.match(/^data:([^;,]+)/)||[])[1] || "application/octet-stream";
+  let bin; try{ bin = atob(b64); }catch(e){ throw new Error("bad-base64"); }
+  const u8 = new Uint8Array(bin.length); for(let j=0;j<bin.length;j++) u8[j] = bin.charCodeAt(j);
   return new Blob([u8], {type});
+}
+function isPdfType(t, name){ return t==="application/pdf" || /\.pdf$/i.test(name||""); }
+function isTouchish(){ try{ return matchMedia("(max-width:700px), (pointer:coarse)").matches; }catch(_){ return false; } }
+/* Chrome data: top-frame navigation-ийг блоклодог → blob URL + in-page үзэгч. Мобайл дээр PDF iframe хоосон байдаг. */
+function openDataViewer({boxId, title, sub, data, type, name, icon}){
+  let url;
+  try{ url = URL.createObjectURL(dataUrlToBlob(data)); }
+  catch(e){ console.warn("openDataViewer", e); toast("Файлыг нээж чадсангүй — дахин оруулна уу"); return null; }
+  const pdf = isPdfType(type, name), touch = isTouchish(), fname = name || (pdf?"file.pdf":"file.jpg");
+  closeModal(boxId);
+  const m = document.createElement("div"); m.id = boxId; m.className = "modal-bg";
+  m.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="${esc(boxId)}t">
+    <div class="mhead"><span class="mic">${ic(icon || (pdf?"file":"camera"))}</span><div><small>${esc(sub||"")}</small><h3 id="${esc(boxId)}t">${esc(title||fname)}</h3></div></div>
+    <div class="wbview"></div>
+    <div class="mfoot">
+      <a class="btn ghost" data-wbnew tabindex="0">${ic("eye","sm")} Шинэ цонхонд нээх</a>
+      <a class="btn ghost" data-wbdlbtn tabindex="0">${ic("download","sm")} Татах</a>
+      <button class="btn" type="button" id="${esc(boxId)}close">Хаах</button>
+    </div></div>`;
+  const view = m.querySelector(".wbview");
+  if(pdf){
+    if(touch){
+      view.innerHTML = `<div class="wbpdfmob">${ic("file")}<p><b>PDF-ийг татаж нээнэ үү</b></p><p class="muted sm">Утасны хөтөч PDF-ийг энэ цонхонд шууд харуулахгүй. «Татах» эсвэл «Шинэ цонхонд нээх» дарна уу.</p>
+        <div class="row-gap wrap" style="justify-content:center;margin-top:8px"><button type="button" class="btn" data-wbdlbtn2>${ic("download","sm")} PDF татах</button><button type="button" class="btn ghost" data-wbnew2>${ic("eye","sm")} Шинэ цонхонд</button></div></div>`;
+    } else {
+      const ifr = document.createElement("iframe"); ifr.title = fname; ifr.src = url; view.appendChild(ifr);
+    }
+  } else {
+    const img = document.createElement("img"); img.alt = fname; img.src = url; view.appendChild(img);
+  }
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  const dl = ()=>{ const a=document.createElement("a"); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); };
+  const neu = ()=>{ const w=window.open(url, "_blank", "noopener"); if(!w){ toast("Попап хаагдсан — «Татах»-ыг ашиглана уу"); dl(); } };
+  m.querySelectorAll("[data-wbdlbtn],[data-wbdlbtn2]").forEach(el=>{ el.onclick = e=>{ e.preventDefault(); dl(); }; });
+  m.querySelectorAll("[data-wbnew],[data-wbnew2]").forEach(el=>{ el.onclick = e=>{ e.preventDefault(); neu(); }; });
+  const close = ()=>{ closeModal(boxId); setTimeout(()=>URL.revokeObjectURL(url), 60000); };
+  const cbtn = m.querySelector("#"+CSS.escape(boxId)+"close"); if(cbtn){ cbtn.onclick = close; cbtn.focus(); }
+  m.onclick = ev=>{ if(ev.target===m) close(); }; m.onkeydown = ev=>{ if(ev.key==="Escape") close(); };
+  return {url, close, modal:m};
 }
 const WB_KIND = {book:"Цагаан дэвтэр", exam:"Цагаан дэвтэр"};   // хуучин «exam» файлууд цагаан дэвтэр гэж харагдана
 function wbCardHtml(w, canEdit){
@@ -3050,7 +3116,7 @@ function wbCardHtml(w, canEdit){
       <label class="btn ghost sm" for="wbcam">${ic("camera","sm")} Зураг авах</label><input type="file" id="wbcam" accept="image/*" capture="environment" class="vh"/>
       <span class="muted sm">Зураг автоматаар шахагдана (~300 КБ хүртэл) · PDF 1 МБ хүртэл</span>
       <div id="wbprog" class="muted sm" role="status" aria-live="polite"></div></div>`:""}
-    ${fs.length?`<div class="wbgrid">${fs.map(f=>{ const pdf = f.type==="application/pdf";
+    ${fs.length?`<div class="wbgrid">${fs.map(f=>{ const pdf = isPdfType(f.type, f.name);
       return `<figure class="wbf" data-wbf="${esc(f.id)}">
         <button type="button" class="wbth ${pdf?"pdf":""}" data-wbview="${esc(f.id)}" aria-label="Харах: ${esc(f.name)}">${pdf?`${ic("file")}<span>PDF</span>`:`<span class="muted sm">Ачаалж байна…</span>`}</button>
         <figcaption><b title="${esc(f.name)}">${esc(f.name)}</b><span>${esc(WB_KIND[f.kind]||WB_KIND.book)} · ${esc(fmtSize(f.size||0))}</span><span>${esc(f.date||"")} · ${esc(f.by||"")}</span></figcaption>
@@ -3060,9 +3126,17 @@ function wbCardHtml(w, canEdit){
 }
 function wbBind(w, u, canEdit, rerender){
   $$("[data-wbf]").forEach(async el=>{
-    const f = (DB.wbfiles||{})[el.dataset.wbf]; if(!f || f.type==="application/pdf") return;
+    const f = (DB.wbfiles||{})[el.dataset.wbf]; if(!f || isPdfType(f.type, f.name)) return;
     const d = await getWbData(f.id); const th = el.querySelector(".wbth");
-    if(th && th.isConnected) th.innerHTML = d ? `<img src="${esc(d)}" alt="${esc(f.name)}"/>` : `<span class="muted sm">Ачаалагдсангүй</span>`;
+    if(!th || !th.isConnected) return;
+    if(!d){ th.innerHTML = `<span class="muted sm">Ачаалагдсангүй</span>`; return; }
+    try{
+      const url = URL.createObjectURL(dataUrlToBlob(d));
+      const img = document.createElement("img"); img.alt = f.name||""; img.src = url;
+      img.onload = ()=> setTimeout(()=>URL.revokeObjectURL(url), 30000);
+      img.onerror = ()=>{ URL.revokeObjectURL(url); th.innerHTML = `<span class="muted sm">Зураг алдаатай</span>`; };
+      th.replaceChildren(img);
+    }catch(e){ th.innerHTML = `<span class="muted sm">Зураг алдаатай</span>`; }
   });
   const up = async file=>{
     if(!file || !canEdit) return;
@@ -3084,21 +3158,19 @@ async function wbAction(e, canEdit, rerender){
   const id = (v||dl||del)?.dataset.wbview || (v||dl||del)?.dataset.wbdl || (v||dl||del)?.dataset.wbdel; if(!id) return false;
   const f = (DB.wbfiles||{})[id]; if(!f) return true;
   if(del){ if(canEdit && confirm(`«${f.name}» файлыг устгах уу?`)){ write({["wbfiles/"+id]: null, ["wbdata/"+id]: null}); toast("Файл устлаа"); rerender(); } return true; }
-  const d = await getWbData(id); if(!d){ toast("Файлыг ачаалж чадсангүй"); return true; }
-  const url = URL.createObjectURL(dataUrlToBlob(d));
-  if(dl){ const a = document.createElement("a"); a.href = url; a.download = f.name || "file"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 4000); return true; }
-  closeModal("wbbox");
-  const m = document.createElement("div"); m.id = "wbbox"; m.className = "modal-bg";
-  m.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="wbt">
-    <div class="mhead"><span class="mic">${ic(f.type==="application/pdf"?"file":"camera")}</span><div><small>${esc(WB_KIND[f.kind]||WB_KIND.book)} · ${esc(fmtSize(f.size||0))} · ${esc(f.date||"")}</small><h3 id="wbt">${esc(f.name)}</h3></div></div>
-    <div class="wbview">${f.type==="application/pdf" ? `<iframe src="${esc(url)}" title="${esc(f.name)}"></iframe>` : `<img src="${esc(url)}" alt="${esc(f.name)}"/>`}</div>
-    <div class="mfoot"><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Шинэ цонхонд нээх</a><a class="btn ghost" href="${esc(url)}" download="${esc(f.name||"file")}">${ic("download","sm")} Татах</a><button class="btn" type="button" id="wbclose">Хаах</button></div></div>`;
-  document.body.appendChild(m); document.body.classList.add("modal-open");
-  const close = ()=>{ closeModal("wbbox"); setTimeout(()=>URL.revokeObjectURL(url), 1000); };
-  m.querySelector("#wbclose").onclick = close; m.querySelector("#wbclose").focus();
-  m.onclick = ev=>{ if(ev.target===m) close(); }; m.onkeydown = ev=>{ if(ev.key==="Escape") close(); };
+  const d = await getWbData(id, true); if(!d){ toast("Файлыг ачаалж чадсангүй"); return true; }
+  if(dl){
+    try{
+      const url = URL.createObjectURL(dataUrlToBlob(d));
+      const a = document.createElement("a"); a.href = url; a.download = f.name || "file"; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    }catch(err){ console.warn(err); toast("Татаж чадсангүй"); }
+    return true;
+  }
+  openDataViewer({boxId:"wbbox", title:f.name, sub:`${WB_KIND[f.kind]||WB_KIND.book} · ${fmtSize(f.size||0)} · ${f.date||""}`, data:d, type:f.type, name:f.name, icon:isPdfType(f.type,f.name)?"file":"camera"});
   return true;
 }
+
 
 
 /* ======================= БҮТЭЭГДЭХҮҮНИЙ ШИНЖИЛГЭЭНИЙ БИЧИГ ======================= */
@@ -3249,20 +3321,16 @@ async function labFileAction(e){
   const id=(v||dl)?.dataset.labview || (v||dl)?.dataset.labdl; if(!id) return false;
   const c=(DB.labcerts||{})[id]; if(!c || !(c.fileName||c.fileType)){ toast("Файл алга"); return true; }
   const d=await getLabData(id); if(!d){ toast("Файлыг ачаалж чадсангүй"); return true; }
-  const url=URL.createObjectURL(dataUrlToBlob(d));
   const name=c.fileName||"shinjelgee";
-  if(dl){ const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); return true; }
-  closeModal("labbox");
-  const m=document.createElement("div"); m.id="labbox"; m.className="modal-bg";
-  const pdf=c.fileType==="application/pdf";
-  m.innerHTML=`<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="lbt">
-    <div class="mhead"><span class="mic">${ic(pdf?"file":"camera")}</span><div><small>${esc(c.name||"")} · ${esc(fmtSize(c.fileSize||0))} · ${esc(c.exp||"")}</small><h3 id="lbt">${esc(name)}</h3></div></div>
-    <div class="wbview">${pdf?`<iframe src="${esc(url)}" title="${esc(name)}"></iframe>`:`<img src="${esc(url)}" alt="${esc(name)}"/>`}</div>
-    <div class="mfoot"><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Шинэ цонхонд нээх</a><a class="btn ghost" href="${esc(url)}" download="${esc(name)}">${ic("download","sm")} Татах</a><button class="btn" type="button" id="labclose">Хаах</button></div></div>`;
-  document.body.appendChild(m); document.body.classList.add("modal-open");
-  const close=()=>{ closeModal("labbox"); setTimeout(()=>URL.revokeObjectURL(url),1000); };
-  m.querySelector("#labclose").onclick=close; m.querySelector("#labclose").focus();
-  m.onclick=ev=>{ if(ev.target===m) close(); }; m.onkeydown=ev=>{ if(ev.key==="Escape") close(); };
+  if(dl){
+    try{
+      const url=URL.createObjectURL(dataUrlToBlob(d));
+      const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(err){ console.warn(err); toast("Татаж чадсангүй"); }
+    return true;
+  }
+  openDataViewer({boxId:"labbox", title:name, sub:`${c.name||""} · ${fmtSize(c.fileSize||0)} · ${c.exp||""}`, data:d, type:c.fileType, name, icon:isPdfType(c.fileType,name)?"file":"camera"});
   return true;
 }
 /* ======================= ТОХИРГОО ======================= */
