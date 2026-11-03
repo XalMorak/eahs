@@ -1184,3 +1184,52 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .apk-offer{display:grid;gap:6px;margin-top:2px;padding:12px 14px;border-radius:var(--r);background:var(--brand-50);border:1px solid var(--brand-100)}
 .apk-offer .apk-btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;text-decoration:none}
 .apk-offer small{font-size:12.5px;color:var(--mut);line-height:1.4}
+
+/* ===== v30: Шилдэг ажилтан ===== */
+.bestboard .bestgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:8px 0 12px}
+.bestboard .bestgrid.lg{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.besttile{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:#fff}
+.bestmedia{width:56px;height:56px;border-radius:12px;overflow:hidden;flex:0 0 auto;background:#f3f4f6;display:grid;place-items:center}
+.bestph{width:100%;height:100%;object-fit:cover}
+.bestav{font-weight:700;color:#64748b}
+.bestwhy{margin:.35rem 0 0;font-size:.85rem;color:#334155}
+.bsug{margin:.5rem 0} .bsug ul{margin:.35rem 0 0;padding-left:1.1rem}
+.warnbox{border:1px solid #fecaca;background:#fff7f7}
+
+/* ===== v30: Удирдах ажилтны ярилцлага (A4) ===== */
+.fi-wrap{max-width:920px;margin:0 auto}
+.fi-sheet{background:#fff;color:#111;padding:18px 20px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;line-height:1.35}
+.fi-title{text-align:center;font-size:1.15rem;margin:0 0 12px;letter-spacing:.02em}
+.fi-head,.fi-lv,.fi-qs,.fi-ctrl,.fi-sig{width:100%;border-collapse:collapse;margin:0 0 12px}
+.fi-head td,.fi-lv td,.fi-lv th,.fi-qs td,.fi-qs th,.fi-ctrl td,.fi-ctrl th,.fi-sig td{border:1px solid #334155;padding:6px 8px;vertical-align:top}
+.fi-head td{background:#f8fafc}
+.fi-obs{margin:4px 0 8px}
+.fi-chip,.fi-inline{display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:12.5px}
+.fi-lv .fi-g,.fi-qs .fi-g,.fi-ctrl .fi-risk-g{background:#bbf7d0}
+.fi-lv .fi-a,.fi-qs .fi-a,.fi-ctrl .fi-risk-a{background:#fde68a}
+.fi-lv .fi-r,.fi-qs .fi-r,.fi-ctrl .fi-risk-r{background:#fca5a5}
+.fi-n{width:36px;text-align:center;font-weight:700}
+.fi-qs th:first-child{width:38%}
+.fi-qs thead th.fi-g{background:#86efac}
+.fi-qs thead th.fi-a{background:#fcd34d}
+.fi-qs thead th.fi-r{background:#f87171;color:#111}
+.fi-na{background:#f1f5f9;color:#94a3b8;text-align:center}
+.fi-box{min-height:2.2em;border:1px solid #94a3b8;padding:6px;white-space:pre-wrap}
+.fi-sheet textarea,.fi-sheet input[type=date]{width:100%;font:inherit}
+.fi-notice{border:1px solid #334155;padding:8px 10px;margin:10px 0;background:#f8fafc}
+.fi-ctrl .fi-on{outline:3px solid #0f172a;outline-offset:-3px}
+.fi-cur{margin:.4rem 0 0}
+.fi-acts{margin:0;padding-left:1.1rem}
+.fi-tick{width:28px}
+.sigbox{position:relative;margin-top:4px}
+.sigbox canvas{display:block;width:100%;max-width:360px;height:110px;border:1px dashed #64748b;background:#fff;touch-action:none;cursor:crosshair}
+.fi-sigdate{width:28%;white-space:nowrap}
+@media print{
+  .fi-wrap{max-width:none;margin:0}
+  .fi-sheet{border:none;border-radius:0;padding:0;font-size:11pt}
+  .sigbox canvas{border:1px solid #000}
+  .noprint,.navs,.side,.actions,[data-hback],.appbar .actions{display:none!important}
+  .dash{display:block}
+  .main{padding:0;margin:0}
+  @page{size:A4;margin:12mm}
+}
