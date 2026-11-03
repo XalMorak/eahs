@@ -774,19 +774,29 @@ const HB = {book:{l:"Цагаан дэвтэр", exp:"bookExp", iss:"bookIss", i
 const HB_KINDS = ["book"];
 const H_SOON = 30;   // ≤30 хоног → «Дуусах дөхсөн»
 const H_ST = {ok:["Хүчинтэй","b-ok"], soon:["Дуусах дөхсөн","b-wait"], exp:["Дууссан","b-bad"], none:["Бүртгэлгүй","b-new"]};
+/* v30: цагаан дэвтрийн тайлбар (урт чөлөө гэх мэт) — анхааруулга/мэдэгдлээс хасна */
+const WB_NOTE_PRE = ["Урт хугацааны чөлөөтэй","Жирэмсний амралттай","Өвчтэй"];
+function wbNoteTxt(w){ const n = w && w.wbNote; if(!n) return ""; if(typeof n==="string") return String(n).trim();
+  const code = String(n.code||"").trim(), text = String(n.text||"").trim();
+  if(code==="Бусад" || !code) return text; return text && text!==code ? code+" · "+text : code; }
+const hasWbNote = w => !!wbNoteTxt(w);
+function wbNoteBadge(w){ const t = wbNoteTxt(w); return t ? `<span class="badge b-new" title="${esc(t)}">${esc(t.length>28?t.slice(0,28)+"…":t)}</span>` : ""; }
 function hState(d){ if(!d) return "none"; const left = daysBetween(today(), d); return left<0 ? "exp" : left<=H_SOON ? "soon" : "ok"; }
 function hLeftTxt(d){ if(!d) return ""; const n = daysBetween(today(), d); return n<0 ? `${-n} хоног хэтэрсэн` : n===0 ? "Өнөөдөр дуусна" : `${n} хоног үлдсэн`; }
-function expBadge(d){ const st = hState(d); return st==="none" ? "" : `<span class="badge ${H_ST[st][1]}">${H_ST[st][0]}</span>`; }
-const hBadge = d => { const st = hState(d); return `<span class="badge ${H_ST[st][1]}">${H_ST[st][0]}</span>`; };
+function expBadge(d, w){ if(w && hasWbNote(w)) return wbNoteBadge(w); const st = hState(d); return st==="none" ? "" : `<span class="badge ${H_ST[st][1]}">${H_ST[st][0]}</span>`; }
+const hBadge = (d, w) => { if(w && hasWbNote(w)) return wbNoteBadge(w); const st = hState(d); return `<span class="badge ${H_ST[st][1]}">${H_ST[st][0]}</span>`; };
 function addMonths(base, m){ const d = new Date(base+"T00:00:00"); const day = d.getDate(); d.setMonth(d.getMonth()+m); if(d.getDate()!==day) d.setDate(0); return ymd(d); }
 /* Цагаан дэвтэр шаардлагатай хүмүүс: ажилтан + ахлах */
 const hbPeople = ()=> users().filter(w=>w.role==="worker" || w.role==="supervisor");
 function healthAlerts(alba){
   const out = [];
-  hbPeople().filter(w=>!alba || albaN(w.alba)===albaN(alba)).forEach(w=>HB_KINDS.forEach(kind=>{
-    const d = w[HB[kind].exp]; const st = hState(d);
-    if(st==="soon" || st==="exp") out.push({w, kind, exp:d, st, left:daysBetween(today(), d)});
-  }));
+  hbPeople().filter(w=>!alba || albaN(w.alba)===albaN(alba)).forEach(w=>{
+    if(hasWbNote(w)) return;   // урт чөлөө гэх мэт — хугацаа дууссан гэж анхааруулахгүй
+    HB_KINDS.forEach(kind=>{
+      const d = w[HB[kind].exp]; const st = hState(d);
+      if(st==="soon" || st==="exp") out.push({w, kind, exp:d, st, left:daysBetween(today(), d)});
+    });
+  });
   return out.sort((a,b)=>a.left-b.left || a.w.name.localeCompare(b.w.name));
 }
 const wpLink = (w, txt) => `<button type="button" class="lnk" data-wp="${esc(w.sap)}">${esc(txt==null?w.name:txt)}</button>`;
@@ -899,11 +909,12 @@ function workerHome(){
     ${waterCard(u)}
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
-      ${HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — аюулгүй ажиллагаа, эрүүл ахуйчид хандаж сунгуулна уу.</div>`:""}
+      ${hasWbNote(u)?`<div class="infobox">${ic("chat","sm")} Тэмдэглэл: <b>${esc(wbNoteTxt(u))}</b> — хугацаа дууссан гэж анхааруулахгүй.</div>`
+        : (HB_KINDS.some(k=>["soon","exp"].includes(hState(u[HB[k].exp])))?`<div class="warnbox">${ic("alert","sm")} Цагаан дэвтрийн хугацаа ${HB_KINDS.some(k=>hState(u[HB[k].exp])==="exp")?"дууссан":"дуусах дөхсөн"} байна — аюулгүй ажиллагаа, эрүүл ахуйчид хандаж сунгуулна уу.</div>`:"")}
       <div class="docs">
-        ${HB_KINDS.map(kind=>{ const H=HB[kind], d=u[H.exp]||"", st=hState(d);
-          return `<div class="doc hst-${st}" data-doc="${kind}"><span>${esc(H.l)}${d?" · дуусах":""}</span><b>${d?esc(d):"Огноо оруулаагүй"}</b>${hBadge(d)}
-            <small class="muted">${d?esc(hLeftTxt(d)):"Аюулгүй ажиллагаа, эрүүл ахуйчид хандана уу"}${u[H.iss]?" · Олгосон: "+esc(u[H.iss]):""}</small></div>`; }).join("")}
+        ${HB_KINDS.map(kind=>{ const H=HB[kind], d=u[H.exp]||"", st=hasWbNote(u)?"ok":hState(d);
+          return `<div class="doc hst-${st}" data-doc="${kind}"><span>${esc(H.l)}${d?" · дуусах":""}</span><b>${d?esc(d):"Огноо оруулаагүй"}</b>${hBadge(d,u)}
+            <small class="muted">${hasWbNote(u)?esc(wbNoteTxt(u)):(d?esc(hLeftTxt(d)):"Аюулгүй ажиллагаа, эрүүл ахуйчид хандана уу")}${u[H.iss]?" · Олгосон: "+esc(u[H.iss]):""}</small></div>`; }).join("")}
       </div>
     </div>
     <div class="card advhome" id="advhome"><div class="ctitle">${ic("chat")}<h3>Аюулгүй ажиллагаа, эрүүл ахуйчийн зөвлөмж</h3>${advNew?`<span class="badge b-wait">Шинэ: ${advNew}</span>`:""}</div>
@@ -1020,12 +1031,28 @@ const FAT_DEFAULT = [
   {id:"q11", title:"Анхаарал төвлөрөл / Сэтгэцийн хурц байдал", sub:"Анхаарал төвлөрлийг ямар түвшинд үнэлэх вэ?", opts:[{t:"Маш сайн / Хурц",s:0},{t:"Дунд зэрэг / Хангалттай",s:1},{t:"Муу / Бүдэг",s:2}]}
 ];
 const INF_DEFAULT = [
-  {id:"f1", title:"Та сүүлийн 72 цагийн хугацаанд ил задгай хадгалсан, үнэр амт өөрчлөгдсөн, хордлого үүсгэж болзошгүй хоол хүнс хэрэглэсэн үү?", sub:"", opts:[{t:"Тийм"},{t:"Үгүй"}]},
-  {id:"f2", title:"Таньд дотор муухайрах, гэдэс базлах, гүйлгэх шинж тэмдэг илэрч байна уу?", sub:"", opts:[{t:"Тийм"},{t:"Үгүй"},{t:"Илэрсэн, одоо эдгэсэн"}]},
-  {id:"f3", title:"Та амралтын хугацаанд дээрх шинж тэмдэг илэрсэн хүнтэй хавьтал болсон уу?", sub:"", opts:[{t:"Тийм"},{t:"Үгүй"},{t:"Мэдэхгүй"}]},
-  {id:"f4", title:"Танд бэртэл гэмтэл авсан зэрэг эрүүл мэндийн асуудал байна уу? (Тийм бол ахлах ажилтандаа мэдэгдэнэ үү)", sub:"", opts:[{t:"Тийм"},{t:"Үгүй"}]},
-  {id:"f5", title:"Нойр, амралт хангалттай авч ажилдаа бэлэн байх нөхцөлийг хангаж чадаж байна уу?", sub:"", opts:[{t:"Тийм"},{t:"Үгүй"}]}
+  {id:"f1", title:"Та сүүлийн 72 цагийн хугацаанд ил задгай хадгалсан, үнэр амт өөрчлөгдсөн, хордлого үүсгэж болзошгүй хоол хүнс хэрэглэсэн үү?", sub:"", opts:[{t:"Тийм",s:1},{t:"Үгүй",s:0}]},
+  {id:"f2", title:"Таньд дотор муухайрах, гэдэс базлах, гүйлгэх шинж тэмдэг илэрч байна уу?", sub:"", opts:[{t:"Тийм",s:1},{t:"Үгүй",s:0},{t:"Илэрсэн, одоо эдгэсэн",s:0}]},
+  {id:"f3", title:"Та амралтын хугацаанд дээрх шинж тэмдэг илэрсэн хүнтэй хавьтал болсон уу?", sub:"", opts:[{t:"Тийм",s:1},{t:"Үгүй",s:0},{t:"Мэдэхгүй",s:0}]},
+  {id:"f4", title:"Танд бэртэл гэмтэл авсан зэрэг эрүүл мэндийн асуудал байна уу? (Тийм бол ахлах ажилтандаа мэдэгдэнэ үү)", sub:"", opts:[{t:"Тийм",s:1},{t:"Үгүй",s:0}]},
+  {id:"f5", title:"Нойр, амралт хангалттай авч ажилдаа бэлэн байх нөхцөлийг хангаж чадаж байна уу?", sub:"", opts:[{t:"Тийм",s:0},{t:"Үгүй",s:1}]}
 ];
+/* v30: эрүүл ахуйчид зөвхөн эрсдэлтэй хариулт («Тийм» эсвэл оноотой) байвал мэдэгдэнэ; бүх «Үгүй» хадгалагдана, мэдэгдэлгүй */
+function infectNeedsReview(ans, qs){
+  const A = arr(ans);
+  if(!A.length) return false;
+  const Q = arr(qs);
+  const scored = Q.some(q => arr(q.opts).some(o => +o.s > 0));
+  if(scored){
+    return A.some(a => {
+      const q = Q.find(q => q.title === (a && a.q));
+      if(!q) return String(a && a.a || "").trim() === "Тийм";
+      const o = arr(q.opts).find(o => o.t === (a && a.a));
+      return o ? +o.s > 0 : String(a && a.a || "").trim() === "Тийм";
+    });
+  }
+  return A.some(a => String(a && a.a || "").trim() === "Тийм");
+}
 function surveyDefaults(kind){ return (kind==="fatigue"?FAT_DEFAULT:INF_DEFAULT).map(q=>({...q, opts:q.opts.map(o=>({...o}))})); }
 function surveyUnpack(raw, kind){
   const items = arr(raw).filter(q=>q && (q.title||q.t));
@@ -1222,9 +1249,18 @@ function infectForm(){
   $("#send").onclick = ()=>{
     if(qs.some(q=>!optVal(q.id))){ toast("Бүх асуултыг хариулна уу"); return; }
     const id = uid();
-    write({["infect/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:today(), ts:Date.now(), ...($("#arrive").value?{arrive:$("#arrive").value}:{}),
-      ans: qs.map(q=>({q:q.title, a:optVal(q.id)})), verdict:"huleegdej"}});
-    toast("Илгээгдлээ. Үр дүнг аюулгүй ажиллагаа, эрүүл ахуйч гаргана.");
+    const ans = qs.map(q=>({q:q.title, a:optVal(q.id)}));
+    const flag = infectNeedsReview(ans, qs);
+    const upd = {["infect/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), date:today(), ts:Date.now(), ...($("#arrive").value?{arrive:$("#arrive").value}:{}),
+      ans, verdict: flag ? "huleegdej" : "orjbolno", ...(flag?{flag:true}:{})}};
+    if(flag){
+      const yes = ans.filter(a=>a.a==="Тийм").map(a=>a.q).slice(0,2);
+      upd["notifs/inf_"+id] = {id:"inf_"+id, type:"infect", level:"infect", ts:Date.now(),
+        title: "Халдварын асуумж — Тийм хариулт", body: (u.name+" · "+(yes[0]||"шалгах")).slice(0,160),
+        alba: albaN(u.alba), ref:id, by:u.name, bySap:u.sap};
+    }
+    write(upd);
+    toast(flag ? "Илгээгдлээ. Үр дүнг аюулгүй ажиллагаа, эрүүл ахуйч гаргана." : "Илгээгдлээ.");
     workerHome();
   };
 }
@@ -1686,7 +1722,7 @@ function supervisorHome(){
     ${healthCard(u.alba)}
     ${labAlertCard(true)}
     <div class="card" id="svstaff"><div class="ctitle">${ic("users")}<h3>Албаны ажилтнууд (${aw.length})</h3></div>
-      ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
+      ${tbl(["Ажилтан","SAP","Албан тушаал","Цагаан дэвтэр"], aw.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(w.job||"")}</td><td>${esc(w.bookExp||"—")} ${expBadge(w.bookExp,w)}</td></tr>`), "Албанд ажилтан бүртгэгдээгүй")}</div>`));
   app.addEventListener("click", e=>{ const d=e.target.closest("[data-udel]"); if(d){ e.preventDefault(); e.stopImmediatePropagation(); if(delUhaan(d.dataset.udel)) supervisorHome(); } }, true);
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba);
     const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); } });
@@ -1774,7 +1810,7 @@ function hygieneHome(){
         ${det("ov-hz","alert","Сүүлийн аюулын мэдээлэл", Math.min(6,hzN.length), `<div class="row-gap" style="justify-content:flex-end"><button class="btn ghost sm" data-nav="аюул">Бүгд ${ic("chev","sm")}</button></div>`+(hzN.slice(0,6).map(x=>`<div class="hzrow click" data-hzd="${esc(x.id)}"><div><b>${esc(x.det||x.types?.[0]||"Аюул")}</b><div class="muted">${esc(x.date)} · ${esc(x.area)}</div></div>${stH(x.status)}</div>`).join("")||emptyState("Аюулын мэдээлэл алга","Ажилтнууд мэдээлэхэд энд харагдана","alert")))}
         ${det("ov-workers","users","Ажилтнуудын тойм", ws.length, tbl(["Ажилтан","SAP","Тасаг","Ядаргаа","Цагаан дэвтэр"], ws.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(w=>{
             const last=f.find(x=>x.sap===w.sap);
-            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?fatFace(last.level,20)+" "+esc(fatLvTxt(last.level)):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp)}</td></tr>`;
+            return `<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}${albaHint(w.alba)}</td><td>${last?fatFace(last.level,20)+" "+esc(fatLvTxt(last.level)):"—"}</td><td class="nowrap">${esc(w.bookExp||"—")} ${expBadge(w.bookExp,w)}</td></tr>`;
           })))}
         ${det("ov-uhaan","checks","УХААН — сүүлийн бүртгэл", Math.min(12,u.length), tbl(["Огноо","Нэр","Алба","Байршил","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${stU(x)}</td></tr>`)))}`));
   app.addEventListener("click", e=>{ const k=e.target.closest("[data-ovopen]"); if(k){ const d=$("#"+k.dataset.ovopen); if(d){ d.open=true; d.scrollIntoView({behavior:"smooth", block:"start"}); } } }, true);
@@ -1804,7 +1840,7 @@ function hbHistory(w, kind){
   return base ? [...hist, base] : hist;
 }
 function hbCardHtml(w, kind, canEdit, open){
-  const H = HB[kind], exp = w[H.exp]||"", iss = w[H.iss]||"", st = hState(exp);
+  const H = HB[kind], exp = w[H.exp]||"", iss = w[H.iss]||"", st = hasWbNote(w) ? "ok" : hState(exp);
   const total = iss && exp ? Math.max(1, daysBetween(iss, exp)) : 365;
   const left = exp ? daysBetween(today(), exp) : 0;
   const pct = exp ? Math.max(0, Math.min(100, Math.round(100*left/total))) : 0;
@@ -1822,7 +1858,7 @@ function hbCardHtml(w, kind, canEdit, open){
       <div class="row-gap"><button class="btn" type="submit">${ic("check","sm")} Хадгалах</button><button class="btn ghost" type="button" data-rncancel>Болих</button></div>
     </form>` : "";
   return `<section class="card hbc hst-${st}" data-hb="${kind}">
-    <div class="ctitle">${ic(H.ic)}<h3>${esc(H.l)}</h3>${hBadge(exp)}
+    <div class="ctitle">${ic(H.ic)}<h3>${esc(H.l)}</h3>${hBadge(exp,w)}
       ${canEdit && !open ? `<button class="btn sm" data-renew="${kind}" style="margin-left:auto">${ic("history","sm")} Сунгах</button>` : ""}</div>
     <div class="hbdates">
       <div><span>Олгосон</span><b>${esc(iss||"—")}</b></div>
@@ -1870,7 +1906,7 @@ function workerProfile(sap){
     <section class="card wphead">
       <span class="avatar lg" aria-hidden="true">${esc(initials(w.name))}</span>
       <div class="wpmain"><h3>${esc(w.name)}</h3><div class="muted">${esc(roleName(w.role))}${w.job?" · "+esc(w.job):""}</div>
-        <div class="row-gap wrap">${HB_KINDS.map(k=>{ const st=hState(w[HB[k].exp]); return `<span class="badge ${H_ST[st][1]}">Дэвтэр: ${H_ST[st][0]}</span>`; }).join("")}
+        <div class="row-gap wrap">${hasWbNote(w)?wbNoteBadge(w):HB_KINDS.map(k=>{ const st=hState(w[HB[k].exp]); return `<span class="badge ${H_ST[st][1]}">Дэвтэр: ${H_ST[st][0]}</span>`; }).join("")}
           ${sup?'<span class="badge b-closed">Зөвхөн харах</span>':""}</div></div>
       <dl class="wpinfo">
         <div><dt>SAP</dt><dd>${esc(w.sap)}</dd></div>
@@ -1880,6 +1916,19 @@ function workerProfile(sap){
         ${w.gender?`<div><dt>Хүйс</dt><dd>${esc(w.gender)}</dd></div>`:""}
       </dl>
     </section>
+    ${(()=>{ const n=w.wbNote||{}, code=(typeof n==="object"?n.code:"")||"", text=(typeof n==="object"?n.text:n)||"", pre=WB_NOTE_PRE.includes(code)?code:(code||text?"Бусад":"");
+      return `<section class="card" id="wbnote">
+      <div class="ctitle">${ic("edit")}<h3>Цагаан дэвтрийн тайлбар</h3>${hasWbNote(w)?wbNoteBadge(w):`<span class="muted">заавал биш</span>`}</div>
+      <p class="muted">Урт чөлөө, жирэмсний амралт, өвчтэй гэх мэт — тэмдэглэлтэй бол хугацаа дууссан гэж анхааруулахгүй.</p>
+      ${canEdit?`<div class="g2">
+        <div><label class="f" for="wbncode">Төлөв</label>
+          <select id="wbncode"><option value="">— Сонгох / арилгах —</option>${WB_NOTE_PRE.map(p=>`<option value="${esc(p)}" ${pre===p?"selected":""}>${esc(p)}</option>`).join("")}<option value="Бусад" ${pre==="Бусад"?"selected":""}>Бусад (чөлөөт текст)</option></select></div>
+        <div><label class="f" for="wbntext">Нэмэлт тайлбар</label><input id="wbntext" maxlength="200" value="${esc(text)}" placeholder="Жишээ: 2026-03 хүртэл…"/></div>
+      </div>
+      <div class="gap"></div>
+      <button type="button" class="btn sm" id="wbnsave">${ic("check","sm")} Тайлбар хадгалах</button>`
+      : (hasWbNote(w)?`<p><b>${esc(wbNoteTxt(w))}</b></p>`:`<p class="muted">Тайлбар бүртгээгүй.</p>`)}
+    </section>`; })()}
     <div class="hbgrid">${HB_KINDS.map(k=>hbCardHtml(w, k, canEdit, canEdit && WP.open===k)).join("")}</div>
     ${sup?`<p class="muted">${ic("lock","sm")} Цагаан дэвтрийн сунгалт, файлыг аюулгүй ажиллагаа, эрүүл ахуйч бүртгэнэ.</p>`:""}
     ${wbCardHtml(w, canEdit)}
@@ -1914,6 +1963,18 @@ function workerProfile(sap){
     });
   });
   wbBind(w, u, canEdit, ()=>workerProfile(sap));
+  const wbs = $("#wbnsave");
+  if(wbs && canEdit) wbs.onclick = ()=>{
+    const code = ($("#wbncode")?.value||"").trim();
+    const text = ($("#wbntext")?.value||"").trim();
+    let val = null;
+    if(code==="Бусад"){ if(!text){ toast("Бусад сонгосон бол тайлбар бичнэ үү"); return; } val = {code:"Бусад", text}; }
+    else if(code) val = {code, text};
+    else if(text) val = {code:"Бусад", text};
+    write({["users/"+keyOf(w.sap)+"/wbNote"]: val});
+    toast(val?"Тайлбар хадгаллаа":"Тайлбар арилгалаа");
+    workerProfile(sap);
+  };
   bindNav(app, e=>{
     if(e.target.closest("[data-wbview],[data-wbdl],[data-wbdel]")){ wbAction(e, canEdit, ()=>workerProfile(sap)); return; }
     const r = e.target.closest("[data-renew]"); if(r && canEdit){ WP.open = r.dataset.renew; workerProfile(sap); const f=$(`[data-hbform="${WP.open}"]`); if(f){ f.scrollIntoView({block:"center"}); $("#rn-iss-"+WP.open).focus(); } return; }
@@ -2188,8 +2249,8 @@ function infectListPage(){
   const app = mount(shell("халдвар", `${phead("Халдвар — үр дүн гаргах", "Ажилтан бөглөсөн. Асуултыг засаж, орж болно / оруулахгүй-г эндээс тогтооно.")}
     <div class="row-gap noprint"><button class="btn" id="iedit">${ic("sliders")} Асуулт засах</button></div>
     ${inf.map(x=>{ const v = x.verdict && VERDICT[x.verdict] ? x.verdict : "huleegdej"; return `<div class="card">
-      <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(albaN(x.alba))}</div></div></div>
-      <div class="qa">${arr(x.ans).map(a=>`<div class="item inl"><p>${esc(a.q)}</p><b>${esc(a.a)}</b></div>`).join("")}</div>
+      <div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(x.name))}</span><div><b>${esc(x.name)}</b><div class="muted">${esc(x.date)} · ${esc(x.sap)} · ${esc(albaN(x.alba))}</div></div>${x.flag?`<span class="badge b-wait">Тийм</span>`:""}</div>
+      <div class="qa">${arr(x.ans).map(a=>`<div class="item inl"><p>${esc(a.q)}</p><b class="${a.a==="Тийм"?"bad":""}">${esc(a.a)}</b></div>`).join("")}</div>
       <label class="f">Үр дүн</label>
       <select data-inf="${esc(x.id)}" class="v-${v}">${Object.entries(VERDICT).map(([k,l])=>`<option value="${k}" ${k===v?"selected":""}>${l}</option>`).join("")}</select>
     </div>`;}).join("")||`<div class="card">${emptyState("Халдварын асуумж алга","Хуваарьтай ажилтан ирэх өдрөө бөглөнө","virus")}</div>`}`));
@@ -2204,17 +2265,17 @@ let BOOKF = "";
 function bookPage(){
   if(!requireRole("hygiene")) return;
   view(bookPage, true);
-  const minExp = w=> w.bookExp || "9999";
+  const minExp = w=> hasWbNote(w) ? "0000" : (w.bookExp || "9999");
   const all = hbPeople().sort((a,b)=>minExp(a).localeCompare(minExp(b)) || a.name.localeCompare(b.name));
-  const worst = w=> { const ss = HB_KINDS.map(k=>hState(w[HB[k].exp])); return ss.includes("exp")?"exp":ss.includes("soon")?"soon":ss.includes("none")?"none":"ok"; };
+  const worst = w=> { if(hasWbNote(w)) return "leave"; const ss = HB_KINDS.map(k=>hState(w[HB[k].exp])); return ss.includes("exp")?"exp":ss.includes("soon")?"soon":ss.includes("none")?"none":"ok"; };
   const cnt = st=> all.filter(w=>worst(w)===st).length;
   const ws = BOOKF ? all.filter(w=>worst(w)===BOOKF) : all;
   const chip = (k,l)=>`<button type="button" class="chip ${BOOKF===k?"on":""}" data-bookf="${k}">${esc(l)}</button>`;
-  const cell = (w,kind)=>{ const H=HB[kind], d=w[H.exp]; return `<td class="nowrap">${esc(d||"—")} ${expBadge(d)}${d?`<div class="muted sm">${esc(hLeftTxt(d))}</div>`:""}</td>`; };
-  const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр", "Дуусах хугацаагаар эрэмбэлсэн · мөр дээр дарж хувийн хуудсыг нээж сунгана")}
-    <div class="chips" role="group" aria-label="Төлөвөөр шүүх">${chip("","Бүгд ("+all.length+")")}${chip("exp","Дууссан ("+cnt("exp")+")")}${chip("soon","Дуусах дөхсөн ("+cnt("soon")+")")}${chip("ok","Хүчинтэй ("+cnt("ok")+")")}${chip("none","Бүртгэлгүй ("+cnt("none")+")")}</div>
+  const cell = (w,kind)=>{ const H=HB[kind], d=w[H.exp]; return `<td class="nowrap">${esc(d||"—")} ${expBadge(d,w)}${hasWbNote(w)?"":(d?`<div class="muted sm">${esc(hLeftTxt(d))}</div>`:"")}</td>`; };
+  const app = mount(shell("дэвтэр", `${phead("Цагаан дэвтэр", "Дуусах хугацаагаар эрэмбэлсэн · мөр дээр дарж хувийн хуудсыг нээж сунгана / тайлбар оруулна")}
+    <div class="chips" role="group" aria-label="Төлөвөөр шүүх">${chip("","Бүгд ("+all.length+")")}${chip("leave","Тайлбартай ("+cnt("leave")+")")}${chip("exp","Дууссан ("+cnt("exp")+")")}${chip("soon","Дуусах дөхсөн ("+cnt("soon")+")")}${chip("ok","Хүчинтэй ("+cnt("ok")+")")}${chip("none","Бүртгэлгүй ("+cnt("none")+")")}</div>
     <div class="card">
-    ${tbl(["Нэр","SAP","Алба","Дэвтэр",""], ws.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td>${cell(w,"book")}<td><button class="btn ghost sm" data-wp="${esc(w.sap)}">${ic("history","sm")} Сунгах</button></td></tr>`))}</div>`));
+    ${tbl(["Нэр","SAP","Алба","Дэвтэр","Тайлбар",""], ws.map(w=>`<tr class="click" data-wp="${esc(w.sap)}"><td>${wpLink(w)}</td><td>${esc(w.sap)}</td><td>${esc(albaN(w.alba))}</td>${cell(w,"book")}<td>${hasWbNote(w)?esc(wbNoteTxt(w)):"—"}</td><td><button class="btn ghost sm" data-wp="${esc(w.sap)}">${ic("history","sm")} Сунгах</button></td></tr>`))}</div>`));
   bindNav(app, e=>{ const c=e.target.closest("[data-bookf]"); if(c){ BOOKF=c.dataset.bookf; bookPage(); } });
 }
 function rosterPage(){
@@ -2429,7 +2490,15 @@ function svgBars(cats, series, opt={}){
 function svgLine(cats, series, opt={}){
   const W=640, H=opt.h||200, pl=34, pr=10, pt=14, pb=34, iw=W-pl-pr, ih=H-pt-pb;
   const vals = series.flatMap(s=>s.data.filter(v=>v!=null)); const max = opt.max || Math.max(1, ...vals);
-  let g=""; [0,.25,.5,.75,1].forEach(f=>{ const y=pt+ih-ih*f; g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" class="gl"/><text x="${pl-6}" y="${y+4}" class="ax" text-anchor="end">${+(max*f).toFixed(1)}</text>`; });
+  let g="";
+  if(opt.bands && max>=8){ // ядаргааны өнгөт бүс
+    const Y = v => pt+ih-ih*Math.min(v,max)/max;
+    g+=`<rect x="${pl}" y="${Y(3)}" width="${iw}" height="${Y(0)-Y(3)}" fill="#157A3E22"/><rect x="${pl}" y="${Y(7)}" width="${iw}" height="${Y(3)-Y(7)}" fill="#FCC41933"/><rect x="${pl}" y="${pt}" width="${iw}" height="${Y(7)-pt}" fill="#C1272D22"/>`;
+    g+=`<text x="${W-pr-4}" y="${(Y(1.5)+4).toFixed(1)}" class="ax" text-anchor="end" fill="${CH_COL.ok}">Бага</text>`;
+    g+=`<text x="${W-pr-4}" y="${(Y(5)+4).toFixed(1)}" class="ax" text-anchor="end" fill="${CH_COL.warn}">Дунд</text>`;
+    g+=`<text x="${W-pr-4}" y="${(Y(10.5)+4).toFixed(1)}" class="ax" text-anchor="end" fill="${CH_COL.bad}">Өндөр</text>`;
+  }
+  [0,.25,.5,.75,1].forEach(f=>{ const y=pt+ih-ih*f; g+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" class="gl"/><text x="${pl-6}" y="${y+4}" class="ax" text-anchor="end">${+(max*f).toFixed(1)}</text>`; });
   const X = i=> pl + iw*(cats.length===1?.5:i/(cats.length-1));
   let l=""; series.forEach(se=>{ const pts = se.data.map((v,i)=>v==null?null:[X(i), pt+ih-ih*v/max]);
     let d=""; pts.forEach((p,i)=>{ if(!p) return; d += (d && pts[i-1] ? "L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1); });
@@ -2485,11 +2554,15 @@ function reportsPage(){
   const stCnt = HZ_ST.map(s=>({k:s, v:hz.filter(x=>x.status===s).length, color:ST_COL[s]}));
   const clsCnt = HZ_CLS.map(([c])=>({k:c, v:hz.filter(x=>(x.cls||[]).includes(c)).length})).filter(x=>x.v).sort((a,b)=>b.v-a.v).slice(0,8);
   const od = hz.filter(hzOverdue).length;
-  // ядаргаа
+  // ядаргаа — түвшинээр (Бага 0–3 ногоон / Дунд 4–7 шар / Өндөр 8+ улаан)
   const fa = list("fatigue").filter(inR);
-  const fAvg = zero(), fN = zero(), fHi = zero();
-  fa.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; fN[i]++; fAvg[i]+= +x.score||0; if(x.level==="Өндөр") fHi[i]++; });
+  const fAvg = zero(), fN = zero(), fHi = zero(), fLo = zero(), fMid = zero();
+  fa.forEach(x=>{ const i=idx(periodKey(x.date,F.g)); if(i<0) return; fN[i]++; fAvg[i]+= +x.score||0;
+    const lv = fatLvIdx(x.level); if(lv===2 || x.level==="Өндөр") fHi[i]++; else if(lv===1) fMid[i]++; else fLo[i]++; });
   const avg = fAvg.map((s,i)=> fN[i]? +(s/fN[i]).toFixed(1) : null);
+  const _fsum = a=>a.reduce((s,v)=>s+v,0);
+  const fTot = fa.length, fCnt = {lo:_fsum(fLo), mid:_fsum(fMid), hi:_fsum(fHi)};
+  const FAT_BANDS = [{name:"Бага (0–3)", color:CH_COL.ok, data:fLo}, {name:"Дунд (4–7)", color:CH_COL.sun, data:fMid}, {name:"Өндөр (8+)", color:CH_COL.bad, data:fHi}];
   // ариун цэврийн зөрчил
   const hc = list("hygcheck").filter(inR);
   const hFail = zero(), hOk = zero(), hInc = zero(); const critFail = HYG_CRIT.map(()=>0);
@@ -2503,9 +2576,9 @@ function reportsPage(){
   const rows = sum(hFail)+sum(hOk)+sum(hInc);
   // Цагаан дэвтэр: одоогийн төлөв (алба шүүлтүүрээр) + хугацаанд хийсэн сунгалт
   const hp = hbPeople().filter(w=>!F.alba || albaN(w.alba)===F.alba);
-  const hCnt = kind=> ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:hp.filter(w=>hState(w[HB[kind].exp])===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
-  const hBad = hp.filter(w=>HB_KINDS.some(k=>["soon","exp"].includes(hState(w[HB[k].exp])))).length;
-  const hExpN = hp.filter(w=>HB_KINDS.some(k=>hState(w[HB[k].exp])==="exp")).length;
+  const hCnt = kind=> ["ok","soon","exp","none"].map(st=>({k:H_ST[st][0], v:hp.filter(w=>!hasWbNote(w) && hState(w[HB[kind].exp])===st).length, color:{ok:CH_COL.ok, soon:CH_COL.warn, exp:CH_COL.bad, none:CH_COL.gray}[st]}));
+  const hBad = hp.filter(w=>!hasWbNote(w) && HB_KINDS.some(k=>["soon","exp"].includes(hState(w[HB[k].exp])))).length;
+  const hExpN = hp.filter(w=>!hasWbNote(w) && HB_KINDS.some(k=>hState(w[HB[k].exp])==="exp")).length;
   const labAll = labList();
   const labBad = labAll.filter(c=>["soon","exp"].includes(hState(c.exp))).length;
   const labExpN = labAll.filter(c=>hState(c.exp)==="exp").length;
@@ -2543,7 +2616,14 @@ function reportsPage(){
       ${sec("check","Төлөв", hbars(stCnt))}
     </div>
     ${clsCnt.length? sec("map","Аюулын ангилал (эхний 8)", hbars(clsCnt)) : ""}
-    ${sec("battery","Ядаргааны чиг хандлага", fa.length? svgLine(cats, [{name:"Дундаж оноо (0–14)", color:CH_COL.blue, data:avg}], {max:14, title:"Ядаргааны дундаж оноо"}) + svgBars(cats, [{name:"Их эрсдэл", color:CH_COL.bad, data:fHi}, {name:"Бусад", color:CH_COL.blue2, data:fN.map((n,i)=>n-fHi[i])}], {h:170, title:"Ядаргааны асуумж"}) : emptyState("Ядаргааны асуумж алга","","battery"))}
+    ${sec("battery","Ядаргааны чиг хандлага", fa.length? `
+      <p class="fatcap muted">Оноо: <b class="rk0">Бага 0–3</b> · <b class="rk1">Дунд 4–7</b> · <b class="rk2">Өндөр 8+</b>. Нийт ${fTot} бүртгэл: Бага ${fCnt.lo}, Дунд ${fCnt.mid}, Өндөр ${fCnt.hi}.</p>
+      <div class="fatbands" aria-hidden="true"><span class="fb lo">Бага</span><span class="fb mid">Дунд</span><span class="fb hi">Өндөр</span></div>
+      ${hbars([{k:"Бага (0–3)", v:fCnt.lo, color:CH_COL.ok},{k:"Дунд (4–7)", v:fCnt.mid, color:CH_COL.sun},{k:"Өндөр (8+)", v:fCnt.hi, color:CH_COL.bad}])}
+      <h4 class="rsub">Түвшингээр — сар/улирал бүрт</h4>
+      ${svgBars(cats, FAT_BANDS, {h:200, title:"Ядаргаа түвшингээр"})}
+      <h4 class="rsub">Дундаж оноо (0–14) · ногоон≤3 · шар≤7 · улаан≥8</h4>
+      ${svgLine(cats, [{name:"Дундаж оноо", color:CH_COL.blue, data:avg}], {max:14, title:"Ядаргааны дундаж оноо", bands:true})}` : emptyState("Ядаргааны асуумж алга","","battery"))}
     ${sec("drop","Ариун цэврийн шалгалт — зөрчил", rows? svgBars(cats, [{name:"Ажиллахгүй", color:CH_COL.bad, data:hFail}, {name:"Хангасан", color:CH_COL.ok, data:hOk}, {name:"Бүрэн бус", color:CH_COL.gray, data:hInc}], {title:"Ариун цэврийн шалгалт"})
         + `<h4 class="rsub">Үзүүлэлтээр хангаагүй тоо</h4>` + hbars(HYG_CRIT.map((c,i)=>({k:c, v:critFail[i], color:CH_COL.bad}))) : emptyState("Ариун цэврийн бүртгэл алга","","drop"))}
     ${sec("virus","Халдварын асуумжийн дүгнэлт", inf.length? svgBars(cats, vS, {title:"Халдвар"}) : emptyState("Халдварын асуумж алга","","virus"))}
@@ -2637,7 +2717,7 @@ async function qrPrint(items){
 const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
 function notifList(){
   const u = me(); if(!u || u.role==="worker") return [];
-  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (n.type==="infect" ? u.role==="hygiene" : (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba)))).sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
 function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
@@ -2671,11 +2751,13 @@ function openNotif(id){
   if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
   if(n.type==="health" && DB.users[keyOf(n.ref)]){ WP.from = notifPage; return workerProfile(n.ref); }
   if(n.type==="lab" && (DB.labcerts||{})[n.ref]) return labPage(null, n.ref);
+  if(n.type==="infect") return infectListPage();
   notifPage();
 }
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"],
   hexp:["Дууссан","b-bad","book"], hsoon:["Дуусах дөхсөн","b-wait","book"],
-  lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"]};
+  lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"],
+  infect:["Халдвар","b-wait","virus"]};
 function notifPage(){
   const u = requireRole("hygiene","supervisor"); if(!u) return;
   view(notifPage, true);
@@ -2765,21 +2847,47 @@ function openAdvLightbox(id, iid){
   const a = (DB.advice||{})[id]; const im = advImgList(a); if(!im.length) return;
   let i = Math.max(0, im.findIndex(m=>m.iid===iid));
   closeModal("advlb");
-  const m = document.createElement("div"); m.id = "advlb"; m.className = "modal-bg lb";
-  m.innerHTML = `<div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="advlbt">
-    <div class="mhead"><span class="mic">${ic("eye")}</span><div><small id="advlbn"></small><h3 id="advlbt">${esc(a.title||"")}</h3></div></div>
-    <div class="wbview"><img id="advlbimg" alt=""/></div>
-    <div class="mfoot">${im.length>1?`<button class="btn ghost" type="button" id="advlbprev">${ic("back","sm")} Өмнөх</button><button class="btn ghost" type="button" id="advlbnext">Дараах ${ic("chev","sm")}</button>`:""}<button class="btn" type="button" id="advlbclose">Хаах</button></div></div>`;
+  const m = document.createElement("div"); m.id = "advlb"; m.className = "modal-bg lb fs";
+  m.innerHTML = `<div class="advlbx" role="dialog" aria-modal="true" aria-labelledby="advlbt">
+    <div class="advlb-top"><div><small id="advlbn"></small><b id="advlbt">${esc(a.title||"Зураг")}</b></div>
+      <button class="btn ghost sm advlb-x" type="button" id="advlbclose" aria-label="Хаах">✕</button></div>
+    <div class="advlb-stage" id="advlbstage"><img id="advlbimg" alt="" draggable="false"/></div>
+    <div class="advlb-foot">${im.length>1?`<button class="btn ghost sm" type="button" id="advlbprev">${ic("back","sm")} Өмнөх</button><button class="btn ghost sm" type="button" id="advlbnext">Дараах ${ic("chev","sm")}</button>`:""}
+      <button class="btn ghost sm" type="button" id="advlbzout" aria-label="Жижигрүүлэх">−</button>
+      <button class="btn ghost sm" type="button" id="advlbzin" aria-label="Томруулах">+</button>
+      <button class="btn sm" type="button" id="advlbclose2">Хаах</button></div>
+    <p class="advlb-hint muted">Хоёр хуруугаар томруулна · Esc / дэвсгэр дарж хаана</p></div>`;
   document.body.appendChild(m); document.body.classList.add("modal-open");
+  const stage = m.querySelector("#advlbstage"), img = m.querySelector("#advlbimg");
+  let z = 1, tx = 0, ty = 0;
+  const apply = ()=>{ img.style.transform = `translate(${tx}px,${ty}px) scale(${z})`; };
+  const resetZ = ()=>{ z=1; tx=0; ty=0; apply(); };
   const show = async ()=>{ const cur = i; m.querySelector("#advlbn").textContent = `Зураг ${i+1} / ${im.length}`;
-    const img = m.querySelector("#advlbimg"); img.removeAttribute("src"); img.alt = `Зураг ${i+1}`;
+    img.removeAttribute("src"); img.alt = `Зураг ${i+1}`; resetZ();
     const d = await getAdvImg(id, im[cur].iid); if(img.isConnected && cur===i && d) img.src = d; };
   const close = ()=>{ closeModal("advlb"); document.querySelector("#advmodal #advok")?.focus(); };
   const step = d=>{ i = (i+d+im.length)%im.length; show(); };
-  m.querySelector("#advlbclose").onclick = close; m.querySelector("#advlbclose").focus();
+  m.querySelector("#advlbclose").onclick = close; m.querySelector("#advlbclose2").onclick = close;
+  m.querySelector("#advlbclose").focus();
+  m.querySelector("#advlbzin").onclick = ()=>{ z = Math.min(4, +(z+0.4).toFixed(2)); apply(); };
+  m.querySelector("#advlbzout").onclick = ()=>{ z = Math.max(1, +(z-0.4).toFixed(2)); if(z===1){tx=0;ty=0;} apply(); };
   if(im.length>1){ m.querySelector("#advlbprev").onclick = ()=>step(-1); m.querySelector("#advlbnext").onclick = ()=>step(1); }
-  m.onclick = ev=>{ if(ev.target===m) close(); };
+  m.onclick = ev=>{ if(ev.target===m || ev.target===stage) close(); };
   m.onkeydown = ev=>{ ev.stopPropagation(); if(ev.key==="Escape") close(); else if(im.length>1 && ev.key==="ArrowLeft") step(-1); else if(im.length>1 && ev.key==="ArrowRight") step(1); };
+  /* pinch + pan (гар утас) */
+  let pts = null, baseZ = 1, baseD = 0, pan0 = null;
+  const dist = (a,b)=> Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+  const mid = (a,b)=> ({x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2});
+  stage.addEventListener("touchstart", ev=>{
+    if(ev.touches.length===2){ pts = [...ev.touches]; baseZ = z; baseD = dist(pts[0], pts[1])||1; pan0 = null; }
+    else if(ev.touches.length===1 && z>1){ pan0 = {x:ev.touches[0].clientX-tx, y:ev.touches[0].clientY-ty}; pts=null; }
+  }, {passive:true});
+  stage.addEventListener("touchmove", ev=>{
+    if(pts && ev.touches.length===2){ ev.preventDefault(); z = Math.min(4, Math.max(1, baseZ * dist(ev.touches[0], ev.touches[1])/baseD)); apply(); }
+    else if(pan0 && ev.touches.length===1 && z>1){ ev.preventDefault(); tx = ev.touches[0].clientX-pan0.x; ty = ev.touches[0].clientY-pan0.y; apply(); }
+  }, {passive:false});
+  stage.addEventListener("touchend", ()=>{ pts=null; pan0=null; if(z<1.05) resetZ(); }, {passive:true});
+  stage.addEventListener("wheel", ev=>{ ev.preventDefault(); const d = ev.deltaY>0?-0.15:0.15; z = Math.min(4, Math.max(1, +(z+d).toFixed(2))); if(z===1){tx=0;ty=0;} apply(); }, {passive:false});
   show();
 }
 /* Маягт доторх зургийн хэсэг (одоо байгаа − хассан + шинэ) */
@@ -3753,7 +3861,7 @@ function svEdit(id, init){
       <div class="svt">${esc(it.text)}${t.freq.length?` <small class="fq fq-${it.f||"x"}">${esc(SV_FQ_L[it.f||""])}</small>`:""}${el&&!v?` <small class="fq fq-done">${esc(svMD(el))}-нд хийсэн</small>`:""}</div>
       <div class="svbs"><button type="button" class="svb ok ${v==="ok"?"on":""}" data-k="${it.ik}" data-v="ok" aria-pressed="${v==="ok"}" ${edit?"":"disabled"}>✓ Бүрэн</button>
         <button type="button" class="svb imp ${v==="imp"?"on":""}" data-k="${it.ik}" data-v="imp" aria-pressed="${v==="imp"}" ${edit?"":"disabled"}>! Сайжруулах</button></div>
-      ${v==="imp"?`<input class="svnote" data-nk="${it.ik}" maxlength="200" value="${esc(note)}" placeholder="Юуг сайжруулах вэ? (заавал биш)" aria-label="Сайжруулах тэмдэглэл" ${edit?"":"readonly"}/>`:""}
+      ${v==="imp"?`<input class="svnote ${!note&&edit?"need":""}" data-nk="${it.ik}" maxlength="200" value="${esc(note)}" placeholder="Юуг сайжруулах вэ? (заавал)" aria-label="Сайжруулах тэмдэглэл — заавал" required ${edit?"":"readonly"}/>${!note&&edit?`<small class="svneed">Сайжруулах бол тайлбар заавал</small>`:""}`:""}
     </div>`;
   }
   function dayProg(i){
@@ -3801,12 +3909,19 @@ function svEdit(id, init){
     const d = SV_DK[di];
     if(a==="sign"){ const s = R().sign && R().sign[d];
       if(s && !confirm("Энэ өдрийн баталгаажуулалтыг цуцлах уу?")) return;
+      if(!s && t.kind!=="service"){
+        const miss = its.filter(it=> svCell(R(),it.ik,d)==="imp" && !svNote(R(),it.ik,d));
+        if(miss.length){ toast("«Сайжруулах» мөрүүдэд тайлбар бичнэ үү ("+miss.length+")"); draw(); const n=box.querySelector(".svnote.need"); if(n){ n.focus(); n.scrollIntoView({block:"center"}); } return; }
+      }
       put({[base+"/sign/"+d]: s ? null : {by:u.name, sap:u.sap, at:nowStr()}}); toast(s?"Цуцаллаа":"Баталгаажууллаа"); draw(); return; }
     const b = e.target.closest("[data-k]");
     if(b){ const k=b.dataset.k, v=b.dataset.v, cur=svCell(R(),k,d);
-      const upd = {[base+"/cells/"+k+"/"+d]: cur===v ? null : v};
-      if(cur==="imp" && v!=="imp" && svNote(R(),k,d)) upd[base+"/notes/"+k+"/"+d] = null;
-      put(upd); draw(); return; }
+      const nxt = cur===v ? null : v;
+      const upd = {[base+"/cells/"+k+"/"+d]: nxt};
+      if(cur==="imp" && nxt!=="imp" && svNote(R(),k,d)) upd[base+"/notes/"+k+"/"+d] = null;
+      put(upd); draw();
+      if(nxt==="imp"){ const n=box.querySelector(`.svnote[data-nk="${CSS.escape(k)}"]`); if(n){ n.focus(); n.scrollIntoView({block:"center"}); } }
+      return; }
     const all = e.target.closest("[data-allok]");
     if(all){ const upd = {};
       its.filter(it=>it.sk===all.dataset.allok).forEach(it=>{

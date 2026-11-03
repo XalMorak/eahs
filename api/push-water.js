@@ -8,7 +8,7 @@
  *   07:00–21:59 — өнөөдөр 10 аягад хүрээгүй, сүүлийн 50 минутад аяга нэмээгүй бүх захиалагч руу сануулга.
  *   Даваа 09:00-с хойш (7 хоногт 1 удаа) — эрүүл ахуйчид өмнөх 7 хоногийн усны тайлангийн хураангуй.
  *   404/410 буцаасан захиалгыг устгана.
- * v25: Апп доторх мэдэгдэл (notifs: их эрсдэлтэй аюул, «Ажиллахгүй», цагаан дэвтэр, шинжилгээ) — апп/сайт хаалттай байсан ч
+ * v25/v30: Апп доторх мэдэгдэл (notifs: их эрсдэлтэй аюул, «Ажиллахгүй», цагаан дэвтэр, шинжилгээ, халдварын «Тийм») — апп/сайт хаалттай байсан ч
  *   эрүүл ахуйч (бүгд) ба тухайн албаны хянагчид push-ээр очно. Шинэ мэдэгдэл үүсэхэд апп өөрөө ?notif=1-ийг
  *   (Authorization: Bearer <Firebase ID token>) дууддаг + cron 10 мин тутам нөхөж шалгана. push/_sent/notif = эхлэх ts, push/_sent/n_<id> = илгээсэн тэмдэг.
  *   Бүх push urgency:"high" (Android Doze/унтсан үед ч шууд хүргэнэ; "normal" нь дэлгэц асах хүртэл хойшлогддог).
@@ -59,11 +59,13 @@ async function tokenOk(idToken) {
 }
 const albaN = a => { const s = String(a == null ? "" : a).trim(); if (!s) return ""; return /оффис/i.test(s) ? "Оффис" : "Бар"; };
 const NOTIF_MAX_AGE = 24 * 3600000, NOTIF_MAX = 8;
-/* notif-ийг хэн авах вэ (апп-ын notifList()-тэй ижил): эрүүл ахуйч бүгд, хянагч — алба таарвал/албагүй бол; бичсэн хүн өөрөө биш */
+/* notif-ийг хэн авах вэ (апп-ын notifList()-тэй ижил): эрүүл ахуйч бүгд, хянагч — алба таарвал/албагүй бол; бичсэн хүн өөрөө биш.
+ * v30: type:"infect" — зөвхөн эрүүл ахуйч (асуумж дээр «Тийм» байхад л апп notifs бичнэ; cron энд шүүрдэнэ). */
 function notifTo(n, u, sap) {
   if (!u || !n) return false;
   if (n.bySap != null && keyOf(n.bySap) === sap) return false;
   if (n.type === "health" && n.kind === "exam") return false;
+  if (n.type === "infect") return u.role === "hygiene";
   if (u.role === "hygiene") return true;
   if (u.role === "supervisor") return !n.alba || albaN(n.alba) === albaN(u.alba);
   return false;
