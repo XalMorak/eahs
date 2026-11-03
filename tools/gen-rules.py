@@ -138,6 +138,32 @@ SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newD
                   " && (!newData.child('loc').exists() || newData.child('loc').val().matches(/^(Оюут бар|Манлай бар|Оффис)$/)))")
 
 # v22: Web Push захиалга — push/{sap}/{hash}; хэрэглэгч зөвхөн өөрийн sap дор бичнэ/устгана/уншина; эрүүл ахуйч (сервер) бүгдийг уншина/устгана
+
+# v30b: Тээврийн хэрэгсэлийн хяналт — эрүүл ахуйч CRUD.
+# Менежер уншихыг хялбар нэмэх: HYG_OR_MGR = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'manager'))"
+#   дараа нь VEH_READ = HYG_OR_MGR болго (v30-roles агент). Одоо: VEH_READ = HYG.
+VEH_READ = HYG   # TODO v30-roles: || ROLE === 'manager'
+VEH_PURPOSE_RE = "/^(food|staff|other)$/"
+VEH_RESULT_RE = "/^(pass|fail)$/"
+VEH_ANS_RE = "/^(Тийм|Үгүй|Хамаарахгүй)$/"
+VEH_CHECK_KEYS = "cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs"
+VEH_VALIDATE = ("!newData.exists() || (newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
+                " && newData.child('time').isString() && newData.child('time').val().length <= 8"
+                " && newData.child('plate').isString() && newData.child('plate').val().length > 0 && newData.child('plate').val().length <= 20"
+                " && newData.child('vtype').isString() && newData.child('vtype').val().length > 0 && newData.child('vtype').val().length <= 80"
+                " && newData.child('driver').isString() && newData.child('driver').val().length > 0 && newData.child('driver').val().length <= 100"
+                " && (!newData.child('license').exists() || (newData.child('license').isString() && newData.child('license').val().length <= 40))"
+                " && newData.child('purpose').val().matches(" + VEH_PURPOSE_RE + ")"
+                " && newData.child('result').val().matches(" + VEH_RESULT_RE + ")"
+                " && newData.child('signature').isString() && newData.child('signature').val().beginsWith('data:image/') && newData.child('signature').val().length <= 400000"
+                " && (!newData.child('notes').exists() || (newData.child('notes').isString() && newData.child('notes').val().length <= 800))"
+                " && (!newData.child('photos').exists() || newData.child('photos').hasChildren())"
+                " && newData.child('by').isString() && newData.child('by').val().length <= 100"
+                " && newData.child('ts').isNumber())")
+VEH_CHECK_VALIDATE = ("!newData.exists() || (newData.child('v').val().matches(" + VEH_ANS_RE + ")"
+                      " && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200)))")
+VEH_PHOTO_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
+
 PUSH_VALIDATE = ("!newData.exists() || ($h.matches(/^[0-9a-f]{16,64}$/)"
     " && newData.child('endpoint').isString() && newData.child('endpoint').val().beginsWith('https://') && newData.child('endpoint').val().length <= 1000"
     " && newData.child('keys/p256dh').isString() && newData.child('keys/p256dh').val().length <= 200"
@@ -202,6 +228,11 @@ def strict():
         # Бүтээгдэхүүний шинжилгээ: эрүүл ахуйч бичнэ; ахлах уншина
         "labcerts": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_VALIDATE}},
         "labdata": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_DATA_VALIDATE}},
+        # v30b: Тээврийн хяналт — эрүүл ахуйч CRUD; менежер унших: VEH_READ-д || ROLE==='manager'
+        "vehicles": {".read": VEH_READ, ".write": HYG, ".indexOn": ["date", "plate"],
+            "$id": {".validate": VEH_VALIDATE,
+                    "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
+                    "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
         # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
         "svcheck": {".read": STAFF, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
@@ -236,6 +267,9 @@ def transition():
         "wbdata": {"$id": {".write": ANY, ".validate": WB_DATA_VALIDATE}},
         "labcerts": {"$id": {".write": ANY, ".validate": LAB_VALIDATE}},
         "labdata": {"$id": {".write": ANY, ".validate": LAB_DATA_VALIDATE}},
+        "vehicles": {"$id": {".write": ANY, ".validate": VEH_VALIDATE,
+            "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
+            "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "$other": {".write": False}}}}}
 

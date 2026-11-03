@@ -1206,3 +1206,35 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .apk-offer{display:grid;gap:6px;margin-top:2px;padding:12px 14px;border-radius:var(--r);background:var(--brand-50);border:1px solid var(--brand-100)}
 .apk-offer .apk-btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;text-decoration:none}
 .apk-offer small{font-size:12.5px;color:var(--mut);line-height:1.4}
+
+/* —— Тээврийн хэрэгсэлийн хяналт (v30b) —— */
+.vehform .vehh{margin:14px 0 8px;font-size:15px;color:var(--brand)}
+.vehchecks{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+.vehchk{display:grid;grid-template-columns:1fr;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.vehchkl{display:flex;flex-direction:column;gap:8px}
+.vehchkl b{font-size:13.5px}
+.vehans{gap:6px}
+.vehnote{width:100%;min-height:36px}
+.vehphotos{display:flex;flex-wrap:wrap;gap:8px;width:100%;margin-top:6px}
+.vehph{position:relative;margin:0;width:96px;height:96px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#fff}
+.vehph img{width:100%;height:100%;object-fit:cover;display:block}
+.vehph .btn{position:absolute;top:4px;right:4px;padding:4px 6px}
+.vehsigbox{margin:14px 0 8px;padding:12px;border:1px dashed var(--brand-200, #B8C7F0);border-radius:var(--r);background:var(--brand-50, #F3F6FF)}
+.sigpad{width:100%}
+.sigcanvas{display:block;width:100%;max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff;touch-action:none;cursor:crosshair}
+.sigimg{display:block;max-width:360px;width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
+.vehsignrow{display:flex;justify-content:space-between;gap:24px;margin-top:18px;align-items:flex-end}
+.vehsignrow .sigbox{min-height:70px;min-width:220px;border:1px solid #000;margin-top:6px;padding:4px;background:#fff}
+.vehsignrow .sigbox img{max-height:90px;max-width:100%;display:block}
+.vehprintphs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.vehprintph{max-width:180px;max-height:140px;border:1px solid #000;object-fit:cover}
+.vehsheet .vehm th{width:18%;background:#f3f3f3;font-weight:600}
+.vehsheet .vehm td{width:32%}
+@media(max-width:640px){
+  .vehchk{padding:10px}
+  .vehsignrow{flex-direction:column;align-items:stretch}
+}
+@media print{
+  .vehsigbox,.vehform{display:none!important}
+  .vehprintph{max-width:140px}
+}

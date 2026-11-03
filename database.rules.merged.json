@@ -247,6 +247,27 @@
             ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
           }
         },
+        "vehicles": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          ".indexOn": [
+            "date",
+            "plate"
+          ],
+          "$id": {
+            ".validate": "!newData.exists() || (newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('time').isString() && newData.child('time').val().length <= 8 && newData.child('plate').isString() && newData.child('plate').val().length > 0 && newData.child('plate').val().length <= 20 && newData.child('vtype').isString() && newData.child('vtype').val().length > 0 && newData.child('vtype').val().length <= 80 && newData.child('driver').isString() && newData.child('driver').val().length > 0 && newData.child('driver').val().length <= 100 && (!newData.child('license').exists() || (newData.child('license').isString() && newData.child('license').val().length <= 40)) && newData.child('purpose').val().matches(/^(food|staff|other)$/) && newData.child('result').val().matches(/^(pass|fail)$/) && newData.child('signature').isString() && newData.child('signature').val().beginsWith('data:image/') && newData.child('signature').val().length <= 400000 && (!newData.child('notes').exists() || (newData.child('notes').isString() && newData.child('notes').val().length <= 800)) && (!newData.child('photos').exists() || newData.child('photos').hasChildren()) && newData.child('by').isString() && newData.child('by').val().length <= 100 && newData.child('ts').isNumber())",
+            "checks": {
+              "$ck": {
+                ".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (!newData.exists() || (newData.child('v').val().matches(/^(Тийм|Үгүй|Хамаарахгүй)$/) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 200))))"
+              }
+            },
+            "photos": {
+              "$i": {
+                ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
+              }
+            }
+          }
+        },
         "svcheck": {
           ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
