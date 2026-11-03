@@ -899,7 +899,7 @@ function workerHome(){
   const advMine = myAdvice(u), advNew = advMine.filter(a=>!advAck(a.id, u.sap)).length;
   const task = (id, icon, title, sub, state, stTxt) => `<button class="home-btn ${state}" id="${id}"><span class="mi">${ic(icon)}</span><span><b>${title}</b><span class="muted">${esc(sub)}</span></span><span class="st">${stTxt}</span></button>`;
   const app = mount(`
-    ${appbar("ЭАХС · Ажилтан", esc(albaN(u.alba)))}
+    ${appbar("ЭАХС", esc(albaN(u.alba)))}
     <main class="page">
     <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(albaN(u.alba))}</div></div></div>
       <button class="btn ghost sm" id="out">${ic("logout","sm")} Гарах</button></div>
@@ -1677,7 +1677,7 @@ function shell(active, inner){
   const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : role==="manager" ? "Менежерийн самбар" : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
   return `<div class="dash">
     <aside class="side">
-      <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
+      <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС</small></h1></div>
       <nav class="navs" aria-label="Цэс">
       ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role!=="supervisor" ? list("hazards").map(normHazard).filter(hzOverdue).length : k==="ядаргаа" && role==="supervisor" ? fatIntPending(u).length : k==="хяналт" ? svOpenFixCount(u) : 0;
         return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"||k==="ядаргаа"||k==="хяналт"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
@@ -3521,7 +3521,7 @@ async function changePassword(form){
 function workerPwPage(){
   const u = me(); if(!u) return landing();
   view(workerPwPage, false);
-  const app = mount(`${appbar("ЭАХС · Ажилтан", esc(albaN(u.alba)))}
+  const app = mount(`${appbar("ЭАХС", esc(albaN(u.alba)))}
     <main class="page"><button class="btn ghost sm" id="wb">${ic("back","sm")} Буцах</button><div class="gap"></div>${pwFormHtml(u)}</main>`);
   $("#wb").onclick = workerHome;
   app.onsubmit = async e=>{ e.preventDefault(); if(await changePassword(e.target)) setTimeout(workerHome, 900); };
