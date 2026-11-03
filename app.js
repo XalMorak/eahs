@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v29 · 2026-11-02";
+const APP_VER = "v30b · 2026-11-03";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -89,7 +89,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water","vehicles"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -181,7 +181,8 @@ const ICONS = {
   bug:'<path d="m8 2 1.9 1.9M16 2l-1.9 1.9"/><path d="M9 7.1V6a3 3 0 0 1 6 0v1.1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6 13H2M22 13h-4M6.5 9 3 7M17.5 9 21 7M6.5 17 3 19M17.5 17 21 19"/>',
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
   eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-  flask:'<path d="M9 3h6M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h12a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M8.5 14h7"/>'
+  flask:'<path d="M9 3h6M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h12a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M8.5 14h7"/>',
+  truck:'<path d="M1 7h13v10H1z"/><path d="M14 10h4l3 3v4h-7V10z"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'
 };
 const ic = (n, cls="") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n]||""}</svg>`;
 const initials = name => String(name||"?").replace(/^[^\s.]+\.\s*/,"").trim().slice(0,1).toUpperCase() || "?";
@@ -1623,10 +1624,10 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["тээвэр","Тээвэр"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
   supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["ажилтан","Ажилтнууд"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","тээвэр":"truck","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
 function shell(active, inner){
   const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
   const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
@@ -1650,7 +1651,7 @@ function bindNav(app, extra){
       const sup = me()?.role==="supervisor";
       ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "ус":waterReportPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
-        "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
+        "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тээвэр":vehicleListPage, "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -3939,6 +3940,345 @@ async function svExcel(recs, wb0){
   return wb;
 }
 
+/* ======================= ТЭЭВРИЙН ХЭРЭГСЭЛИЙН ХЯНАЛТ (v30b) =======================
+   Эрүүл ахуйч: ариун цэвэр + аюулгүй ажиллагааны шалгалт (хүнс/ажилтан тээвэр).
+   Бичлэг: vehicles/{id} = {id,date,time,plate,vtype,model,driver,license,purpose,
+     checks:{k:{v,note}}, result, notes, photos:[dataURL…], signature:dataURL, by,bySap,at,ts}
+   Зөвхөн эрүүл ахуйч CRUD. Менежер унших эрхийг gen-rules-д хялбар нэмнэ. */
+const VEH_PURPOSE = [["food","Хүнс тээвэрлэх"],["staff","Ажилтан тээвэрлэх"],["other","Бусад"]];
+const VEH_RESULT = [["pass","Тэнцсэн"],["fail","Тэнцээгүй"]];
+const VEH_ANS = ["Тийм","Үгүй","Хамаарахгүй"];
+const VEH_CHECKS = [
+  ["cargo","Ачааны хэсэг цэвэр"],
+  ["temp","Температурын хяналт / термометрийн заалт"],
+  ["sep","Хүнс химийн бодис / бохирдолоос тусдаа"],
+  ["pest","Хортон шавьж / мэрэгчгүй"],
+  ["health","Жолоочийн эрүүл мэнд / цагаан дэвтэр хүчинтэй"],
+  ["clothes","Жолоочийн цэвэр хувцас"],
+  ["firstaid","Анхны тусламжийн хэрэгсэл"],
+  ["fire","Гал унтраагуур"],
+  ["belt","Суудлын бүс"],
+  ["tyre","Дугуй / гэрэл хэвийн"],
+  ["docs","Бичиг баримт / бүртгэл хүчинтэй"]
+];
+const VEH_PHOTO_MAX = 3;
+let VEHF = {q:"", from:"", to:"", result:""};
+let VEH_DRAFT = {photos:[], signature:null};
+
+const vehPurpose = k => (VEH_PURPOSE.find(x=>x[0]===k)||[k,k])[1];
+const vehResult = k => (VEH_RESULT.find(x=>x[0]===k)||[k,k||"—"])[1];
+const vehList = () => list("vehicles").filter(x=>x && x.id);
+const vehBadge = r => r==="pass" ? `<span class="badge b-ok">Тэнцсэн</span>` : r==="fail" ? `<span class="badge b-bad">Тэнцээгүй</span>` : `<span class="badge b-wait">—</span>`;
+const vehPhotos = v => arr(v && v.photos).filter(d => typeof d==="string" && d.startsWith("data:"));
+
+function vehSigPad(host, initial){
+  if(!host) return {empty:()=>true, data:()=>null, clear:()=>{}};
+  host.innerHTML = `<canvas class="sigcanvas" width="640" height="200" aria-label="Жолоочийн гарын үсэг"></canvas>
+    <div class="row-gap wrap"><button type="button" class="btn ghost sm" data-sigclear>${ic("trash","sm")} Цэвэрлэх</button><span class="muted sm">Хуруу эсвэл хулганаар зурна</span></div>`;
+  const c = host.querySelector("canvas"); const g = c.getContext("2d");
+  let emptyFlag = !initial;
+  const inkCount = ()=>{
+    try{
+      const d = g.getImageData(0,0,c.width,c.height).data; let n=0;
+      for(let i=0;i<d.length;i+=4){ if(d[i]<80 && d[i+1]<80 && d[i+2]<140) n++; }
+      return n;
+    }catch(e){ return 0; }
+  };
+  const hasInk = ()=> !emptyFlag || !!initial || inkCount()>60;
+  const fit = ()=>{
+    const r = c.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio||1);
+    const w = Math.max(280, Math.round(r.width||320)); const h = Math.round(w*0.32);
+    const keep = hasInk() ? (()=>{ try{ return c.toDataURL("image/png"); }catch(e){ return null; } })() : null;
+    c.width = Math.round(w*dpr); c.height = Math.round(h*dpr);
+    c.style.width = w+"px"; c.style.height = h+"px";
+    g.setTransform(dpr,0,0,dpr,0,0); g.lineCap="round"; g.lineJoin="round"; g.lineWidth=2.4;
+    g.fillStyle="#fff"; g.fillRect(0,0,w,h);
+    g.strokeStyle="#E6ECF5"; g.beginPath(); g.moveTo(12,h-28); g.lineTo(w-12,h-28); g.stroke();
+    g.strokeStyle="#0B1D5C";
+    const src = (keep && keep.length>100 && !emptyFlag) ? keep : initial;
+    if(src){ const img=new Image(); img.onload=()=>{ g.drawImage(img,0,0,w,h); emptyFlag=false; initial=null; }; img.src=src; }
+  };
+  let drawing=false;
+  const xy = e=>{ const r=c.getBoundingClientRect(); const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX-r.left, y:t.clientY-r.top}; };
+  const start = e=>{ e.preventDefault(); drawing=true; emptyFlag=false; const p=xy(e); g.beginPath(); g.moveTo(p.x,p.y); g.lineTo(p.x+0.1,p.y+0.1); g.stroke(); };
+  const move = e=>{ if(!drawing) return; e.preventDefault(); const p=xy(e); g.lineTo(p.x,p.y); g.stroke(); emptyFlag=false; };
+  const end = ()=>{ drawing=false; };
+  c.addEventListener("mousedown", start); c.addEventListener("mousemove", move); window.addEventListener("mouseup", end);
+  c.addEventListener("touchstart", start, {passive:false}); c.addEventListener("touchmove", move, {passive:false}); c.addEventListener("touchend", end);
+  const clear = ()=>{ initial=null; emptyFlag=true; fit(); };
+  host.querySelector("[data-sigclear]").onclick = clear;
+  fit();
+  return {
+    empty:()=>!hasInk(),
+    data:()=> hasInk() ? c.toDataURL("image/png") : null,
+    clear, canvas:c
+  };
+}
+
+function vehicleListPage(editId){
+  const u = requireRole("hygiene"); if(!u) return;
+  view(()=>vehicleListPage(), !editId);
+  const F = VEHF;
+  const all = vehList().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.time||"").localeCompare(String(a.time||"")) || (b.ts||0)-(a.ts||0));
+  const q = (F.q||"").trim().toLowerCase();
+  const shown = all.filter(v=>{
+    if(F.from && String(v.date||"") < F.from) return false;
+    if(F.to && String(v.date||"") > F.to) return false;
+    if(F.result && v.result!==F.result) return false;
+    if(!q) return true;
+    const hay = `${v.plate||""} ${v.driver||""} ${v.model||""} ${v.vtype||""} ${v.license||""} ${v.notes||""}`.toLowerCase();
+    return hay.includes(q);
+  });
+  const ed = editId ? (DB.vehicles||{})[editId] : null;
+  if(editId && !ed){ toast("Бичлэг олдсонгүй"); return vehicleListPage(); }
+  if(!editId) VEH_DRAFT = {photos:[], signature:null};
+  else if(VEH_DRAFT.key!==editId) VEH_DRAFT = {key:editId, photos:vehPhotos(ed), signature:ed.signature||null};
+
+  const checkRows = VEH_CHECKS.map(([k,l])=>{
+    const cur = (ed && ed.checks && ed.checks[k]) || {};
+    const v = cur.v || "";
+    return `<div class="vehchk" data-ck="${k}">
+      <div class="vehchkl"><b>${esc(l)}</b>
+        <div class="row-gap wrap vehans">${VEH_ANS.map(a=>`<label class="seg"><input type="radio" name="ck_${k}" value="${esc(a)}" ${v===a?"checked":""}/><span>${esc(a)}</span></label>`).join("")}</div>
+      </div>
+      <input type="text" class="vehnote" data-ckn="${k}" maxlength="200" placeholder="Тайлбар (заавал биш)" value="${esc(cur.note||"")}"/>
+    </div>`;
+  }).join("");
+
+  const form = `<form class="card vehform" id="vehf" novalidate>
+    <div class="ctitle">${ic(ed?"edit":"truck")}<h3>${ed?"Хяналт засах":"Шинэ тээврийн хяналт"}</h3></div>
+    <div class="g3">
+      <div><label class="f" for="vdate">Огноо *</label><input type="date" id="vdate" required value="${esc(ed?.date||today())}" max="${today()}"/></div>
+      <div><label class="f" for="vtime">Цаг *</label><input type="time" id="vtime" required value="${esc(ed?.time||new Date().toTimeString().slice(0,5))}"/></div>
+      <div><label class="f" for="vplate">Улсын дугаар *</label><input id="vplate" maxlength="20" required value="${esc(ed?.plate||"")}" placeholder="Жишээ: 1234 УБА" autocomplete="off"/></div>
+      <div><label class="f" for="vvtype">Төрөл / загвар *</label><input id="vvtype" maxlength="80" required value="${esc(ed?.vtype||ed?.model||"")}" placeholder="Жишээ: Фургон / Toyota Hiace"/></div>
+      <div><label class="f" for="vdriver">Жолоочийн нэр *</label><input id="vdriver" maxlength="100" required value="${esc(ed?.driver||"")}" placeholder="Жолоочийн нэр"/></div>
+      <div><label class="f" for="vlic">Жолооны үнэмлэх №</label><input id="vlic" maxlength="40" value="${esc(ed?.license||"")}" placeholder="Заавал биш"/></div>
+      <div><label class="f" for="vpur">Зориулалт *</label><select id="vpur">${VEH_PURPOSE.map(([k,l])=>`<option value="${k}" ${(ed?.purpose||"food")===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+      <div><label class="f" for="vres">Ерөнхий дүн *</label><select id="vres">${VEH_RESULT.map(([k,l])=>`<option value="${k}" ${(ed?.result||"pass")===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+    </div>
+    <h4 class="vehh">Шалгах зүйлс</h4>
+    <div class="vehchecks">${checkRows}</div>
+    <label class="f" for="vnotes">Нэмэлт тэмдэглэл</label>
+    <textarea id="vnotes" rows="2" maxlength="800" placeholder="Жишээ: Температур +4°C, ачаа бүрэн битүүмжилсэн…">${esc(ed?.notes||"")}</textarea>
+    <div class="wbup" id="vehup">
+      <span class="f" style="margin:0">Зураг (заавал биш, ${VEH_PHOTO_MAX} хүртэл)</span>
+      <label class="btn sm" for="vfile">${ic("upload","sm")} Зураг оруулах</label><input type="file" id="vfile" accept="image/*" multiple class="vh"/>
+      <label class="btn ghost sm" for="vcam">${ic("camera","sm")} Зураг авах</label><input type="file" id="vcam" accept="image/*" capture="environment" class="vh"/>
+      <span class="muted sm">Автоматаар шахагдана (~300 КБ)</span>
+      <div id="vphprog" class="muted sm" role="status"></div>
+      <div class="vehphotos" id="vehphotos"></div>
+    </div>
+    <div class="vehsigbox">
+      <label class="f">Жолоочийн гарын үсэг *</label>
+      <div id="vehsig" class="sigpad"></div>
+      <p class="muted sm">Хадгалахаас өмнө жолооч гарын үсэг зурна. Шалгасан: <b>${esc(u.name)}</b></p>
+    </div>
+    <div class="row-gap"><button class="btn" type="submit">${ic("check","sm")} ${ed?"Хадгалах":"Бүртгэх"}</button>${ed?'<button class="btn ghost" type="button" id="vcancel">Болих</button>':""}</div>
+  </form>`;
+
+  const rows = shown.map(v=>`<tr>
+    <td class="nowrap">${esc(v.date||"")}<div class="muted sm">${esc(v.time||"")}</div></td>
+    <td><b>${esc(v.plate||"—")}</b><div class="muted sm">${esc(v.vtype||v.model||"")}</div></td>
+    <td>${esc(v.driver||"—")}<div class="muted sm">${esc(vehPurpose(v.purpose))}</div></td>
+    <td>${vehBadge(v.result)}</td>
+    <td class="nowrap">
+      <button type="button" class="btn sm" data-vo="${esc(v.id)}">${ic("eye","sm")} Харах</button>
+      <button type="button" class="btn ghost sm" data-vp="${esc(v.id)}">${ic("printer","sm")}</button>
+      <button type="button" class="btn ghost sm" data-ve="${esc(v.id)}">${ic("edit","sm")}</button>
+      <button type="button" class="btn warn sm" data-vd="${esc(v.id)}">${ic("trash","sm")}</button>
+    </td></tr>`);
+
+  const app = mount(shell("тээвэр", `${phead("Тээврийн хэрэгсэлийн хяналт", "Ариун цэвэр + аюулгүй ажиллагаа · жолоочийн гарын үсэг")}
+    ${form}
+    <div class="card filters" id="vehfilt">
+      <div class="frow g3">
+        <div><label class="f" for="vq">Хайх</label><input type="search" id="vq" value="${esc(F.q||"")}" placeholder="Дугаар, жолооч, загвар…"/></div>
+        <div><label class="f" for="vfrom">Эхлэх</label><input type="date" id="vfrom" value="${esc(F.from||"")}"/></div>
+        <div><label class="f" for="vto">Дуусах</label><input type="date" id="vto" value="${esc(F.to||"")}"/></div>
+        <div><label class="f" for="vresf">Дүн</label><select id="vresf"><option value="">Бүгд</option>${VEH_RESULT.map(([k,l])=>`<option value="${k}" ${F.result===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+      </div>
+      <p class="muted sm">${shown.length} / ${all.length} бүртгэл</p>
+    </div>
+    <div class="card"><div class="ctitle">${ic("truck")}<h3>Бүртгэл</h3>
+      <button type="button" class="btn ghost sm" id="vxl">${ic("sheet","sm")} Excel</button></div>
+      ${tbl(["Огноо","Улсын дугаар","Жолооч","Дүн",""], rows, "Одоогоор тээврийн хяналт бүртгээгүй")}
+    </div>`));
+
+  const redrawPh = ()=>{
+    const box = $("#vehphotos"); if(!box) return;
+    const ph = VEH_DRAFT.photos||[];
+    box.innerHTML = ph.map((d,i)=>`<figure class="vehph"><img src="${d}" alt="Зураг ${i+1}"/><button type="button" class="btn warn sm" data-vphx="${i}">${ic("trash","sm")}</button></figure>`).join("")
+      || `<p class="muted sm">Зураг оруулаагүй</p>`;
+  };
+  redrawPh();
+  const pad = vehSigPad($("#vehsig"), VEH_DRAFT.signature||null);
+
+  const addPh = async files=>{
+    const pr = $("#vphprog");
+    for(const f of files){
+      if((VEH_DRAFT.photos||[]).length >= VEH_PHOTO_MAX){ toast(`Зураг ${VEH_PHOTO_MAX}-аас ихгүй`); break; }
+      if(pr) pr.textContent = "Шахаж байна…";
+      try{
+        const r = await prepWbFile(f);
+        if(!/^image\//.test(r.type)){ toast("Зөвхөн зураг оруулна уу"); continue; }
+        VEH_DRAFT.photos.push(r.data);
+      }catch(err){ toast(err.message||"Зураг алдаатай"); }
+    }
+    if(pr) pr.textContent = "";
+    redrawPh();
+  };
+  ["vfile","vcam"].forEach(id=>{ const inp=document.getElementById(id); if(inp) inp.onchange = ()=>{ const fs=[...inp.files]; inp.value=""; addPh(fs); }; });
+  if($("#vehphotos")) $("#vehphotos").onclick = e=>{ const b=e.target.closest("[data-vphx]"); if(b){ VEH_DRAFT.photos.splice(+b.dataset.vphx,1); redrawPh(); } };
+  if($("#vcancel")) $("#vcancel").onclick = ()=>{ VEH_DRAFT={photos:[],signature:null}; vehicleListPage(); window.scrollTo(0,0); };
+
+  const applyFilt = ()=>{
+    VEHF = {q:$("#vq").value, from:$("#vfrom").value, to:$("#vto").value, result:$("#vresf").value};
+    vehicleListPage(editId||undefined);
+  };
+  ["vq","vfrom","vto","vresf"].forEach(id=>{ const el=document.getElementById(id); if(!el) return;
+    el.onchange = applyFilt; if(id==="vq") el.oninput = ()=>{ clearTimeout(el._t); el._t=setTimeout(applyFilt, 280); }; });
+
+  if($("#vxl")) $("#vxl").onclick = async ()=>{
+    if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
+    const wb = new ExcelJS.Workbook(); wb.creator="EAHS";
+    addVehSheet(wb, ()=>true);
+    await downloadWb(wb, `EAHS_teevir_${today()}.xlsx`);
+  };
+
+  bindNav(app, e=>{
+    const o=e.target.closest("[data-vo]"); if(o){ vehicleDetail(o.dataset.vo); return; }
+    const p=e.target.closest("[data-vp]"); if(p){ vehiclePrint(p.dataset.vp); return; }
+    const ee=e.target.closest("[data-ve]"); if(ee){ vehicleListPage(ee.dataset.ve); window.scrollTo(0,0); return; }
+    const d=e.target.closest("[data-vd]"); if(d){
+      const v=(DB.vehicles||{})[d.dataset.vd];
+      if(v && confirm(`«${v.plate||""}» · ${v.date||""} хяналтыг устгах уу?`)){ write({["vehicles/"+v.id]:null}); toast("Устгалаа"); vehicleListPage(); }
+    }
+  });
+
+  app.onsubmit = async e=>{
+    e.preventDefault();
+    const date=$("#vdate").value, time=$("#vtime").value, plate=$("#vplate").value.trim().slice(0,20);
+    const vtype=$("#vvtype").value.trim().slice(0,80), driver=$("#vdriver").value.trim().slice(0,100);
+    const license=$("#vlic").value.trim().slice(0,40), purpose=$("#vpur").value, result=$("#vres").value;
+    const notes=$("#vnotes").value.trim().slice(0,800);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ toast("Огноо буруу"); return; }
+    if(!time){ toast("Цаг оруулна уу"); return; }
+    if(!plate){ toast("Улсын дугаар оруулна уу"); $("#vplate").focus(); return; }
+    if(!vtype){ toast("Төрөл / загвар оруулна уу"); return; }
+    if(!driver){ toast("Жолоочийн нэр оруулна уу"); return; }
+    const checks={}; let missing=0;
+    VEH_CHECKS.forEach(([k])=>{
+      const inp = app.querySelector(`input[name="ck_${k}"]:checked`);
+      const note = (app.querySelector(`[data-ckn="${k}"]`)?.value||"").trim().slice(0,200);
+      if(!inp){ missing++; return; }
+      checks[k] = {v:inp.value, ...(note?{note}:{})};
+    });
+    if(missing){ toast("Шалгах зүйлс бүгдийг бөглөнө үү"); return; }
+    const signature = pad.data();
+    if(!signature){ toast("Жолоочийн гарын үсэг зурна уу"); return; }
+    const ts = Date.now(), id = ed ? ed.id : keyOf("veh_"+ts.toString(36)+uid().slice(-3));
+    const photos = (VEH_DRAFT.photos||[]).slice(0, VEH_PHOTO_MAX);
+    const rec = {id, date, time, plate, vtype, model:vtype, driver, license, purpose, checks, result, notes,
+      photos, signature, by:u.name, bySap:u.sap, at:nowStr(), ts: ed?.ts||ts, ...(ed?{updatedAt:nowStr(), updatedBy:u.name}:{})};
+    write({["vehicles/"+id]: rec});
+    VEH_DRAFT = {photos:[], signature:null};
+    toast(ed?"Хадгаллаа":"Бүртгэлээ");
+    vehicleListPage();
+    window.scrollTo(0,0);
+  };
+}
+
+function vehicleDetail(id){
+  const u = requireRole("hygiene"); if(!u) return;
+  const v = (DB.vehicles||{})[id]; if(!v){ toast("Бичлэг олдсонгүй"); return vehicleListPage(); }
+  view(()=>vehicleDetail(id), true);
+  const checks = VEH_CHECKS.map(([k,l])=>{
+    const c = (v.checks||{})[k]||{};
+    return `<tr><td>${esc(l)}</td><td>${esc(c.v||"—")}</td><td>${esc(c.note||"")}</td></tr>`;
+  });
+  const ph = vehPhotos(v).map((d,i)=>`<figure class="vehph"><img src="${d}" alt="Зураг ${i+1}"/></figure>`).join("");
+  const app = mount(shell("тээвэр", `${phead(esc(v.plate||"Тээвэр"), `${esc(v.date||"")} · ${esc(v.time||"")} · ${esc(vehPurpose(v.purpose))}`, `<button class="btn ghost sm" id="vback">${ic("back","sm")} Жагсаалт</button>`)}
+    <div class="card">
+      <div class="row-between wrap"><div class="row-gap">${vehBadge(v.result)}<span class="muted sm">${esc(v.by||"")} · ${esc(v.at||"")}</span></div>
+        <div class="row-gap"><button class="btn ghost sm" id="vprint">${ic("printer","sm")} Хэвлэх</button><button class="btn ghost sm" id="vedit">${ic("edit","sm")} Засах</button></div></div>
+      <div class="lockgrid" style="margin-top:10px">
+        <div class="cell"><span>Улсын дугаар</span><b>${esc(v.plate||"—")}</b></div>
+        <div class="cell"><span>Төрөл / загвар</span><b>${esc(v.vtype||v.model||"—")}</b></div>
+        <div class="cell"><span>Жолооч</span><b>${esc(v.driver||"—")}</b></div>
+        <div class="cell"><span>Жолооны үнэмлэх</span><b>${esc(v.license||"—")}</b></div>
+        <div class="cell"><span>Зориулалт</span><b>${esc(vehPurpose(v.purpose))}</b></div>
+        <div class="cell"><span>Шалгасан</span><b>${esc(v.by||"—")}</b></div>
+      </div>
+      ${v.notes?`<p class="advtext" style="margin-top:10px">${esc(v.notes)}</p>`:""}
+    </div>
+    <div class="card"><div class="ctitle">${ic("clipboard")}<h3>Шалгах зүйлс</h3></div>
+      ${tbl(["Шалгуур","Үр дүн","Тайлбар"], checks)}</div>
+    ${ph?`<div class="card"><div class="ctitle">${ic("camera")}<h3>Зураг</h3></div><div class="vehphotos">${ph}</div></div>`:""}
+    <div class="card"><div class="ctitle">${ic("edit")}<h3>Жолоочийн гарын үсэг</h3></div>
+      ${v.signature?`<img class="sigimg" src="${v.signature}" alt="Гарын үсэг"/>`:`<p class="muted">Гарын үсэг алга</p>`}
+    </div>`));
+  $("#vback").onclick = ()=>{ vehicleListPage(); window.scrollTo(0,0); };
+  $("#vprint").onclick = ()=>vehiclePrint(id);
+  $("#vedit").onclick = ()=>{ vehicleListPage(id); window.scrollTo(0,0); };
+  bindNav(app);
+}
+
+function vehiclePrint(id){
+  const u = requireRole("hygiene"); if(!u) return;
+  const v = (DB.vehicles||{})[id]; if(!v){ toast("Бичлэг олдсонгүй"); return; }
+  view(()=>vehiclePrint(id), true);
+  const body = VEH_CHECKS.map(([k,l],i)=>{
+    const c=(v.checks||{})[k]||{};
+    return `<tr><td class="c">${i+1}</td><td>${esc(l)}</td><td class="c">${esc(c.v||"")}</td><td>${esc(c.note||"")}</td></tr>`;
+  }).join("");
+  const ph = vehPhotos(v).map(d=>`<img class="vehprintph" src="${d}" alt=""/>`).join("");
+  mount(`
+    <div class="printbar noprint">
+      <button class="btn sm" id="pp">${ic("printer","sm")} Хэвлэх (A4)</button>
+      <button class="btn ghost sm" id="pb">${ic("back","sm")} Буцах</button>
+    </div>
+    <div class="sheet-wrap"><div class="sheet vehsheet">
+      <div class="sh-top"><img src="/logo.png" class="sh-logo" alt="Лого"/><h1>Тээврийн хэрэгсэлийн хяналтын хуудас</h1><div class="sh-logo-sp"></div></div>
+      <div class="sh-meta"><span>Огноо: <b>${esc(v.date||"")}</b> ${esc(v.time||"")}</span><span>Дүн: <b>${esc(vehResult(v.result))}</b></span></div>
+      <table class="sht vehm">
+        <tbody>
+          <tr><th>Улсын дугаар</th><td>${esc(v.plate||"")}</td><th>Төрөл / загвар</th><td>${esc(v.vtype||v.model||"")}</td></tr>
+          <tr><th>Жолооч</th><td>${esc(v.driver||"")}</td><th>Жолооны үнэмлэх</th><td>${esc(v.license||"")}</td></tr>
+          <tr><th>Зориулалт</th><td>${esc(vehPurpose(v.purpose))}</td><th>Шалгасан</th><td>${esc(v.by||"")}</td></tr>
+        </tbody>
+      </table>
+      <table class="sht" style="margin-top:10px">
+        <thead><tr><th>№</th><th>Шалгуур</th><th>Үр дүн</th><th>Тайлбар</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      ${v.notes?`<div class="sh-notes"><b>Тэмдэглэл:</b><div>${esc(v.notes)}</div></div>`:""}
+      ${ph?`<div class="vehprintphs">${ph}</div>`:""}
+      <div class="sh-sign vehsignrow">
+        <div>Жолоочийн гарын үсэг:<div class="sigbox">${v.signature?`<img src="${v.signature}" alt="Гарын үсэг"/>`:""}</div></div>
+        <div>Шалгасан (ЭАХ): <span class="dots">${esc(v.by||"")}</span></div>
+      </div>
+    </div></div>`);
+  const fit = ()=>{ const sh=$(".sheet"); if(!sh) return; const z=Math.min(1,(window.innerWidth-24)/900); sh.style.zoom = z<1? z.toFixed(3) : ""; };
+  fit(); window.onresize = fit;
+  $("#pp").onclick = ()=>window.print();
+  $("#pb").onclick = ()=>vehicleDetail(id);
+}
+
+function addVehSheet(wb, inR){
+  const head = r=>{ r.font={bold:true}; r.eachCell(c=>{ c.fill={type:"pattern", pattern:"solid", fgColor:{argb:"FFDCE5FB"}}; c.border={bottom:{style:"thin"}}; }); };
+  const s = wb.addWorksheet("Тээврийн хяналт");
+  const cols = ["Огноо","Цаг","Улсын дугаар","Төрөл/загвар","Жолооч","Үнэмлэх","Зориулалт","Дүн","Тэмдэглэл", ...VEH_CHECKS.map(([,l])=>l), ...VEH_CHECKS.map(([,l])=>l+" (тайлбар)"), "Зураг тоо","Гарын үсэг","Шалгасан","Бүртгэсэн"];
+  head(s.addRow(cols));
+  vehList().filter(v=>!inR || inR(v.date||"")).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).forEach(v=>{
+    const checks = VEH_CHECKS.map(([k])=>((v.checks||{})[k]||{}).v||"");
+    const notes = VEH_CHECKS.map(([k])=>((v.checks||{})[k]||{}).note||"");
+    s.addRow([v.date||"", v.time||"", v.plate||"", v.vtype||v.model||"", v.driver||"", v.license||"", vehPurpose(v.purpose), vehResult(v.result), v.notes||"", ...checks, ...notes, vehPhotos(v).length, v.signature?"Тийм":"Үгүй", v.by||"", v.at||""]);
+  });
+  s.columns.forEach((c,i)=>{ c.width = [12,8,14,18,18,12,16,12,28][i] || 14; });
+  s.views=[{state:"frozen", ySplit:1}];
+}
+
 /* ======================= EXCEL ======================= */
 function reportPage(){
   if(!requireRole("hygiene")) return;
@@ -3960,13 +4300,14 @@ function reportPage(){
       <label class="chk"><input type="checkbox" id="x-water" checked/> Ус уух (өдөр бүрийн аяга)</label>
       <label class="chk"><input type="checkbox" id="x-book" checked/> Цагаан дэвтэр (одоогийн төлөв + сунгалтын түүх)</label>
       <label class="chk"><input type="checkbox" id="x-lab" checked/> Бүтээгдэхүүний шинжилгээний бичиг</label>
+      <label class="chk"><input type="checkbox" id="x-veh" checked/> Тээврийн хэрэгсэлийн хяналт</label>
       <div class="gap"></div>
       <button class="btn" type="submit" id="xl">${ic("download")} Татах</button>
     </form>`));
   bindNav(app);
   app.onsubmit = async e=>{
     e.preventDefault();
-    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-sleep","sleep"],["x-water","water"],["x-book","book"],["x-lab","lab"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
+    const kinds=[["x-hyg","hyg"],["x-sv","sv"],["x-ayul","ayul"],["x-inf","inf"],["x-fat","fat"],["x-sleep","sleep"],["x-water","water"],["x-book","book"],["x-lab","lab"],["x-veh","veh"]].filter(([i])=>$("#"+i).checked).map(([,k])=>k);
     if(!kinds.length){ toast("Дор хаяж нэг тайлан сонгоно уу"); return; }
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
     $("#xl").disabled=true; $("#xl").textContent="Бэлдэж байна…";
@@ -4093,6 +4434,7 @@ async function exportExcel(from,to,kinds){
   }
   if(kinds.includes("book")) addBookSheets(wb, inR);
   if(kinds.includes("lab")) addLabSheet(wb);
+  if(kinds.includes("veh")) addVehSheet(wb, inR);
   await downloadWb(wb, `EAHS_${kinds.join("-")}_${from}_${to}.xlsx`);
 }
 
