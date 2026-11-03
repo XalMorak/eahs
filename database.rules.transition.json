@@ -115,7 +115,7 @@
         "notifs": {
           "$id": {
             ".write": "auth != null",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
         "renew": {
@@ -232,6 +232,13 @@
             "sign": {
               "$d": {
                 ".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"
+              }
+            },
+            "fixes": {
+              "$ik": {
+                "$d": {
+                  ".validate": "$d.matches(/^d[0-6]$/) && (!newData.exists() || (newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('by').isString() && newData.child('by').val().length <= 80 && (!newData.child('bySap').exists() || (newData.child('bySap').isString() && newData.child('bySap').val().length <= 40)) && (!newData.child('at').exists() || (newData.child('at').isString() && newData.child('at').val().length <= 40)) && (!newData.child('ts').exists() || newData.child('ts').isNumber())))"
+                }
               }
             }
           }

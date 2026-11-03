@@ -180,6 +180,13 @@ async function strict(){
   await expect('sup: read svcheck', true, ()=>s.db.ref(SV).once('value'));
   await expect('sup: create svcheck own alba (per-path)', true, ()=>s.db.ref(V).update({'svcheck/sv1/id':'sv1','svcheck/sv1/tpl':'oyut','svcheck/sv1/start':T,'svcheck/sv1/heseg':'Оюут','svcheck/sv1/alba':'Бар','svcheck/sv1/cells/zg1/d0':'ok','svcheck/sv1/cells/zg2/d0':'imp','svcheck/sv1/notes/zg2/d0':'тоос үлдсэн'}));
   await expect('sup: cell + sign per-path', true, ()=>s.db.ref(V).update({'svcheck/sv1/cells/hk3/d1':'ok','svcheck/sv1/sign/d0':{by:'Д. Ганболд',sap:'akhakh',at:'x'},'svcheck/sv1/_u':5}));
+  // v31: fixes (залруулсан арга хэмжээ) + svfix notif
+  await expect('sup: write fix on imp cell', true, ()=>s.db.ref(V).update({'svcheck/sv1/fixes/zg2/d0':{text:'Тоосыг арчив',date:T,by:'Д. Ганболд',bySap:'akhakh',at:'x',ts:1}}));
+  await expect('sup: fix without text denied', false, ()=>s.db.ref(V+'svcheck/sv1/fixes/zg2/d1').set({text:'',date:T,by:'X'}));
+  await expect('sup: fix bad date denied', false, ()=>s.db.ref(V+'svcheck/sv1/fixes/zg2/d1').set({text:'ok',date:'2026/01/01',by:'X'}));
+  await expect('sup: svfix notif when all corrected', true, ()=>s.db.ref(V+'notifs/svfix_sv1').set({id:'svfix_sv1',type:'svfix',level:'ok',ts:1,alba:'Бар',ref:'sv1',title:'Залруулагдлаа',body:'бүгд',by:'Д. Ганболд',bySap:'akhakh'}));
+  await expect('sup: svfix wrong id denied', false, ()=>s.db.ref(V+'notifs/svfix_wrong').set({id:'svfix_wrong',type:'svfix',level:'ok',ts:1,alba:'Бар',ref:'sv1',title:'x',body:'y'}));
+
   await expect('sup: edit existing Оюут svcheck', true, ()=>s.db.ref(SV+'svOld/cells/zg1/d1').set('ok'));
   await expect('sup: create Манлай svcheck', true, ()=>s.db.ref(SV+'svM').set({id:'svM',tpl:'manlai',start:T,heseg:'Манлай',alba:'Бар',cells:{zg1:{d0:'ok'}}}));
   await expect('sup: legacy template (servis) create', false, ()=>s.db.ref(SV+'svL2').set({id:'svL2',tpl:'servis',start:T,heseg:'Оюут',alba:'Бар'}));

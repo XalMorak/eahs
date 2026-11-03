@@ -1287,3 +1287,26 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
   .main{padding:0;margin:0}
   @page{size:A4;margin:12mm}
 }
+
+/* v31 — залруулсан арга хэмжээ */
+.svi.unfixed{box-shadow:inset 3px 0 0 var(--warn)}
+.svi.fixed{box-shadow:inset 3px 0 0 var(--ok)}
+.svfix{grid-column:2;margin-top:6px;padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--surface-2,var(--surface));display:grid;gap:6px}
+.svfix-h{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.svfix-txt{width:100%;min-height:56px;resize:vertical}
+.svfix-txt.need{border-color:var(--warn)!important;box-shadow:0 0 0 2px var(--warn-200)}
+.svfix-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.svfixst{margin-left:6px;font-size:11px}
+.svfixsum{margin-top:8px}
+.svfixp{font-size:10px;margin-top:2px;color:#1a5}
+.svfixp.open{color:#a40}
+.svfix-app{margin-top:16px;page-break-inside:avoid}
+.svfix-app h3{font-size:14px;margin:0 0 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.svfix-t{width:100%;border-collapse:collapse;font-size:11px}
+.svfix-t th,.svfix-t td{border:1px solid #333;padding:4px 6px;vertical-align:top}
+.svfix-t th{background:#A9D08E}
+.svfix-t td.ok{background:#C6EFCE}
+.svfix-t td.bad{background:#FFC7CE}
+@media (min-width:900px){
+  .svfix{grid-column:2 / span 2}
+}

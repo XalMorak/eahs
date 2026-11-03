@@ -25,10 +25,19 @@ SV_VALIDATE = ("!newData.exists() || (newData.child('tpl').isString() && newData
                " && newData.child('start').isString() && newData.child('start').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
                " && newData.child('heseg').val() === (newData.child('tpl').val() === 'oyut' ? 'Оюут' : 'Манлай')"
                " && newData.child('alba').val() === 'Бар')")
+# v31: fixes = залруулсан арга хэмжээ («Сайжруулах» мөрт). Ахлах өөрийн албаныхыг бүрэн бичнэ (7 хоногийн бөглөлт);
+# апп-д хадгалсны дараа залруулга нэмэхэд олдворыг өөрчлөхгүй (UX). fixes дэд талбаруудыг баталгаажуулна.
+SV_FIX_VALIDATE = ("!newData.exists() || (newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500"
+                   " && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+                   " && newData.child('by').isString() && newData.child('by').val().length <= 80"
+                   " && (!newData.child('bySap').exists() || (newData.child('bySap').isString() && newData.child('bySap').val().length <= 40))"
+                   " && (!newData.child('at').exists() || (newData.child('at').isString() && newData.child('at').val().length <= 40))"
+                   " && (!newData.child('ts').exists() || newData.child('ts').isNumber()))")
 SVCHECK_KIDS = {
     "cells": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().matches(/^(ok|imp|no)$/)"}}},
     "notes": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.isString() && newData.val().length <= 200"}}},
-    "sign": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"}}}
+    "sign": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"}},
+    "fixes": {"$ik": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && (" + SV_FIX_VALIDATE + ")"}}}}
 HYG = f"(auth != null && {ROLE} === 'hygiene')"
 SUP = f"(auth != null && {ROLE} === 'supervisor')"
 MGR = f"(auth != null && {ROLE} === 'manager')"
@@ -77,8 +86,12 @@ NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'health' && {SUP} && {SAME_ALBA_NEW}"
                 f" && (!data.exists() || data.child('type').val() === 'health'))"
                 f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'fatint' && {SUP} && {SAME_ALBA_NEW})"
-                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'infect' && $id === 'inf_' + newData.child('ref').val() && newData.child('bySap').val() === {MYSAP})")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect)$/) && newData.child('ts').isNumber()"
+                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'infect' && $id === 'inf_' + newData.child('ref').val() && newData.child('bySap').val() === {MYSAP})"
+                # v31: ахлах өөрийн албаны svcheck бүх үл нийцлийг залруулсны мэдэгдэл
+                f" || (auth != null && newData.exists() && newData.child('type').val() === 'svfix' && {SUP} && {SAME_ALBA_NEW}"
+                f" && $id === 'svfix_' + newData.child('ref').val()"
+                f" && (!data.exists() || data.child('type').val() === 'svfix'))")
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"

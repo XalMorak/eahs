@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v30 · 2026-11-03";
+const APP_VER = "v31 · 2026-11-03";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1679,8 +1679,8 @@ function shell(active, inner){
     <aside class="side">
       <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
       <nav class="navs" aria-label="Цэс">
-      ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role!=="supervisor" ? list("hazards").map(normHazard).filter(hzOverdue).length : k==="ядаргаа" && role==="supervisor" ? fatIntPending(u).length : 0;
-        return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"||k==="ядаргаа"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
+      ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role!=="supervisor" ? list("hazards").map(normHazard).filter(hzOverdue).length : k==="ядаргаа" && role==="supervisor" ? fatIntPending(u).length : k==="хяналт" ? svOpenFixCount(u) : 0;
+        return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"||k==="ядаргаа"||k==="хяналт"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
       <button class="navb out" data-nav="гарах">${ic("logout")}<span>Гарах</span></button>
       </nav>
       <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(albaN(u.alba)):""}</span></div></div>
@@ -2791,6 +2791,7 @@ function openNotif(id){
   markRead([id]);
   if(n.type==="hazard" && DB.hazards[n.ref]) return hazardDetail(n.ref);
   if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
+  if(n.type==="svfix" && DB.svcheck[n.ref]) return svEdit(n.ref);
   if(n.type==="health" && DB.users[keyOf(n.ref)]){ WP.from = notifPage; return workerProfile(n.ref); }
   if(n.type==="lab" && (DB.labcerts||{})[n.ref]) return labPage(null, n.ref);
   if(n.type==="infect") return infectListPage();
@@ -2800,7 +2801,7 @@ function openNotif(id){
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"],
   hexp:["Дууссан","b-bad","book"], hsoon:["Дуусах дөхсөн","b-wait","book"],
   lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"],
-  infect:["Халдвар","b-wait","virus"]};
+  infect:["Халдвар","b-wait","virus"], ok:["Залруулсан","b-ok","checks"]};
 function notifPage(){
   const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(notifPage, true);
@@ -3775,8 +3776,10 @@ function hygPrint(id){
 /* ======================= АХЛАХЫН ХЯНАЛТЫН ХУУДАС (xlsx маягт) =======================
    Эх: «Ахлах ажилтны өдөр тутмын цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас» (8 хуудас/sheet).
    Бичлэг: svcheck/{id} = {id,tpl,start,heseg,alba,inspector,createdBy,createdBySap,_u,updatedBy,
-     cells/{ik}/{d0..d6} = "ok"|"imp"|"no", notes/{ik}/{d0..d6} = "…", sign/{d0..d6} = {by,sap,at}}
-   Бичихдээ зөвхөн өөрчлөгдсөн замыг (per-path) бичнэ. */
+     cells/{ik}/{d0..d6} = "ok"|"imp"|"no", notes/{ik}/{d0..d6} = "…", sign/{d0..d6} = {by,sap,at},
+     fixes/{ik}/{d0..d6} = {text,date,by,bySap,at,ts}  — «Сайжруулах» мөрийн залруулга (v31)}
+   Бичихдээ зөвхөн өөрчлөгдсөн замыг (per-path) бичнэ. Ахлах өөрийн албаныхыг бөглөнө;
+   хадгалсан хуудсан дээр олдвор (cells/notes/sign) хэвээр, залруулга (fixes) нэмж/засна. */
 const SV_TPL = {"oyut":{"name":"Оюут","heseg":"Оюут","sheet":"Оюут","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"zg","name":"Зөөгч","items":[["Текний цэвэрлэгээ","d"],["Тоглоомнуудын тоос","d"],["Эмийн сан цэвэрлэгээ","d"],["Зөөврийн депүзер цэвэрлэгээ","w"],["Задгай пивоны хөргүүр дотор гадна","w"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","w"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхны цэвэрлэгээ /гадна, дотор/","w"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханийн цэвэрлэгээ","2w"],["Ханын доод гарнез цэвэрлэгээ","2w"],["Өлгүүрнүүдийн цэвэрлэгээ","w"],["Диспенсерүүдийн цэвэрлэгээ","d"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Пьечны цэвэрлэгээ","d"],["Хурлын өрөөний бичиг цаас эмх цэгц","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","w"],["Унтраалганы цэвэрлэгээ","d"],["Буйдангийн цэвэрлэгээ","w"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Пос цэнэглэх, цэвэрлэх","d"],["Цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хөргүүрийн дотор цэвэрлэгээ","w"],["Хөгжимийн хэсэг","d"],["Дарсны тек цэвэрлэгээ","d"],["Ком дэлгэц арчих","d"],["Ахлахын өрөөний цэвэрлэгээ","d"],["ХАБ гүйдэг хаалга","w"],["Хувин цэвэрлэгээ","d"],["Алчуур дэлгэж хатаах","d"],["5s буюу эмх цэгц","d"]]},{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ /Ногоон/","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","w"],["Цонхны цэвэрлэгээ","d"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","d"],["Нойлын кабины никель хүрээний өнгөлгөө","w"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","d"],["Тольны цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","w"],["Хогийн савны цэвэрлэгээ","d"],["Ангор шал","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Такси цэвэрлэгээ","w"],["Тэмдэг тэмдэглэгээ арчих","w"],["Тавилагны арын хог","w"],["Хогын шүүр хутгуур цэвэрлэгээ","w"],["Хурлын өрөөний цэвэрлэгээ","d"],["Гар цаастай эсэх түүний тавиур","d"],["5s буюу эмх цэгц","d"]]},{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбайн тоос шороо","d"],["Гадаа талбайн хог түүх","d"],["BBQ хашаа хэсэг","d"],["Хогын цэг","d"],["Тамхины цэг","d"],["Гадаа хогын сав","d"]]},{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Зурагт болон удирдлага ажиллагаатай эсэх","d"],["Заал шал","d"],["Текний эмх цэгц","d"],["Кордор шал","d"],["Тооллого тооцоо","d"]]}]},"manlai":{"name":"Манлай","heseg":"Манлай","sheet":"Манлай","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"zg","name":"Зөөгч","items":[["Дарс Текний цэвэрлэгээ","d"],["Ширээний цэвэрлэгээ /тавцан/","d"],["Ширээ тавцан /сойтогдож угаах/","w"],["Шалны хүрээ","w"],["Эмийн сан цэвэрлэгээ","d"],["Задгай пивоны хөргүүр дотор гадна","d"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","d"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхнй цэвэрлэгээ /гадна,дотор/","d"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханын цэвэрлэгээ","w"],["Ханын доод гарнез цэвэрлэгээ","w"],["Өлгүүрнүүдийн цэвэрлэгээ","d"],["Диспенсерүүдийн цэвэрлэгээ","d"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","d"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн темпратур бүртгэл","d"],["Пос цэнэглэх, арчиж цэвэрлэх","d"],["5S буюу эмх цэгц",""]]},{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","d"],["Цонхны цэвэрлэгээ","d"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","d"],["Нойлын кабины никель хүрээний өнгөлгөө","d"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","d"],["Тольны цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Хурлын өрөөний цэврэлгээ","d"],["Гар цаастай эсэх түүний тавиур",""]]},{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбай шүүрдэх","d"],["Гадна талбайн хог түүх","d"],["Тамхны цэгийн хог түүх","d"],["Тамхны цэгийн хог сав угаах","w"],["Хогоо ангилаж хаях","d"],["Хогын цэгийг эмх цэгцтэй байлгах","d"],["Гадаа талбай мөс хусаж цэвэрлэх / давс цацах/","d"]]},{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Шалны цэвэрлэгээ","d"],["Текны эмх цэгц","d"],["Хогоо ангилаж хаях","d"]]}]},"zoogch":{"name":"Зөөгч","sheet":"Зөөгч","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","title":"Ахлах ажилтны цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас","secs":[{"k":"zg","name":"Зөөгч","items":[["Текний цэвэрлэгээ","d"],["Тоглоомнуудын тоос","d"],["Эмийн сан цэвэрлэгээ","d"],["Зөөврийн депүзер цэвэрлэгээ","w"],["Задгай пивоны хөргүүр дотор гадна","w"],["Хөргүүрийн дотор гадна талын цэвэрлэгээ","w"],["Тавиурын цэвэрлэгээ","d"],["Ханын гэрэлний цэвэрлэгээ","w"],["Ширээний цэвэрлэгээ /хөл/","w"],["Сандалны цэвэрлэгээ /хөл/","w"],["Цонхны цэвэрлэгээ /гадна, дотор/","w"],["Цонхны тавцан цэвэрлэгээ","d"],["Ханийн цэвэрлэгээ","2w"],["Ханын доод гарнез цэвэрлэгээ","2w"],["Өлгүүрнүүдийн цэвэрлэгээ","w"],["Диспенсерүүдийн цэвэрлэгээ","w"],["Галын хорны тоос арчсан эсэх","d"],["Контейнерийн цэвэрлэгээ","w"],["Паарны цэвэрлэгээ","d"],["Пьечны цэвэрлэгээ","d"],["Хурлын өрөөний цэвэрлэгээ","d"],["Хогийн савны цэвэрлэгээ","d"],["Хогийн уут хийгдсэн эсэх","d"],["Хогийн савны sign","d"],["Хаалганы цэвэрлэгээ","d"],["Вино тогоо цэвэрлэсэн эсэх","d"],["Гарцны тэмдэглэгээний цэвэрлэгээ","w"],["Унтраалганы цэвэрлэгээ","w"],["Буйдангийн цэвэрлэгээ","w"],["Спорт тоглоомны ширээнүүд","d"],["Хөргүүр цэвэрлэгээний бүртгэл","d"],["Пос цэнэглэх, цэвэрлэх","d"],["Цэвэрлэгээний бүртгэл","d"],["Хөргүүрийн дээгүүр тоос","w"],["Хөргүүр дотор цэвэрлгээ","w"],["Хөгжимийн хэсэг",""],["Дарсны тек цэврэлгээ","d"],["Ком арчих","d"],["Ахлахын өрөөний эмх цэгц","d"],["HUB-гүйдэг хаалга","w"],["Хувин цэврэлгээ","d"],["Арчуур дэлгэж хатаах","d"]]}]},"hk":{"name":"Үйлчилгээний ажилтан (HK)","sheet":"HK","kind":"weekly","freq":["d","w","2w"],"orient":"landscape","secs":[{"k":"hk","name":"Үйлчилгээний ажилтан","items":[["Үйлчлэгчийн өрөөний цэвэрлэгээ","d"],["Шалны цэвэрлэгээ /Ногоон/","d"],["Тосгуурны цэвэрлэгээ","d"],["Шээлтүүрний цэвэрлэгээ","d"],["Крантны өнгөлгөө","w"],["Цонхны цэвэрлэгээ","w"],["Угаалтуурны цэвэрлэгээ","d"],["Суултуурны цэвэрлэгээ","d"],["Нойлын кабины цэвэрлэгээ","w"],["Нойлын кабины никель хүрээний өнгөлгөө","w"],["Паарны цэвэрлэгээ","d"],["Хаалганы цэвэрлэгээ","w"],["Толины цэвэрлэгээ","d"],["Унтраалганы цэвэрлэгээ","w"],["Хогийн савны цэвэрлэгээ","d"],["Такси цэврэлгээ","d"],["Хогийн савны sign","d"],["Нойлын сойтог тавигдсан эсэх","d"],["Гар цаастай эсэх түүний тавиур","d"],["Тэмдэг тэмдэглэгээ арчих","d"],["Тавилганы арын хог","w"],["Тосгуурны гаднах цагаан тавцан","d"],["Хогын шүүр хутгуур цэврэлгээ","d"],["Ханын цэвэрлэгээ","2w"],["Хурлын өрөө цэвэрлэгээ","d"]]}]},"tuslah":{"name":"Туслах ажилтан (гадаа талбай)","sheet":"Туслах","kind":"weekly","freq":["d","w","2w"],"orient":"portrait","secs":[{"k":"gt","name":"Гадаа талбай /Туслах ажилтан/","items":[["Гадаа талбайн шороо шүүрдэх","d"],["Гадаа талбайн хог түүх","d"],["Гадаа хогын сав угаах","w"],["Гадаа талбайг угаах","w"],["Тамхины цэгийн хог түүх","d"],["Тамхины цэгийг угаах","w"],["Гадуур тамхины иш түүх","d"],["Ширээ сандал зөөх эмх цэгц","d"],["Ногоон шал угаах","d"],["Агуулах цэгцлэж янзлах","w"],["Дартс биллиард цэвэрлэгээ","d"],["Хогыг ангилаж цэгцлэж хаях","d"],["Гадаа талбайд давс цацах","d"],["Хогын цэгийг цэгцлэх","d"],["BBQ хашаа хэсэг цэвэрлэх","d"]]}]},"barmen":{"name":"Бармен","sheet":"Бармен","kind":"weekly","freq":["d"],"orient":"portrait","approve":"Батлав. Үйл ажиллагааны менежер","extra":1,"secs":[{"k":"bm","name":"Бармен","items":[["AC болон удирдлага ажиллагаатай эсэх","d"],["Зурагт болон удирдлага ажиллагаатай эсэх","d"],["Хог ангилж цэгцэлж хаях","d"],["Текний эмх цэгц","d"],["Хогын цэгийг цэгцлэх","d"],["Дартс биллиард цэвэрлэгээ","d"],["Ногоон шал угаах","d"],["Ширээ сандал зөөх эмх цэгц","d"],["Текний эмх цэгц","d"],["Хогын цэгийг цэгцлэх","d"],["Дартс биллиард цэвэрлэгээ","d"],["Коридор шал",""],["Тооллого тооцоо","d"]]}]},"servis":{"name":"Сервисийн өмнөх шалгалт (бармен)","sheet":"Сервис","kind":"service","freq":[],"orient":"landscape","extra":2,"title":"Ахлах ажилтан барменыг сервист гарахаас өмнөх хяналт шалгалт хийх хуудас","secs":[{"k":"sv","name":"","items":[["Хувцас жигдрэлт",""],["Үс засалт",""],["ХХХ-бүрэн байдал",""],["Пос цаас бэлдэх",""],["Пиво, Вино оруулах",""],["Пиво тоолох",""],["Ком шалгах",""],["Пос шалгах",""],["Касс мөнгө тулгах",""],["Биеэ бэлдэх",""],["Пиво, Вино задлагч",""],["Хогын уут бэлдэх",""],["Бээлий бэлдэх",""],["Тооцооны цаас бэлдэх",""],["Хутга бэлдэх",""],["Цаг баримтлах",""],["10-20мин өмнө тамхи татах",""],["QR-Тай stand бэлдэх",""],["Текний арын өрөлт",""],["АЭӨмнөх эмх цэгц",""],["Ай ди уншигч шалгах",""],["Зурагт асаасан эсэх",""]]}]},"abarmen":{"name":"Ахлах бармены ажил үүрэг","sheet":"А.Бармен","kind":"duty","freq":[],"orient":"portrait","title":"Ахлах бармены өдөр тутмын ажил үүрэгийн жагсаалт","inspector":"Ээлжийн ахлах ажилтан","itemHead":"Хийгдэх ажилууд","secs":[{"k":"ab","name":"","items":[["Тооллого хийх",""],["Цэвэрлэгээ үйлчилгээ шалгах",""],["Сервист гарах",""],["Ахлах ажилтантай өглөө ээлжилж ирэх",""],["Шаардлагатхай тохиолдолд тооцоо хийх",""],["Ахлах ажилтны өгсөн үүрэг даалгавар чиглэлийн дагуу ажиллах",""],["Аваарын хаалга онгойлгох",""]]}]}};
 const SV_TITLE = "Ахлах ажилтны өдөр тутмын цэвэрлэгээ үйлчилгээний хяналт шалгалтын хуудас";
 const SV_FQ = {d:"Өдөр бүр", w:"7х1", "2w":"14х1"};
@@ -3795,6 +3798,30 @@ const svItems = t => t.secs.flatMap(s=>s.items.map((it,i)=>({sk:s.k, sec:s.name,
 const svHeseg = h => { const s = String(h||"").trim(); return !s ? "" : /ба?ар$/i.test(s) ? s : s+" баар"; };
 const svCell = (r, ik, d) => (r && r.cells && r.cells[ik] && r.cells[ik][d]) || "";
 const svNote = (r, ik, d) => (r && r.notes && r.notes[ik] && r.notes[ik][d]) || "";
+const svFix = (r, ik, d) => (r && r.fixes && r.fixes[ik] && r.fixes[ik][d]) || null;
+const svFixOk = f => !!(f && String(f.text||"").trim());
+function svOpenFixes(r){
+  if(!r) return {open:0, fixed:0, total:0};
+  const t = svT(r.tpl), its = svItems(t); let open=0, fixed=0;
+  its.forEach(it=>SV_DK.forEach(d=>{
+    if(t.kind==="service") return;
+    if(svCell(r,it.ik,d)!=="imp") return;
+    if(svFixOk(svFix(r,it.ik,d))) fixed++; else open++;
+  }));
+  return {open, fixed, total: open+fixed};
+}
+function svFixStatusBadge(r){
+  const o = svOpenFixes(r);
+  if(!o.total) return `<span class="badge b-ok">Залруулахгүй</span>`;
+  if(o.open) return `<span class="badge b-bad" title="Залруулаагүй ${o.open} / ${o.total}">Залруулаагүй · ${o.open}</span>`;
+  return `<span class="badge b-ok">Залруулсан</span>`;
+}
+function svOpenFixCount(u){
+  if(!u) return 0;
+  const own = u.role==="supervisor";
+  return list("svcheck").filter(r=>r && r.id && (!own || albaN(r.alba)===albaN(u.alba)))
+    .reduce((n,r)=>n + svOpenFixes(r).open, 0);
+}
 const svWd = d => SV_WD[(new Date(d+"T00:00:00").getDay()+6)%7];
 const svMD = d => d ? d.slice(5).replace("-","/") : "";
 function svStats(r){
@@ -3804,7 +3831,8 @@ function svStats(r){
     vs.forEach(v=>{ if(v==="ok") ok++; else if(v==="imp") imp++; else if(v==="no") no++; });
   }));
   const signed = SV_DK.filter(d=>r.sign && r.sign[d]).length;
-  return {ok, imp, no, bad: imp+no, signed, items: its.length};
+  const fx = svOpenFixes(r);
+  return {ok, imp, no, bad: imp+no, signed, items: its.length, openFix: fx.open, fixedFix: fx.fixed, fixTotal: fx.total};
 }
 /* Давтамжтай мөр энэ 7 хоногт (14х1 бол өмнөх 7 хоногийн хуудсанд ч) хийгдсэн эсэх */
 function svDoneElsewhere(r, it, di){
@@ -3842,9 +3870,9 @@ function svListPage(){
         <select id="svft" aria-label="Маягт"><option value="">Бүх маягт</option>${tplOpts(F.tpl)}</select>
         ${sup?"":`<select id="svfa" aria-label="Алба"><option value="">Бүх алба</option>${ALBA.map(a=>`<option ${F.alba===a?"selected":""}>${esc(a)}</option>`).join("")}</select>`}
       </div>
-      ${tbl(["7 хоног","Маягт","Хэсэг","Алба","Бөглөсөн","Сайжруулах","Гарын үсэг",""], recs.map(r=>{ const s=svStats(r); const ds=svDays(r.start);
+      ${tbl(["7 хоног","Маягт","Хэсэг","Алба","Бөглөсөн","Сайжруулах","Залруулга","Гарын үсэг",""], recs.map(r=>{ const s=svStats(r); const ds=svDays(r.start);
         return `<tr><td class="nowrap">${esc(r.start)} — ${esc(svMD(ds[6]))}</td><td>${esc(svT(r.tpl).name)}${svActive(r.tpl)?"":' <small class="tag">хуучин маягт</small>'}</td><td>${esc(r.heseg||"")}</td><td>${esc(albaN(r.alba))}</td>
-          <td>${s.ok+s.bad}</td><td>${s.bad?`<span class="badge b-bad">${s.bad}</span>`:'<span class="badge b-ok">0</span>'}</td><td>${s.signed}/7</td>
+          <td>${s.ok+s.bad}</td><td>${s.bad?`<span class="badge b-bad">${s.bad}</span>`:'<span class="badge b-ok">0</span>'}</td><td>${svFixStatusBadge(r)}</td><td>${s.signed}/7</td>
           <td class="nowrap"><button class="btn sm" data-svo="${esc(r.id)}">${svCanEdit(u,r)?"Бөглөх":"Харах"}</button> <button class="btn ghost sm" data-svp="${esc(r.id)}">${ic("printer","sm")} Хэвлэх</button> ${svActive(r.tpl)?`<button class="btn ghost sm" data-svx="${esc(r.id)}">${ic("sheet","sm")} Excel</button>`:""}${sup?"":` <button class="btn warn sm" data-svd="${esc(r.id)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`; }), "Одоогоор хяналтын хуудас бүртгээгүй")}
     </div>`));
   bindNav(app, async e=>{
@@ -3900,11 +3928,23 @@ function svEdit(id, init){
         <div class="svbs two">${seg("m","Өглөө")}${seg("e","Орой")}</div></div>`;
     }
     const v = svCell(r,it.ik,d), note = svNote(r,it.ik,d), el = svDoneElsewhere(r, it, di);
-    return `<div class="svi ${v} ${el&&!v?"done-el":""}"><span class="svn">${it.n}</span>
-      <div class="svt">${esc(it.text)}${t.freq.length?` <small class="fq fq-${it.f||"x"}">${esc(SV_FQ_L[it.f||""])}</small>`:""}${el&&!v?` <small class="fq fq-done">${esc(svMD(el))}-нд хийсэн</small>`:""}</div>
+    const fx = svFix(r,it.ik,d), fxOk = svFixOk(fx), canFix = edit; /* ахлах өөрийн алба — findings+fixes; hyg/mgr харна */
+    const fxBadge = v==="imp" ? (fxOk?`<span class="badge b-ok svfixst">Залруулсан</span>`:`<span class="badge b-bad svfixst">Залруулаагүй</span>`) : "";
+    return `<div class="svi ${v} ${el&&!v?"done-el":""} ${v==="imp"?(fxOk?"fixed":"unfixed"):""}"><span class="svn">${it.n}</span>
+      <div class="svt">${esc(it.text)}${t.freq.length?` <small class="fq fq-${it.f||"x"}">${esc(SV_FQ_L[it.f||""])}</small>`:""}${el&&!v?` <small class="fq fq-done">${esc(svMD(el))}-нд хийсэн</small>`:""}${fxBadge}</div>
       <div class="svbs"><button type="button" class="svb ok ${v==="ok"?"on":""}" data-k="${it.ik}" data-v="ok" aria-pressed="${v==="ok"}" ${edit?"":"disabled"}>✓ Бүрэн</button>
         <button type="button" class="svb imp ${v==="imp"?"on":""}" data-k="${it.ik}" data-v="imp" aria-pressed="${v==="imp"}" ${edit?"":"disabled"}>! Сайжруулах</button></div>
-      ${v==="imp"?`<input class="svnote ${!note&&edit?"need":""}" data-nk="${it.ik}" maxlength="200" value="${esc(note)}" placeholder="Юуг сайжруулах вэ? (заавал)" aria-label="Сайжруулах тэмдэглэл — заавал" required ${edit?"":"readonly"}/>${!note&&edit?`<small class="svneed">Сайжруулах бол тайлбар заавал</small>`:""}`:""}
+      ${v==="imp"?`<input class="svnote ${!note&&edit?"need":""}" data-nk="${it.ik}" maxlength="200" value="${esc(note)}" placeholder="Юуг сайжруулах вэ? (заавал)" aria-label="Сайжруулах тэмдэглэл — заавал" required ${edit?"":"readonly"}/>${!note&&edit?`<small class="svneed">Сайжруулах бол тайлбар заавал</small>`:""}
+      <div class="svfix" data-fk="${it.ik}">
+        <div class="svfix-h">Залруулсан арга хэмжээ ${fxBadge}</div>
+        <label class="f" for="svfx-${it.ik}">Тайлбар ${canFix?"(заавал)":""}</label>
+        <textarea id="svfx-${it.ik}" class="svfix-txt ${canFix&&!fxOk?"need":""}" data-fxk="${it.ik}" maxlength="500" rows="2" placeholder="Юу хийсэн / залруулсан тайлбар" ${canFix?"":"readonly"}>${esc((fx&&fx.text)||"")}</textarea>
+        <div class="frow svfix-meta">
+          <label class="f">Огноо<input type="date" data-fxd="${it.ik}" value="${esc((fx&&fx.date)||today())}" ${canFix?"":"readonly disabled"}/></label>
+          <label class="f">Хэн<input type="text" data-fxb="${it.ik}" maxlength="80" value="${esc((fx&&fx.by)||(canFix?u.name:""))}" ${canFix?"":"readonly"}/></label>
+        </div>
+        ${canFix?`<button type="button" class="btn sm" data-fxsave="${it.ik}">${fxOk?"Залруулга шинэчлэх":"Залруулга хадгалах"}</button>`:""}
+      </div>`:""}
     </div>`;
   }
   function dayProg(i){
@@ -3932,6 +3972,7 @@ function svEdit(id, init){
           <span>${svWd(dd)}</span><b>${esc(svMD(dd))}</b><small>${s?"✓ гарын үсэг":q.done?`${q.done}/${q.need}`:"—"}</small></button>`; }).join("")}</div>
       <div class="card svprog"><div class="row-between"><b>${esc(days[di])} (${svWd(days[di])})</b><span class="muted">${p.done}/${p.need} шалгасан</span></div>
         <div class="bar"><i style="width:${p.need?Math.round(100*p.done/p.need):0}%"></i></div>
+        ${(()=>{ const fx=svOpenFixes(r); return fx.total?`<div class="row-between svfixsum">${svFixStatusBadge(r)}<span class="muted small">Залруулсан ${fx.fixed}/${fx.total}</span></div>`:""; })()}
         ${t.kind==="weekly"&&t.freq.length>1?`<p class="muted small">7х1 / 14х1 мөрийг 7 (14) хоногт нэг удаа шалгана — өөр өдөр «Бүрэн» болсон бол саарал харагдана.</p>`:""}</div>
       ${t.secs.map(s=>{ const sits = its.filter(it=>it.sk===s.k);
         return `<section class="card svsec"><div class="svsh"><h3>${esc(s.name||t.itemHead||"Шалгах зүйлс")}</h3>
@@ -3962,6 +4003,7 @@ function svEdit(id, init){
       const nxt = cur===v ? null : v;
       const upd = {[base+"/cells/"+k+"/"+d]: nxt};
       if(cur==="imp" && nxt!=="imp" && svNote(R(),k,d)) upd[base+"/notes/"+k+"/"+d] = null;
+      if(cur==="imp" && nxt!=="imp" && svFix(R(),k,d)) upd[base+"/fixes/"+k+"/"+d] = null;
       put(upd); draw();
       if(nxt==="imp"){ const n=box.querySelector(`.svnote[data-nk="${CSS.escape(k)}"]`); if(n){ n.focus(); n.scrollIntoView({block:"center"}); } }
       return; }
@@ -3971,6 +4013,30 @@ function svEdit(id, init){
         if(t.kind==="service"){ ["m","e"].forEach(s=>{ if(!svCell(R(),it.ik+s,d)) upd[base+"/cells/"+it.ik+s+"/"+d]="ok"; }); return; }
         if(!svCell(R(),it.ik,d) && !svDoneElsewhere(R(), it, di)) upd[base+"/cells/"+it.ik+"/"+d]="ok"; });
       if(Object.keys(upd).length){ put(upd); draw(); toast(Object.keys(upd).length+" мөр «Бүрэн»"); } else toast("Хоосон мөр алга");
+      return; }
+    const fxsave = e.target.closest("[data-fxsave]");
+    if(fxsave){
+      const k=fxsave.dataset.fxsave;
+      if(svCell(R(),k,d)!=="imp"){ toast("Зөвхөн «Сайжруулах» мөрт залруулга оруулна"); return; }
+      const root = box.querySelector(`.svfix[data-fk="${CSS.escape(k)}"]`);
+      const text = (root?.querySelector("[data-fxk]")?.value||"").trim();
+      const date = root?.querySelector("[data-fxd]")?.value || today();
+      const by = (root?.querySelector("[data-fxb]")?.value||"").trim() || u.name;
+      if(!text){ toast("Залруулсан арга хэмжээний тайлбар заавал"); root?.querySelector("[data-fxk]")?.focus(); return; }
+      const beforeOpen = svOpenFixes(R()).open;
+      const rec = {text, date, by, bySap:u.sap, at:nowStr(), ts:Date.now()};
+      put({[base+"/fixes/"+k+"/"+d]: rec});
+      // optional: notify hygienist when last open item is corrected
+      const after = Object.assign({}, R(), {fixes: Object.assign({}, (R().fixes||{}), {[k]: Object.assign({}, ((R().fixes||{})[k]||{}), {[d]: rec})})});
+      const left = svOpenFixes(after).open;
+      if(beforeOpen>0 && left===0){
+        const nid = "svfix_"+id;
+        const title = "Ахлахын хяналт — бүх үл нийцэл залруулагдлаа";
+        const body = `${svT(R().tpl).name} · ${R().heseg||""} · ${R().start} — ${svOpenFixes(after).fixed} мөр`;
+        write({["notifs/"+nid]: {id:nid, type:"svfix", level:"ok", ts:Date.now(), alba:R().alba, ref:id, by:u.name, bySap:u.sap, title, body}});
+        toast("Залрууллаа · эрүүл ахуйчид мэдэгдлээ");
+      } else toast("Залруулга хадгаллаа");
+      draw(); return;
     }
   });
   app.onchange = e=>{
@@ -3992,8 +4058,14 @@ function svSheetHtml(r){
   const cellsFor = it => SV_DK.map(d=>{
     if(t.kind==="service"){ const m=svCell(r,it.ik+"m",d), e=svCell(r,it.ik+"e",d);
       return `<td class="mk">${m==="ok"?"✓":m==="no"?"✗":""}</td><td class="mk">${e==="ok"?"✓":e==="no"?"✗":""}</td>`; }
-    const v=svCell(r,it.ik,d), n=svNote(r,it.ik,d);
-    return `<td class="mk">${v==="ok"?"✓":""}</td><td class="nt">${v==="imp"?(n?esc(n):'<span class="mk">✓</span>'):""}</td>`; }).join("");
+    const v=svCell(r,it.ik,d), n=svNote(r,it.ik,d), fx=svFix(r,it.ik,d);
+      let nt = "";
+      if(v==="imp"){
+        nt = n ? esc(n) : '<span class="mk">✓</span>';
+        if(svFixOk(fx)) nt += `<div class="svfixp">→ Залруулсан: ${esc(fx.text)}${fx.date?" ("+esc(fx.date)+")":""}${fx.by?" · "+esc(fx.by):""}</div>`;
+        else nt += `<div class="svfixp open">→ Залруулаагүй</div>`;
+      }
+      return `<td class="mk">${v==="ok"?"✓":""}</td><td class="nt">${nt}</td>`; }).join("");
   const blank = () => `<tr><td></td><td class="it"></td>${FQ.map(()=>"<td></td>").join("")}${SV_DK.map(()=>"<td></td><td></td>").join("")}</tr>`;
   const body = t.secs.map(s=>`${s.name?`<tr class="sec"><td colspan="${ncol}">${esc(s.name)}</td></tr>`:""}
     ${its.filter(it=>it.sk===s.k).map(it=>`<tr><td class="no">${t.kind==="duty"?"":it.n}</td><td class="it">${esc(it.text)}</td>${FQ.map(f=>`<td class="fqc ${it.f===f?"on":""}">${it.f===f?"1":""}</td>`).join("")}${cellsFor(it)}</tr>`).join("")}`).join("")
@@ -4012,7 +4084,17 @@ function svSheetHtml(r){
       <tbody>${body}
         <tr class="sg"><td colspan="${2+FQ.length}">Шалгасан гарын үсэг</td>${SV_DK.map(d=>`<td colspan="2">${r.sign&&r.sign[d]?esc(r.sign[d].by):""}</td>`).join("")}</tr>
       </tbody>
-    </table></div>`;
+    </table>
+    ${(()=>{ const fx=svOpenFixes(r); if(!fx.total) return "";
+      const rows=[]; its.forEach(it=>SV_DK.forEach((d,di)=>{ if(svCell(r,it.ik,d)!=="imp") return;
+        const f=svFix(r,it.ik,d), ok=svFixOk(f);
+        rows.push(`<tr><td>${esc(it.n)}</td><td>${esc(it.text)}</td><td>${esc(days[di])}</td><td>${esc(svNote(r,it.ik,d)||"—")}</td>
+          <td class="${ok?"ok":"bad"}">${ok?"Залруулсан":"Залруулаагүй"}</td>
+          <td>${ok?esc(f.text):"—"}</td><td>${ok?esc(f.date||""):""}</td><td>${ok?esc(f.by||""):""}</td></tr>`); }));
+      return `<div class="svfix-app"><h3>Залруулсан арга хэмжээ ${svFixStatusBadge(r)} <small>Залруулсан ${fx.fixed}/${fx.total}</small></h3>
+        <table class="svfix-t"><thead><tr><th>№</th><th>Мөр</th><th>Өдөр</th><th>Үл нийцэл</th><th>Төлөв</th><th>Залруулга</th><th>Огноо</th><th>Хэн</th></tr></thead>
+        <tbody>${rows.join("")}</tbody></table></div>`; })()}
+    </div>`;
 }
 function svPrint(id){
   const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
@@ -4073,15 +4155,36 @@ function addSvSheet(wb, r, used, logo){
       FQ.forEach((f,i)=>{ if(it.f===f){ C(row,3+i).value=1; C(row,3+i).fill=fill("FFE2EFDA"); } });
       SV_DK.forEach((d,i)=>{ const c=D0+2*i;
         if(t.kind==="service"){ const m=svCell(r,it.ik+"m",d), e=svCell(r,it.ik+"e",d); C(row,c).value = m==="ok"?"✓":m==="no"?"✗":""; C(row,c+1).value = e==="ok"?"✓":e==="no"?"✗":""; }
-        else { const v=svCell(r,it.ik,d); C(row,c).value = v==="ok"?"✓":""; C(row,c+1).value = v==="imp" ? (svNote(r,it.ik,d)||"✓") : ""; } });
+        else { const v=svCell(r,it.ik,d); C(row,c).value = v==="ok"?"✓":"";
+          if(v==="imp"){ const n=svNote(r,it.ik,d)||"✓", fx=svFix(r,it.ik,d);
+            C(row,c+1).value = svFixOk(fx) ? (n + " → Залруулсан: " + fx.text + (fx.date?" ("+fx.date+")":"") + (fx.by?" · "+fx.by:"")) : (n + " → Залруулаагүй"); }
+          else C(row,c+1).value = ""; } });
       for(let c=1;c<=NC;c++){ const x=C(row,c); x.border=border; x.font=F(); x.alignment={vertical:"middle", horizontal: c===2?"left": (c>=D0 && (c-D0)%2===1 && t.kind!=="service")?"left":"center", wrapText: c>=D0}; }
-      s.getRow(row).height = SV_DK.some(d=>svNote(r,it.ik,d)) ? 24 : 13.5; row++;
+      s.getRow(row).height = SV_DK.some(d=>svNote(r,it.ik,d)||svFixOk(svFix(r,it.ik,d))) ? 28 : 13.5; row++;
     });
   });
   for(let i=0;i<(t.extra||0);i++){ for(let c=1;c<=NC;c++) C(row,c).border=border; s.getRow(row).height=13.5; row++; }
   s.mergeCells(row,1,row,D0-1); C(row,1).value = "Шалгасан гарын үсэг"; C(row,1).font=F({size:10,bold:true});
   SV_DK.forEach((d,i)=>{ const c=D0+2*i; s.mergeCells(row,c,row,c+1); C(row,c).value = r.sign&&r.sign[d] ? r.sign[d].by : ""; C(row,c).alignment={horizontal:"center",vertical:"middle"}; C(row,c).font=F({size:8}); });
   for(let c=1;c<=NC;c++) C(row,c).border=border; s.getRow(row).height = 24;
+  // Залруулгын хавсралт
+  const fx = svOpenFixes(r);
+  if(fx.total){
+    row += 2;
+    s.mergeCells(row,1,row,Math.min(8,NC));
+    C(row,1).value = `Залруулсан арга хэмжээ — ${fx.open?("Залруулаагүй · "+fx.open):"Залруулсан"} (${fx.fixed}/${fx.total})`;
+    C(row,1).font=F({size:11,bold:true}); row++;
+    ["№","Мөр","Өдөр","Үл нийцэл","Төлөв","Залруулга","Огноо","Хэн"].forEach((h,i)=>{ C(row,i+1).value=h; C(row,i+1).font=F({bold:true}); C(row,i+1).border=border; C(row,i+1).fill=fill("FFA9D08E"); });
+    row++;
+    its.forEach(it=>SV_DK.forEach((d,di)=>{
+      if(svCell(r,it.ik,d)!=="imp") return;
+      const f=svFix(r,it.ik,d), ok=svFixOk(f);
+      const vals=[it.n, it.text, days[di], svNote(r,it.ik,d)||"—", ok?"Залруулсан":"Залруулаагүй", ok?(f.text||""):"—", ok?(f.date||""):"", ok?(f.by||""):""];
+      vals.forEach((v,i)=>{ C(row,i+1).value=v; C(row,i+1).border=border; C(row,i+1).font=F(); C(row,i+1).alignment={wrapText:true,vertical:"middle"}; });
+      if(!ok) C(row,5).fill=fill("FFFFC7CE"); else C(row,5).fill=fill("FFC6EFCE");
+      s.getRow(row).height=18; row++;
+    }));
+  }
   if(logo){ try{ const img = wb.addImage({buffer:logo, extension:"png"}); s.addImage(img, {tl:{col:0.15,row:1.05}, ext:{width:52,height:43}}); }catch(e){ console.warn(e); } }
   s.pageSetup.printArea = `A1:${s.getColumn(NC).letter}${row}`;
   return s;
