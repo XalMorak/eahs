@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v30b · 2026-11-03";
+const APP_VER = "v30 · 2026-11-03";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -89,7 +89,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water","vehicles"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water","vehicles","best","fatint"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -182,7 +182,8 @@ const ICONS = {
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
   eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   flask:'<path d="M9 3h6M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h12a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M8.5 14h7"/>',
-  truck:'<path d="M1 7h13v10H1z"/><path d="M14 10h4l3 3v4h-7V10z"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'
+  truck:'<path d="M1 7h13v10H1z"/><path d="M14 10h4l3 3v4h-7V10z"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  star:'<path d="M12 2.5 14.9 9l7.1.6-5.4 4.6 1.6 7-6.2-3.6L6 21.2l1.6-7L2 9.6 9.1 9z"/>'
 };
 const ic = (n, cls="") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n]||""}</svg>`;
 const initials = name => String(name||"?").replace(/^[^\s.]+\.\s*/,"").trim().slice(0,1).toUpperCase() || "?";
@@ -405,9 +406,9 @@ const SYNCED = new Set();   // үүлнээс анх ачаалагдсан цу
 function stopSync(){ SUBS.forEach(f=>{ try{ f(); }catch(e){} }); SUBS = []; SYNCED.clear(); Object.values(ADV_SUBS).forEach(f=>{ try{ f(); }catch(e){} }); ADV_SUBS = {}; }
 const OWN_COLS = ["uhaan","fatigue","infect","sleep","water"];
 function syncPlan(role){
-  if(role==="hygiene") return COLS;
-  if(role==="supervisor") return ["users","settings","uhaan","fatigue","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water"];
-  return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck"];
+  if(role==="hygiene" || role==="manager") return COLS;
+  if(role==="supervisor") return ["users","settings","uhaan","fatigue","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water","best","fatint"];
+  return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck","best"];
 }
 function startSync(role, sap){
   stopSync();
@@ -418,7 +419,7 @@ function startSync(role, sap){
     let q = _fb.ref(ROOT+"/"+c), map = v=>v||{};
     if(role==="worker" && c==="users"){ q = _fb.ref(ROOT+"/users/"+k); map = v=> v? {[k]:v} : {}; }
     else if(role==="worker" && OWN_COLS.includes(c)) q = q.orderByChild("sap").equalTo(k);
-    else if(role!=="hygiene" && c==="water") q = q.orderByChild("sap").equalTo(k);
+    else if(role!=="hygiene" && role!=="manager" && c==="water") q = q.orderByChild("sap").equalTo(k);
     else if(role==="worker" && (c==="adviceTo" || c==="adviceAck")){ q = _fb.ref(ROOT+"/"+c+"/"+k); map = v=> ({[k]: v||{}}); }
     const cb = snap=>{ SYNCED.add(c); DB[c] = map(snap.val()); overlayPending(c); persist([c]); if(c==="notifs") onNotifs(); if(c==="users") ready();
       if(role==="worker" && (c==="adviceIdx" || c==="adviceTo" || c==="users")) syncWorkerAdvice(k);
@@ -635,7 +636,7 @@ const byNew = (a,b)=> String(b.date||"").localeCompare(String(a.date||"")) || St
 const users = ()=> list("users");
 const workers = ()=> users().filter(u=>u.role==="worker");
 const settings = ()=> ({fatigueDays:7, blockExpired:false, ...(DB.settings.main||{})});
-function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", hygiene:"Аюулгүй ажиллагаа, эрүүл ахуйч"}[r]||""; }
+function roleName(r){ return {worker:"Ажилтан", supervisor:"Ахлах", hygiene:"Аюулгүй ажиллагаа, эрүүл ахуйч", manager:"Менежер"}[r]||""; }
 
 /* Сесс: зөвхөн SAP + үүрэг (нууц үг хадгалахгүй) */
 let session = null;
@@ -690,6 +691,7 @@ function landing(){
             <button class="menu-btn" data-g="worker"><span class="mi">${ic("user")}</span><span><b>Ажилтан</b><small>УХААН, ядаргаа, халдварын асуумж</small></span>${ic("chev","chev")}</button>
             <button class="menu-btn" data-g="supervisor"><span class="mi">${ic("clipboard")}</span><span><b>Ахлах</b><small>УХААН батлах, ариун цэврийн хяналт</small></span>${ic("chev","chev")}</button>
             <button class="menu-btn" data-g="hygiene"><span class="mi">${ic("shield")}</span><span><b>Аюулгүй ажиллагаа, эрүүл ахуйч</b><small>Хяналтын самбар, тайлан, Excel</small></span>${ic("chev","chev")}</button>
+            <button class="menu-btn" data-g="manager"><span class="mi">${ic("chart")}</span><span><b>Менежер</b><small>Бүх нэгжийн тойм · зөвхөн харах · ядаргаа бөглөх</small></span>${ic("chev","chev")}</button>
             <hr/>
             <button class="menu-btn alt" data-g="hazard"><span class="mi">${ic("alert")}</span><span><b>Аюулыг мэдээлэх</b><small>Нэвтрэхгүйгээр шууд илгээнэ</small></span>${ic("chev","chev")}</button>
             ${apkOffer()}
@@ -708,6 +710,7 @@ function homeFor(u){
   if(!u) return landing();
   if(u.role==="worker") workerHome();
   else if(u.role==="supervisor") supervisorHome();
+  else if(u.role==="manager") managerHome();
   else hygieneHome();
 }
 function loginForm(role){
@@ -716,7 +719,7 @@ function loginForm(role){
     ${appbar("ЭАХС", esc(roleName(role))+" нэвтрэх", true)}
     <div class="loginbox">
       <form class="card" id="lf" autocomplete="on">
-        <div class="lhead"><span class="mi">${ic(role==="worker"?"user":role==="supervisor"?"clipboard":"shield","lg")}</span><div><h3>${esc(roleName(role))} нэвтрэх</h3><p>SAP дугаар болон нууц үгээ оруулна уу</p></div></div>
+        <div class="lhead"><span class="mi">${ic(role==="worker"?"user":role==="supervisor"?"clipboard":role==="manager"?"chart":"shield","lg")}</span><div><h3>${esc(roleName(role))} нэвтрэх</h3><p>SAP дугаар болон нууц үгээ оруулна уу</p></div></div>
         <label class="f" for="sap">SAP / нэвтрэх нэр</label><input id="sap" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required/>
         <label class="f" for="pin">Нууц үг</label><input id="pin" name="password" type="password" autocomplete="current-password" required/>
         <div id="lerr" class="errtxt" role="alert"></div>
@@ -908,6 +911,7 @@ function workerHome(){
     ${task("slp","moon","Нойрны чанарын судалгаа", lastS?`Сүүлийн: ${lastS.date}${lastS.hours!=null?" · "+lastS.hours+" цаг":""}`:"Хүссэн үедээ бөглөнө", lastS&&lastS.date===today()?"done":"idle", lastS&&lastS.date===today()?"Дахин бөглөх":"Бөглөх")}
     </div>
     ${waterCard(u)}
+    ${bestCardHtml(3)}
     ${hygHtml}
     <div class="card"><div class="ctitle">${ic("file")}<h3>Миний баримт</h3></div>
       ${hasWbNote(u)?`<div class="infobox">${ic("chat","sm")} Тэмдэглэл: <b>${esc(wbNoteTxt(u))}</b> — хугацаа дууссан гэж анхааруулахгүй.</div>`
@@ -931,6 +935,8 @@ function workerHome(){
   $("#slp").onclick = ()=> sleepForm();
   $("#haz").onclick = ()=>hazardForm();
   $("#wpw").onclick = workerPwPage;
+  $$("[data-nav=шилдэг]").forEach(b=> b.onclick = ()=>{ bestPage(); window.scrollTo(0,0); });
+  loadBestImgs();
   if($("#advall")) $("#advall").onclick = ()=>{ workerAdvicePage(); window.scrollTo(0,0); };
   $$("[data-wadvopen]").forEach(b=> b.onclick = ()=>{ workerAdvicePage(); const el = document.querySelector(`[data-wadv="${CSS.escape(b.dataset.wadvopen)}"]`); if(el) el.scrollIntoView({block:"start"}); });
   maybeAdvicePopup(u);
@@ -1166,10 +1172,10 @@ const FAT_MSG = {
   "Дунд": {t:"Анхаар! Дунд зэргийн ядаргаа", m:"Завсарлага авч, ус ууж, хянагчдаа мэдэгдээрэй."},
   "Өндөр": {t:"Аюултай! Ядаргаа өндөр", m:"Ажлаа зогсоож, хянагч / аюулгүй ажиллагаа, эрүүл ахуйчид нэн даруй мэдэгдэнэ үү."}
 };
-/* v27: ахлах ч мөн өөрөө ядаргааны асуумж бөглөнө — буцахдаа өөрийн «Ядаргаа» жагсаалт руу */
-const fatBack = u => (u && u.role==="supervisor") ? fatigueListPage : workerHome;
+/* v27/v30: ажилтан, ахлах, эрүүл ахуйч, менежер бүгд ядаргаа бөглөнө */
+const fatBack = u => (!u || u.role==="worker") ? workerHome : fatigueListPage;
 function fatigueForm(){
-  const u = me(); if(!u || !["worker","supervisor"].includes(u.role)) return u? homeFor(u) : landing();
+  const u = me(); if(!u || !["worker","supervisor","hygiene","manager"].includes(u.role)) return u? homeFor(u) : landing();
   const qs = surveyQs("fatigue");
   view(fatigueForm, false);
   const g = u.gender==="Эм" ? "ЭМ" : "ЭР";
@@ -1200,7 +1206,7 @@ function fatigueForm(){
     const picked = {}; qs.forEach(q=>picked[q.id]=optVal(q.id));
     const {score, max, level} = fatigueLevel(qs, picked);
     const id = uid();
-    const rec = {id, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, gender:u.gender||"", date:today(), time:nowStr(), ts:Date.now(), score, level, max};
+    const rec = {id, sap:u.sap, name:u.name, role:u.role, alba:albaN(u.alba), loc, gender:u.gender||"", date:today(), time:nowStr(), ts:Date.now(), score, level, max};
     qs.forEach(q=>{ rec[q.id] = picked[q.id]; });
     rec.ans = qs.map(q=>({q:q.title, a:picked[q.id]}));
     write({["fatigue/"+id]: rec});
@@ -1331,7 +1337,7 @@ function sleepForm(){
 }
 let SLF = {who:"", from:"", to:"", bf:"", loc:""};
 function sleepListPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(sleepListPage, true);
   const all=list("sleep").sort((a,b)=>byNew(a,b) || (b.ts||0)-(a.ts||0));
   const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
@@ -1559,7 +1565,7 @@ function hazardForm(opts){
 }
 /* Цаасан маягттай ижил хэвлэх хуудас (A4 босоо, 2 хуудас) */
 async function hazardPrint(id){
-  if(!requireRole("hygiene","supervisor")) return;
+  if(!requireRole("hygiene","supervisor","manager")) return;
   const raw = DB.hazards[id]; if(!raw){ toast("Олдсонгүй"); return; }
   const x = normHazard(raw);
   view(()=>hazardPrint(id), false);
@@ -1660,19 +1666,21 @@ function fileToData(f){
 
 /* ======================= САМБАРЫН БҮРХҮҮЛ ======================= */
 const NAV = {
-  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["тээвэр","Тээвэр"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
-  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["ажилтан","Ажилтнууд"],["тохиргоо","Тохиргоо"]]
+  hygiene: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["тээвэр","Тээвэр"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["шилдэг","Шилдэг"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  manager: [["тойм","Тойм"],["мэдэгдэл","Мэдэгдэл"],["зөвлөмж","Зөвлөмж"],["шинжилгээ","Шинжилгээ"],["тээвэр","Тээвэр"],["ариун","Ариун цэвэр"],["хяналт","Ахлахын хяналт"],["ядаргаа","Ядаргаа"],["нойр","Нойр"],["ус","Ус"],["аюул","Аюул"],["халдвар","Халдвар"],["хуваарь","Хуваарь"],["дэвтэр","Цагаан дэвтэр"],["ажилтан","Ажилтнууд"],["шилдэг","Шилдэг"],["тайлан","Тайлан, график"],["qr","QR код"],["excel","Excel"],["тохиргоо","Тохиргоо"]],
+  supervisor: [["тойм","УХААН шалгах"],["мэдэгдэл","Мэдэгдэл"],["шинжилгээ","Шинжилгээ"],["ариун","Ариун цэвэр"],["хяналт","Хяналтын хуудас"],["ядаргаа","Ядаргаа"],["аюул","Аюул"],["ажилтан","Ажилтнууд"],["шилдэг","Шилдэг"],["тохиргоо","Тохиргоо"]]
 };
-const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","тээвэр":"truck","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+const NAV_IC = {"тойм":"grid","мэдэгдэл":"bell","зөвлөмж":"chat","шинжилгээ":"flask","тээвэр":"truck","ариун":"drop","хяналт":"clipboard","ядаргаа":"battery","нойр":"moon","ус":"drop","аюул":"alert","халдвар":"virus","хуваарь":"calendar","дэвтэр":"book","ажилтан":"users","шилдэг":"star","тайлан":"chart","qr":"qr","excel":"sheet","тохиргоо":"sliders"};
+function shellRole(u){ return u?.role==="supervisor"?"supervisor":u?.role==="manager"?"manager":"hygiene"; }
 function shell(active, inner){
-  const u = me(); const role = u?.role==="supervisor"?"supervisor":"hygiene";
-  const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
+  const u = me(); const role = shellRole(u);
+  const title = role==="supervisor" ? `Ахлах · ${esc(albaN(u?.alba))}` : role==="manager" ? "Менежерийн самбар" : "Аюулгүй ажиллагаа, эрүүл ахуйчийн самбар";
   return `<div class="dash">
     <aside class="side">
       <div class="sbrand"><span class="slogo"><img src="/logo.png" alt="Ерөө говь ХХК"/></span><h1>${title}<small>ЭАХС · ${esc(u?.name||"")}</small></h1></div>
       <nav class="navs" aria-label="Цэс">
-      ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role==="hygiene" ? list("hazards").map(normHazard).filter(hzOverdue).length : 0;
-        return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
+      ${NAV[role].map(([k,l])=>{ const n = k==="мэдэгдэл" ? unreadCount() : k==="аюул" && role!=="supervisor" ? list("hazards").map(normHazard).filter(hzOverdue).length : k==="ядаргаа" && role==="supervisor" ? fatIntPending(u).length : 0;
+        return `<button class="navb ${active===k?"on":""}" data-nav="${k}" ${active===k?'aria-current="page"':""}>${ic(NAV_IC[k])}<span>${esc(l)}</span>${n?`<em class="nbadge ${k==="аюул"||k==="ядаргаа"?"od":""}" aria-label="${n}">${n>99?"99+":n}</em>`:""}</button>`; }).join("")}
       <button class="navb out" data-nav="гарах">${ic("logout")}<span>Гарах</span></button>
       </nav>
       <div class="suser"><span class="avatar" aria-hidden="true">${esc(initials(u?.name))}</span><div><b>${esc(u?.name||"")}</b><span>${esc(roleName(u?.role))}${u?.alba?" · "+esc(albaN(u.alba)):""}</span></div></div>
@@ -1684,10 +1692,11 @@ function bindNav(app, extra){
   app.onclick = e=>{
     const nav=e.target.closest("[data-nav]")?.dataset.nav;
     if(nav){
-      const sup = me()?.role==="supervisor";
-      ({"тойм": sup?supervisorHome:hygieneHome, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "ус":waterReportPage, "аюул":hazardListPage, "халдвар":infectListPage,
+      const r = me()?.role;
+      const home = r==="supervisor"?supervisorHome:r==="manager"?managerHome:hygieneHome;
+      ({"тойм": home, "ариун":hygListPage, "ядаргаа":fatigueListPage, "нойр":sleepListPage, "ус":waterReportPage, "аюул":hazardListPage, "халдвар":infectListPage,
         "хуваарь":rosterPage, "дэвтэр":bookPage, "ажилтан":usersPage, "excel":reportPage, "тохиргоо":settingsPage, "гарах":landing,
-        "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тээвэр":vehicleListPage, "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage}[nav]||(()=>{}))();
+        "мэдэгдэл":notifPage, "зөвлөмж":()=>{ ADV_DRAFT = {key:null, add:[], del:{}}; advicePage(); }, "шинжилгээ":()=>labPage(), "тээвэр":vehicleListPage, "тайлан":reportsPage, "qr":qrPage, "хяналт":svListPage, "шилдэг":bestPage}[nav]||(()=>{}))();
       window.scrollTo(0,0);
       return;
     }
@@ -1717,6 +1726,7 @@ function supervisorHome(){
   const aw = hbPeople().filter(w=>w.sap!==u.sap && albaN(w.alba)===albaN(u.alba)).sort((a,b)=>a.name.localeCompare(b.name));
   const app = mount(shell("тойм", `
     ${phead("УХААН шалгах", `${esc(albaN(u.alba))} · Өнөөдөр: ${today()}`)}
+    ${bestCardHtml(3)}
     ${waterCard(u)}
     ${hygDueCard(u.alba)}
     <div class="card"><div class="ctitle">${ic("checks")}<h3>УХААН — ${esc(albaN(u.alba))}</h3></div>${tbl(["Огноо","Нэр","Байршил","Ажил","Төлөв",""], l.map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${esc(x.job||"")}</td><td>${stU(x)}</td><td class="nowrap"><button class="btn sm" data-u="${esc(x.id)}">Нээх</button> <button class="btn sm warn" data-udel="${esc(x.id)}" aria-label="Устгах" title="Устгах">${ic("trash","sm")}</button></td></tr>`), "УХААН бүртгэл алга")}</div>
@@ -1728,6 +1738,7 @@ function supervisorHome(){
   bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), u.alba);
     const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); } });
   ensureHealthNotifs(u);
+  loadBestImgs();
 }
 function canDelUhaan(u,x){ return !!(u && x && (u.role==="hygiene" || (u.role==="supervisor" && albaN(x.alba)===albaN(u.alba)))); }
 function delUhaan(id){
@@ -1756,7 +1767,7 @@ function viewUhaan(id){
     ${canDelUhaan(u,x)?`<button class="btn warn" id="udel">${ic("trash")} Устгах</button>`:""}
     <button class="btn ghost" id="back">Буцах</button></div>
   </div></div>`);
-  const back = ()=> who==="supervisor"?supervisorHome():hygieneHome();
+  const back = ()=> who==="supervisor"?supervisorHome():who==="manager"?managerHome():hygieneHome();
   const ud=$("#udel"); if(ud) ud.onclick=()=>{ if(delUhaan(id)) back(); };
   $("#back").onclick=back; $("[data-hback]").onclick=back;
   const ok=$("#ok"), no=$("#no");
@@ -1769,9 +1780,12 @@ function stH(s){
   return hzSt(s)===HZ_DONE ? `<span class="badge b-ok" title="${HZ_DONE}">Бүрэн хаасан</span>`
     : `<span class="badge b-wait" title="${HZ_PEND}">Хүлээгдэж байгаа</span>`;
 }
-function hygieneHome(){
-  const me_ = requireRole("hygiene"); if(!me_) return;
-  view(hygieneHome, true);
+function managerHome(){ return hygieneHome(true); }
+function hygieneHome(asMgr){
+  const me_ = asMgr ? requireRole("manager") : requireRole("hygiene","manager");
+  if(!me_) return;
+  if(me_.role==="manager") view(managerHome, true); else view(hygieneHome, true);
+  const canAdmin = me_.role==="hygiene";
   const u=list("uhaan").sort(byNew), f=list("fatigue").sort(byNew), h=list("hazards").sort(byNew), inf=list("infect");
   const ws=workers();
   const hi=f.filter(x=>x.level==="Өндөр" && x.date===today()).length;
@@ -1792,7 +1806,9 @@ function hygieneHome(){
   if(infPend) todo.push(`<div class="todo click" data-nav="халдвар"><span class="badge b-wait">Халдвар</span><div><b>${infPend} асуумж шийдээгүй</b><div class="muted">өнөөдөр оруулахгүй: ${infBlock}</div></div></div>`);
   const det=(id,icn,t,n,body)=>`<details class="card ovd" id="${id}"><summary>${ic(icn)}<b>${t}</b>${n!=null?`<span class="badge b-new">${n}</span>`:""}<span class="muted ovmore">Дэлгэрэнгүй</span></summary><div class="ovbody">${body}</div></details>`;
   const app = mount(shell("тойм", `
-        ${phead("Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
+        ${phead(me_.role==="manager"?"Менежерийн тойм":"Хяналтын самбар", `${ic("calendar","sm")} Өнөөдөр: ${today()}`)}
+        ${bestCardHtml(4)}
+        <div class="row-gap noprint"><button class="btn" data-nav="ядаргаа" id="homefat">${ic("battery")} Ядаргааны асуулга бөглөх</button></div>
         ${waterCard(me_)}
         <div class="kpis ovk">
           <div class="kpi k-blu click" data-ovopen="ov-uhaan" id="kpi-uhaan"><i>${ic("checks")}</i><div>УХААН өнөөдөр<b>${uT.length}</b><span class="muted">хүлээгдэж буй: ${uPend}</span></div></div>
@@ -1816,10 +1832,12 @@ function hygieneHome(){
         ${det("ov-uhaan","checks","УХААН — сүүлийн бүртгэл", Math.min(12,u.length), tbl(["Огноо","Нэр","Алба","Байршил","Төлөв"], u.slice(0,12).map(x=>`<tr data-u="${esc(x.id)}" class="click"><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}${albaHint(x.alba)}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${stU(x)}</td></tr>`)))}`));
   app.addEventListener("click", e=>{ const k=e.target.closest("[data-ovopen]"); if(k){ const d=$("#"+k.dataset.ovopen); if(d){ d.open=true; d.scrollIntoView({behavior:"smooth", block:"start"}); } } }, true);
   app.addEventListener("click", e=>{ if(e.target.closest("[data-hzod]")){ HZF={...HZF, st:"od"}; } }, true);
-  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b) hygEdit(today(), b.dataset.openHyg);
+  bindNav(app, e=>{ const b=e.target.closest("[data-open-hyg]"); if(b){ if(me_.role!=="hygiene"){ toast("Зөвхөн эрүүл ахуйч засна"); return; } hygEdit(today(), b.dataset.openHyg); }
     if(e.target.closest("[data-hbjump]")){ const dd=$("#hbcard")?.closest("details"); if(dd) dd.open=true; $("#hbcard")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
     const lo=e.target.closest("[data-labo]"); if(lo){ labPage(null, lo.dataset.labo); window.scrollTo(0,0); return; }
     const z=e.target.closest("[data-hzd]"); if(z){ hazardDetail(z.dataset.hzd); window.scrollTo(0,0); } });
+  if($("#homefat")) $("#homefat").onclick = ()=>{ fatigueForm(); window.scrollTo(0,0); };
+  loadBestImgs();
   ensureHealthNotifs(me_);
   ensureLabNotifs(me_);
 }
@@ -1878,9 +1896,9 @@ function hbCardHtml(w, kind, canEdit, open){
   </section>`;
 }
 function workerProfile(sap){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const sup = u.role==="supervisor";
-  const home = ()=> sup ? supervisorHome() : hygieneHome();
+  const home = ()=> u.role==="manager" ? managerHome() : sup ? supervisorHome() : hygieneHome();
   const w = DB.users[keyOf(sap)];
   if(!w){ toast("Ажилтан олдсонгүй"); return home(); }
   if(sup && albaN(w.alba)!==albaN(u.alba)){ toast("Зөвхөн өөрийн албаны ажилтны мэдээллийг харна"); return home(); }
@@ -1888,7 +1906,7 @@ function workerProfile(sap){
   if(sup) WP.open = null;
   const fn = ()=>workerProfile(sap); fn._wp = true;
   view(fn, !WP.open);                 // сунгах маягт нээлттэй үед дахин зурахгүй
-  const canEdit = !sup;
+  const canEdit = u.role==="hygiene";
   const uh = list("uhaan").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
   const fa = list("fatigue").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
   const inf = sup ? [] : list("infect").filter(x=>x.sap===w.sap).sort(byNew).slice(0,8);
@@ -2037,15 +2055,30 @@ function fatigueMine(u){
   return all.filter(x=>{ if(x.sap===u.sap) return true; const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba))===albaN(u.alba); });
 }
 function fatigueListPage(){
-  const me_ = requireRole("hygiene","supervisor"); if(!me_) return;
+  const me_ = requireRole("hygiene","supervisor","manager"); if(!me_) return;
   const sup = me_.role==="supervisor";
+  const hyg = me_.role==="hygiene";
   view(fatigueListPage, true);
   const all=fatigueMine(me_).sort(byNew);
   const people=[...new Map(all.map(x=>[x.sap, x.name||x.sap])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
   const f=all.filter(x=>(!FTF.who||x.sap===FTF.who) && (!FTF.from||(x.date||"")>=FTF.from) && (!FTF.to||(x.date||"")<=FTF.to) && (!FTF.lvl||x.level===FTF.lvl) && (!FTF.loc||(FTF.loc==="—"?!LOCS.includes(x.loc):x.loc===FTF.loc)));
   const dept=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return albaN(x.alba||(w&&w.alba)); };
-  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", sup ? `${esc(albaN(me_.alba)||"Бүх алба")} · Ажилтнуудын бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.` : "Хэн, хэзээ, юу гэж бөглөснийг харна. Мөр дээр дарж дэлгэрэнгүйг нээнэ.")}
-    <div class="row-gap noprint">${sup?`<button class="btn" id="ffill">${ic("clip")} Асуулга бөглөх</button>`:`<button class="btn" id="fedit">${ic("sliders")} Асуулт засах</button>`}</div>
+  const roleOf=x=>{ const w=(DB.users||{})[keyOf(x.sap)]; return roleName(x.role||(w&&w.role)||"")||"—"; };
+  const pend = fatIntPending(me_);
+  const doneI = fatIntDone(me_);
+  const fiCell = x=>{
+    const done = fatIntByFatId(x.id);
+    if(x.level!=="Өндөр" && x.level!=="Их") return '<span class="muted">—</span>';
+    if(done) return `<button class="btn sm" data-fiview="${esc(done.id)}"><span class="badge b-ok">Хийсэн</span></button>`;
+    if(sup) return `<button class="btn warn sm" data-fi="${esc(x.id)}"><span class="badge b-bad">Хийгдээгүй</span> Ярилцлага</button>`;
+    return `<span class="badge b-bad">Хийгдээгүй</span>`;
+  };
+  const app = mount(shell("ядаргаа", `${phead("Ядаргааны үнэлгээ", (sup?`${esc(albaN(me_.alba)||"Бүх алба")} · `:"")+ "Хэн, хэзээ, юу гэж бөглөснийг харна.")}
+    <div class="row-gap noprint"><button class="btn" id="ffill">${ic("clip")} Асуулга бөглөх</button>${hyg?`<button class="btn ghost" id="fedit">${ic("sliders")} Асуулт засах</button>`:""}${fatIntBadgeHtml(me_)}</div>
+    ${pend.length?`<div class="card warnbox noprint" id="fipend"><div class="ctitle">${ic("alert")}<h3>Өндөр ядаргаа — ярилцлага (${pend.length})</h3></div>
+      ${tbl(["Огноо","Нэр","SAP","Түвшин",""], pend.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${fLvlB(x.level)}</td><td>${sup?`<button class="btn warn sm" data-fi="${esc(x.id)}">Ярилцлага бөглөх</button>`:`<span class="badge b-bad">Хийгдээгүй</span>`}</td></tr>`))}</div>`:""}
+    ${(!sup && doneI.length)?`<div class="card noprint"><div class="ctitle">${ic("clipboard")}<h3>Хийгдсэн ярилцлагууд (${doneI.length})</h3></div>
+      ${tbl(["Огноо","Ажилтан","Алба","Эрсдэл","Түвшин",""], doneI.slice(0,30).map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(albaN(x.alba))}</td><td>${esc(x.risk||"—")}</td><td>${esc(x.level||"—")}</td><td><button class="btn sm" data-fiview="${esc(x.id)}">Харах / хэвлэх</button></td></tr>`))}</div>`:""}
     <div class="card filters noprint" id="ftfilt"><div class="frow">
       <select id="ftwho" aria-label="Ажилтан"><option value="">Бүх ажилтан</option>${people.map(([s,n])=>`<option value="${esc(s)}" ${FTF.who===s?"selected":""}>${esc(n)} (${esc(s)})</option>`).join("")}</select>
       <select id="ftlvl" aria-label="Түвшин"><option value="">Бүх түвшин</option>${["Бага","Дунд","Өндөр"].map(l=>`<option value="${l}" ${FTF.lvl===l?"selected":""}>${fatLvTxt(l)}</option>`).join("")}</select>
@@ -2055,9 +2088,13 @@ function fatigueListPage(){
       <button class="btn ghost sm" id="ftclr">Цэвэрлэх</button></div>
       <p class="muted" id="ftcnt">${f.length} / ${all.length} бүртгэл</p></div>
     <div class="card">
-    ${tbl(["Огноо","Нэр","SAP","Тасаг","Байршил","Дүн / хариулт","Түвшин",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${fatDots(x)}</td><td>${fLvlB(x.level)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>
+    ${tbl(["Огноо","Нэр","Үүрэг","SAP","Тасаг","Байршил","Дүн / хариулт","Түвшин","Ярилцлага",""], f.map(x=>`<tr class="click" data-fv="${esc(x.id)}"><td>${esc(x.date)}</td><td>${esc(x.name||"")}</td><td>${esc(roleOf(x))}</td><td>${esc(x.sap)}</td><td>${esc(dept(x))}</td><td class="nowrap">${esc(locTxt(x))}</td><td>${fatDots(x)}</td><td>${fLvlB(x.level)}</td><td>${fiCell(x)}</td><td><button class="btn sm" data-fv="${esc(x.id)}">Харах</button></td></tr>`), all.length?"Шүүлтэд тохирох бүртгэл алга":"Ядаргааны үнэлгээ алга")}</div>
     <details class="card noprint" id="fcrit"><summary><b>Үнэлгээний шалгуур</b> <span class="muted">— нийт оноогоор</span></summary>${fatCritHtml()}</details>`));
-  app.addEventListener("click", e=>{ const r=e.target.closest("[data-fv]"); if(r){ e.preventDefault(); e.stopImmediatePropagation(); fatigueView(r.dataset.fv); window.scrollTo(0,0); } }, true);
+  app.addEventListener("click", e=>{
+    const fi=e.target.closest("[data-fi]"); if(fi){ e.preventDefault(); e.stopImmediatePropagation(); fatIntForm(fi.dataset.fi); window.scrollTo(0,0); return; }
+    const fv2=e.target.closest("[data-fiview]"); if(fv2){ e.preventDefault(); e.stopImmediatePropagation(); const r=(DB.fatint||{})[fv2.dataset.fiview]; if(r) fatIntForm(r.fatId, r.id); window.scrollTo(0,0); return; }
+    const r=e.target.closest("[data-fv]"); if(r){ e.preventDefault(); e.stopImmediatePropagation(); fatigueView(r.dataset.fv); window.scrollTo(0,0); }
+  }, true);
   bindNav(app);
   const upd=()=>{ FTF={who:$("#ftwho").value, lvl:$("#ftlvl").value, loc:$("#ftloc").value, from:$("#ftfrom").value, to:$("#ftto").value}; fatigueListPage(); };
   ["#ftwho","#ftlvl","#ftloc","#ftfrom","#ftto"].forEach(k=>$(k).onchange=upd);
@@ -2066,7 +2103,7 @@ function fatigueListPage(){
   if($("#fedit")) $("#fedit").onclick = ()=>{ surveyDraft=null; surveyEditPage("fatigue"); };
 }
 function fatigueView(id){
-  const me_ = requireRole("hygiene","supervisor"); if(!me_) return;
+  const me_ = requireRole("hygiene","supervisor","manager"); if(!me_) return;
   const x=(DB.fatigue||{})[id]; if(!x || !fatigueMine(me_).includes(x)) return fatigueListPage();
   view(()=>fatigueView(id), false);
   const w=(DB.users||{})[keyOf(x.sap)]||{};
@@ -2114,7 +2151,7 @@ function dueTxt(x){
   return "";
 }
 function hazardListPage(){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(hazardListPage, true);
   const all = hzVisible(u).sort((a,b)=> (b.ts||0)-(a.ts||0) || byNew(a,b));
   const hyg = u.role==="hygiene";
@@ -2183,7 +2220,7 @@ function hazardListPage(){
 }
 /* ---------- Аюулын дэлгэрэнгүй: хариуцагч, хугацаа, залруулах арга хэмжээ, түүх ---------- */
 async function hazardDetail(id){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const raw = DB.hazards[id]; if(!raw){ toast("Олдсонгүй"); return hazardListPage(); }
   const x = normHazard(raw);
   view(()=>hazardDetail(id), false);
@@ -2244,7 +2281,7 @@ async function hazardDetail(id){
 }
 const VERDICT = {huleegdej:"Хүлээгдэж байна", orjbolno:"Орж болно", ersdel:"Ажилд оруулахгүй"};
 function infectListPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(infectListPage, true);
   const inf=list("infect").sort(byNew);
   const app = mount(shell("халдвар", `${phead("Халдвар — үр дүн гаргах", "Ажилтан бөглөсөн. Асуултыг засаж, орж болно / оруулахгүй-г эндээс тогтооно.")}
@@ -2264,7 +2301,7 @@ function infectListPage(){
 }
 let BOOKF = "";
 function bookPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(bookPage, true);
   const minExp = w=> hasWbNote(w) ? "0000" : (w.bookExp || "9999");
   const all = hbPeople().sort((a,b)=>minExp(a).localeCompare(minExp(b)) || a.name.localeCompare(b.name));
@@ -2280,7 +2317,7 @@ function bookPage(){
   bindNav(app, e=>{ const c=e.target.closest("[data-bookf]"); if(c){ BOOKF=c.dataset.bookf; bookPage(); } });
 }
 function rosterPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(rosterPage, true);
   const ws=workers().sort((a,b)=>a.name.localeCompare(b.name));
   const rs=list("roster").sort((a,b)=>String(b.arrive).localeCompare(String(a.arrive)));
@@ -2312,24 +2349,26 @@ function rosterPage(){
 
 /* ======================= АЖИЛТНУУД ======================= */
 function usersPage(editSap){
-  const meU = requireRole("hygiene","supervisor"); if(!meU) return;
+  const meU = requireRole("hygiene","supervisor","manager"); if(!meU) return;
   const isSup = meU.role==="supervisor";
-  if(isSup && editSap){ toast("Ахлах засах эрхгүй"); return usersPage(); }
+  const isMgr = meU.role==="manager";
+  if((isSup||isMgr) && editSap){ toast(isMgr?"Менежер засах эрхгүй":"Ахлах засах эрхгүй"); return usersPage(); }
   view(()=>usersPage(), !editSap);
   const all = isSup
     ? workers().filter(w=>!albaN(meU.alba) || albaN(w.alba)===albaN(meU.alba)).sort((a,b)=>a.name.localeCompare(b.name))
     : users().sort((a,b)=>(a.role+a.name).localeCompare(b.role+b.name));
-  const ed = (!isSup && editSap) ? DB.users[keyOf(editSap)] : null;
+  const ed = (!isSup && !isMgr && editSap) ? DB.users[keyOf(editSap)] : null;
   const fixedAlba = isSup && albaN(meU.alba) ? albaN(meU.alba) : null;
+  const readOnlyUsers = isMgr;
   const opt = (vals, cur) => vals.map(v=>`<option value="${esc(v[0])}" ${v[0]===cur?"selected":""}>${esc(v[1])}</option>`).join("");
-  const app = mount(shell("ажилтан", `${phead("Ажилтнууд", isSup ? (fixedAlba?`${esc(fixedAlba)} · зөвхөн ажилтан нэмнэ`:"Зөвхөн ажилтан нэмнэ (өөрийн алба)") : "Хэрэглэгч нэмэх, засах, Excel-ээр оруулах")}
-    <form class="card" id="uf">
+  const app = mount(shell("ажилтан", `${phead("Ажилтнууд", isSup ? (fixedAlba?`${esc(fixedAlba)} · зөвхөн ажилтан нэмнэ`:"Зөвхөн ажилтан нэмнэ (өөрийн алба)") : isMgr ? "Зөвхөн харах (засах/нэмэх эрхгүй)" : "Хэрэглэгч нэмэх, засах, Excel-ээр оруулах")}
+    ${readOnlyUsers?"":`<form class="card" id="uf">
       <div class="ctitle">${ic(ed?"edit":"plus")}<h3>${ed?"Засах: "+esc(ed.name):"Шинэ ажилтан"}</h3></div>
       <div class="g3">
         <div><label class="f" for="usap">SAP / нэвтрэх нэр *</label><input id="usap" autocapitalize="none" autocorrect="off" spellcheck="false" required value="${esc(ed?.sap||"")}" ${ed?"readonly":""}/></div>
         <div><label class="f" for="unm">Нэр *</label><input id="unm" required value="${esc(ed?.name||"")}"/></div>
         ${isSup?`<div><label class="f">Үүрэг</label><input value="Ажилтан" readonly/></div>`
-          :`<div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Аюулгүй ажиллагаа, эрүүл ахуйч"]], ed?.role||"worker")}</select></div>`}
+          :`<div><label class="f" for="urole">Үүрэг</label><select id="urole">${opt([["worker","Ажилтан"],["supervisor","Ахлах"],["hygiene","Аюулгүй ажиллагаа, эрүүл ахуйч"],["manager","Менежер"]], ed?.role||"worker")}</select></div>`}
         ${fixedAlba?`<div><label class="f">Алба</label><input id="ualba" value="${esc(fixedAlba)}" readonly/></div>`
           :`<div><label class="f" for="ualba">Алба</label><select id="ualba">${opt(ALBA.map(a=>[a,a]), albaN(ed?.alba)||"Бар")}</select></div>`}
         <div><label class="f" for="ugender">Хүйс</label><select id="ugender">${opt([["Эр","Эр"],["Эм","Эм"]], ed?.gender||"Эр")}</select></div>
@@ -2340,15 +2379,15 @@ function usersPage(editSap){
       </div>
       <div class="gap"></div>
       <div class="row-gap"><button class="btn" type="submit">Хадгалах</button>${ed?'<button class="btn ghost" type="button" id="ucancel">Болих</button>':""}</div>
-    </form>
+    </form>`}
     <div class="card"><div class="ctitle">${ic("users")}<h3>${isSup?"Албаны ажилтнууд":"Бүх хэрэглэгч"} (${all.length})</h3></div>
-    ${!isSup && CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
+    ${!isSup && !isMgr && CLOUD_AUTH?`<p class="muted">Нэвтрэлт: <b>${all.filter(u=>u.uid).length}/${all.length}</b> шинэ (Firebase) нэвтрэлт рүү шилжсэн. Шилжээгүй хэрэглэгч хуучин PIN-ээрээ анх нэвтрэхэд автоматаар шилжинэ.</p>`:""}
     ${isSup
       ? tbl(["Нэр","SAP","Алба","Албан тушаал"], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td></tr>`), "Ажилтан бүртгэгдээгүй")
-      : tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),""], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
-      <td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td></tr>`))}
+      : tbl(["Нэр","SAP","Үүрэг","Алба","Албан тушаал",...(CLOUD_AUTH?["Нэвтрэлт"]:[]),...(isMgr?[]:[""])], all.map(u=>`<tr class="click" data-wp="${esc(u.sap)}"><td>${wpLink(u)}</td><td>${esc(u.sap)}</td><td>${esc(roleName(u.role))}</td><td>${esc(albaN(u.alba))}</td><td>${esc(u.job||"")}</td>${CLOUD_AUTH?`<td>${u.uid?'<span class="badge b-ok">Шилжсэн</span>':u.pinHash?'<span class="badge b-wait">Хуучин PIN</span>':'<span class="badge b-bad">Нууц үггүй</span>'}</td>`:""}
+      ${isMgr?"":`<td class="nowrap"><button class="btn ghost sm" data-edit="${esc(u.sap)}">${ic("edit","sm")} Засах</button> ${u.sap===meU.sap?"":`<button class="btn warn sm" data-delu="${esc(u.sap)}">${ic("trash","sm")} Устгах</button>`}</td>`}</tr>`))}
     </div>
-    ${isSup?"":`<div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
+    ${isSup||isMgr?"":`<div class="card"><div class="ctitle">${ic("sheet")}<h3>Excel-ээр оруулах</h3></div>
       <p class="muted">Багана: SAP, Нэр, Алба, Хүйс, Ажил, Нууц үг, Цагаан дэвтэр</p>
       <button class="btn ghost" id="tmpl" type="button">${ic("download")} Загвар татах</button>
       <div class="gap"></div>
@@ -2357,14 +2396,16 @@ function usersPage(editSap){
       <button class="btn" id="ximpok" type="button">Шалгаад оруулах</button>
     </div>`}`));
   bindNav(app, e=>{
-    if(isSup) return;
+    if(isSup || isMgr) return;
     const ebtn=e.target.closest("[data-edit]"); if(ebtn){ usersPage(ebtn.dataset.edit); window.scrollTo(0,0); return; }
     const d=e.target.closest("[data-delu]");
     if(d && confirm("Хэрэглэгчийг устгах уу? ("+d.dataset.delu+")")){ const du=DB.users[keyOf(d.dataset.delu)]; write({["users/"+keyOf(d.dataset.delu)]: null, ...(du&&du.uid?{["roles/"+du.uid]: null}:{})}); toast("Устгалаа"); }
   });
   if($("#ucancel")) $("#ucancel").onclick = ()=>usersPage();
+  if(readOnlyUsers){ loadBestImgs(); return; }
   app.onsubmit = async e=>{
     e.preventDefault();
+    if(isMgr){ toast("Менежер ажилтан нэмэх/засах эрхгүй"); return; }
     const sap=ed ? String(ed.sap) : sapKey($("#usap").value), pin=$("#upin").value.trim();
     if(!validKey(sap)){ toast("SAP-д . # $ [ ] / тэмдэгт орж болохгүй"); return; }
     if(!ed && DB.users[keyOf(sap)]){ toast("SAP давхардсан"); return; }
@@ -2403,7 +2444,7 @@ function usersPage(editSap){
     write(upd);
     toast(pin?"Хадгаллаа · нэвтрэх эрх үүслээ":"Хадгаллаа"); usersPage();
   };
-  if(isSup) return;
+  if(isSup || isMgr) return;
   let pending=null;
   $("#tmpl").onclick=async ()=>{
     if(typeof ExcelJS==="undefined"){ toast("Excel сан ачаалагдаагүй байна"); return; }
@@ -2540,7 +2581,7 @@ function hbMonthly(from, to, alba){
 let HBMN = 6;
 const legend = series => series.length>1 ? `<figcaption class="legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</figcaption>` : "";
 function reportsPage(){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
   view(reportsPage, true);
   if(!REPF){ const d=new Date(); d.setMonth(d.getMonth()-5); REPF = {from: ymd(new Date(d.getFullYear(), d.getMonth(), 1)), to: today(), g:"m", alba:""}; }
   const F = REPF; const inR = x=> x && x.date && x.date>=F.from && x.date<=F.to && (!F.alba || albaN(x.alba)===F.alba);
@@ -2671,7 +2712,7 @@ function qrSvg(text, cls="qrsvg"){
 const qrAreas = ()=> { const s = DB.settings.qr; const extra = Array.isArray(s?.areas) ? s.areas : Object.values(s?.areas||{});
   return [...new Set([...ALBA, ...extra.filter(a=>typeof a==="string" && a.trim())])]; };
 async function qrPage(){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
   view(qrPage, true);
   const app = mount(shell("qr", `${phead("QR код — аюул мэдээлэх", "Талбай бүрт наах QR. Уншуулахад «Аюулыг мэдээлэх» маягт тухайн газар бөглөгдсөн нээгдэнэ.")}<div id="qrb"><p class="muted">Ачаалж байна…</p></div>`));
   try{ await loadQr(); }catch{ $("#qrb").innerHTML = `<div class="card">${emptyState("QR сан ачаалагдсангүй","Сүлжээгээ шалгаад дахин оролдоно уу","qr")}</div>`; return; }
@@ -2718,7 +2759,7 @@ async function qrPrint(items){
 const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
 function notifList(){
   const u = me(); if(!u || u.role==="worker") return [];
-  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (n.type==="infect" ? u.role==="hygiene" : (u.role==="hygiene" || !n.alba || albaN(n.alba)===albaN(u.alba)))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (n.type==="infect" ? u.role==="hygiene" : (u.role==="hygiene" || u.role==="manager" || !n.alba || albaN(n.alba)===albaN(u.alba)))).sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
 function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
@@ -2753,6 +2794,7 @@ function openNotif(id){
   if(n.type==="health" && DB.users[keyOf(n.ref)]){ WP.from = notifPage; return workerProfile(n.ref); }
   if(n.type==="lab" && (DB.labcerts||{})[n.ref]) return labPage(null, n.ref);
   if(n.type==="infect") return infectListPage();
+  if(n.type==="fatint" && (DB.fatint||{})[n.ref]){ const r=DB.fatint[n.ref]; return fatIntForm(r.fatId, r.id); }
   notifPage();
 }
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"],
@@ -2760,7 +2802,7 @@ const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["И
   lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"],
   infect:["Халдвар","b-wait","virus"]};
 function notifPage(){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(notifPage, true);
   const ns = notifList(); const r = readSet();
   const perm = !("Notification" in window) ? "none" : Notification.permission;
@@ -2929,7 +2971,7 @@ function advDraftBind(ed){
 }
 
 function advicePage(editId){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
   const ed = editId ? (DB.advice||{})[editId] : null;
   const dk = ed ? ed.id : "new"; if(ADV_DRAFT.key!==dk) ADV_DRAFT = {key:dk, add:[], del:{}};
   view(()=>advicePage(), !ed && !ADV_DRAFT.add.length);
@@ -3291,7 +3333,7 @@ async function getLabData(id){
   catch(e){ console.warn("labdata", e && (e.code||e.message)); return null; }
 }
 function labPage(editId, focusId){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const canEdit = u.role==="hygiene";
   const ed = editId ? (DB.labcerts||{})[editId] : null;
   view(()=>labPage(), !(ed||focusId));
@@ -3484,7 +3526,7 @@ function workerPwPage(){
   app.onsubmit = async e=>{ e.preventDefault(); if(await changePassword(e.target)) setTimeout(workerHome, 900); };
 }
 function settingsPage(){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(settingsPage, false);
   const s=settings(); const hyg = u.role==="hygiene";
   const app = mount(shell("тохиргоо", `${phead("Тохиргоо")}
@@ -3541,7 +3583,7 @@ function hygDueCard(alba){
         <span>${b.total?`${b.done}/${b.total} бүртгэсэн`:"Өнөөдөр бүртгэх хүнгүй"}</span>${left>0?`<em>${left} үлдсэн</em>`:""}</button>`;}).join("")}</div></div>`;
 }
 function hygListPage(){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(hygListPage, true);
   const sup = u.role==="supervisor";
   const sheets = list("hygcheck").filter(h=>!sup || albaN(h.alba)===albaN(u.alba)).sort(byNew);
@@ -3571,7 +3613,7 @@ function hygListPage(){
 }
 
 function hygEdit(date, alba, sid){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   // Хуучин нэртэй (жишээ нь «Оюут баар») хадгалсан хуудсыг id-аар нь нээнэ; шинэ хуудас «Оффис»/«Бар»
   const old = sid && DB.hygcheck[sid] ? DB.hygcheck[sid] : null;
   alba = albaN(u.role==="supervisor" ? u.alba : (old ? old.alba : alba)) || "Бар";
@@ -3690,7 +3732,7 @@ function hygEdit(date, alba, sid){
 }
 
 function hygPrint(id){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const h = DB.hygcheck[id]; if(!h){ toast("Хуудас олдсонгүй"); return; }
   view(()=>hygPrint(id), true);
   const rs = rowsOf(h);
@@ -3776,7 +3818,7 @@ function svDoneElsewhere(r, it, di){
 function svCanEdit(u, r){ return u.role==="supervisor" && albaN(u.alba)===SV_ALBA && (!r || (svActive(r.tpl) && albaN(r.alba)===SV_ALBA)); }
 
 function svListPage(){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(svListPage, true);
   const sup = u.role==="supervisor";
   const F = window.SVF = window.SVF || {tpl:"", alba:""};
@@ -3826,7 +3868,7 @@ function svListPage(){
 }
 
 function svEdit(id, init){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const existing = DB.svcheck[id];
   if(!existing && !(init && svCanEdit(u, {tpl:init.tpl, alba:SV_ALBA}))){ toast("Хуудас олдсонгүй"); return svListPage(); }
   if(existing && u.role==="supervisor" && albaN(existing.alba)!==albaN(u.alba)){ toast("Энэ хуудас таны албанд хамаарахгүй"); return svListPage(); }
@@ -3973,7 +4015,7 @@ function svSheetHtml(r){
     </table></div>`;
 }
 function svPrint(id){
-  const u = requireRole("hygiene","supervisor"); if(!u) return;
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   const r = DB.svcheck[id]; if(!r){ toast("Хуудас олдсонгүй"); return; }
   view(()=>svPrint(id), true);
   const portrait = svT(r.tpl).orient==="portrait";
@@ -4086,52 +4128,29 @@ const vehList = () => list("vehicles").filter(x=>x && x.id);
 const vehBadge = r => r==="pass" ? `<span class="badge b-ok">Тэнцсэн</span>` : r==="fail" ? `<span class="badge b-bad">Тэнцээгүй</span>` : `<span class="badge b-wait">—</span>`;
 const vehPhotos = v => arr(v && v.photos).filter(d => typeof d==="string" && d.startsWith("data:"));
 
+/* v30: vehicle signature host — shared sigPad helper (also used by fatint interview) */
 function vehSigPad(host, initial){
   if(!host) return {empty:()=>true, data:()=>null, clear:()=>{}};
   host.innerHTML = `<canvas class="sigcanvas" width="640" height="200" aria-label="Жолоочийн гарын үсэг"></canvas>
     <div class="row-gap wrap"><button type="button" class="btn ghost sm" data-sigclear>${ic("trash","sm")} Цэвэрлэх</button><span class="muted sm">Хуруу эсвэл хулганаар зурна</span></div>`;
-  const c = host.querySelector("canvas"); const g = c.getContext("2d");
-  let emptyFlag = !initial;
-  const inkCount = ()=>{
-    try{
-      const d = g.getImageData(0,0,c.width,c.height).data; let n=0;
-      for(let i=0;i<d.length;i+=4){ if(d[i]<80 && d[i+1]<80 && d[i+2]<140) n++; }
-      return n;
-    }catch(e){ return 0; }
-  };
-  const hasInk = ()=> !emptyFlag || !!initial || inkCount()>60;
-  const fit = ()=>{
-    const r = c.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio||1);
-    const w = Math.max(280, Math.round(r.width||320)); const h = Math.round(w*0.32);
-    const keep = hasInk() ? (()=>{ try{ return c.toDataURL("image/png"); }catch(e){ return null; } })() : null;
-    c.width = Math.round(w*dpr); c.height = Math.round(h*dpr);
-    c.style.width = w+"px"; c.style.height = h+"px";
-    g.setTransform(dpr,0,0,dpr,0,0); g.lineCap="round"; g.lineJoin="round"; g.lineWidth=2.4;
-    g.fillStyle="#fff"; g.fillRect(0,0,w,h);
-    g.strokeStyle="#E6ECF5"; g.beginPath(); g.moveTo(12,h-28); g.lineTo(w-12,h-28); g.stroke();
-    g.strokeStyle="#0B1D5C";
-    const src = (keep && keep.length>100 && !emptyFlag) ? keep : initial;
-    if(src){ const img=new Image(); img.onload=()=>{ g.drawImage(img,0,0,w,h); emptyFlag=false; initial=null; }; img.src=src; }
-  };
-  let drawing=false;
-  const xy = e=>{ const r=c.getBoundingClientRect(); const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX-r.left, y:t.clientY-r.top}; };
-  const start = e=>{ e.preventDefault(); drawing=true; emptyFlag=false; const p=xy(e); g.beginPath(); g.moveTo(p.x,p.y); g.lineTo(p.x+0.1,p.y+0.1); g.stroke(); };
-  const move = e=>{ if(!drawing) return; e.preventDefault(); const p=xy(e); g.lineTo(p.x,p.y); g.stroke(); emptyFlag=false; };
-  const end = ()=>{ drawing=false; };
-  c.addEventListener("mousedown", start); c.addEventListener("mousemove", move); window.addEventListener("mouseup", end);
-  c.addEventListener("touchstart", start, {passive:false}); c.addEventListener("touchmove", move, {passive:false}); c.addEventListener("touchend", end);
-  const clear = ()=>{ initial=null; emptyFlag=true; fit(); };
-  host.querySelector("[data-sigclear]").onclick = clear;
-  fit();
+  const c = host.querySelector("canvas");
+  // size canvas CSS before sigPad reads clientWidth
+  c.style.width = "100%"; c.style.height = "160px"; c.style.maxWidth = "100%";
+  const pad = sigPad(c, {w:640, h:160});
+  if(initial) pad.load(initial);
+  host.querySelector("[data-sigclear]").onclick = ()=> pad.clear();
   return {
-    empty:()=>!hasInk(),
-    data:()=> hasInk() ? c.toDataURL("image/png") : null,
-    clear, canvas:c
+    empty:()=> pad.isEmpty(),
+    data:()=> pad.isEmpty() ? null : pad.dataURL(),
+    clear:()=> pad.clear(),
+    canvas:c
   };
 }
 
 function vehicleListPage(editId){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
+  const ro = u.role==="manager";
+  if(ro && editId){ toast("Менежер засах эрхгүй"); editId = null; }
   view(()=>vehicleListPage(), !editId);
   const F = VEHF;
   const all = vehList().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.time||"").localeCompare(String(a.time||"")) || (b.ts||0)-(a.ts||0));
@@ -4200,12 +4219,12 @@ function vehicleListPage(editId){
     <td class="nowrap">
       <button type="button" class="btn sm" data-vo="${esc(v.id)}">${ic("eye","sm")} Харах</button>
       <button type="button" class="btn ghost sm" data-vp="${esc(v.id)}">${ic("printer","sm")}</button>
-      <button type="button" class="btn ghost sm" data-ve="${esc(v.id)}">${ic("edit","sm")}</button>
-      <button type="button" class="btn warn sm" data-vd="${esc(v.id)}">${ic("trash","sm")}</button>
+      ${ro?"":`<button type="button" class="btn ghost sm" data-ve="${esc(v.id)}">${ic("edit","sm")}</button>
+      <button type="button" class="btn warn sm" data-vd="${esc(v.id)}">${ic("trash","sm")}</button>`}
     </td></tr>`);
 
-  const app = mount(shell("тээвэр", `${phead("Тээврийн хэрэгсэлийн хяналт", "Ариун цэвэр + аюулгүй ажиллагаа · жолоочийн гарын үсэг")}
-    ${form}
+  const app = mount(shell("тээвэр", `${phead("Тээврийн хэрэгсэлийн хяналт", ro ? "Зөвхөн харах · жолоочийн гарын үсэг" : "Ариун цэвэр + аюулгүй ажиллагаа · жолоочийн гарын үсэг")}
+    ${ro?"":form}
     <div class="card filters" id="vehfilt">
       <div class="frow g3">
         <div><label class="f" for="vq">Хайх</label><input type="search" id="vq" value="${esc(F.q||"")}" placeholder="Дугаар, жолооч, загвар…"/></div>
@@ -4226,8 +4245,8 @@ function vehicleListPage(editId){
     box.innerHTML = ph.map((d,i)=>`<figure class="vehph"><img src="${d}" alt="Зураг ${i+1}"/><button type="button" class="btn warn sm" data-vphx="${i}">${ic("trash","sm")}</button></figure>`).join("")
       || `<p class="muted sm">Зураг оруулаагүй</p>`;
   };
-  redrawPh();
-  const pad = vehSigPad($("#vehsig"), VEH_DRAFT.signature||null);
+  if(!ro) redrawPh();
+  const pad = (!ro && $("#vehsig")) ? vehSigPad($("#vehsig"), VEH_DRAFT.signature||null) : {empty:()=>true, data:()=>null, clear:()=>{}};
 
   const addPh = async files=>{
     const pr = $("#vphprog");
@@ -4264,12 +4283,15 @@ function vehicleListPage(editId){
   bindNav(app, e=>{
     const o=e.target.closest("[data-vo]"); if(o){ vehicleDetail(o.dataset.vo); return; }
     const p=e.target.closest("[data-vp]"); if(p){ vehiclePrint(p.dataset.vp); return; }
-    const ee=e.target.closest("[data-ve]"); if(ee){ vehicleListPage(ee.dataset.ve); window.scrollTo(0,0); return; }
+    const ee=e.target.closest("[data-ve]"); if(ee){ if(ro){ toast("Менежер засах эрхгүй"); return; } vehicleListPage(ee.dataset.ve); window.scrollTo(0,0); return; }
     const d=e.target.closest("[data-vd]"); if(d){
+      if(ro){ toast("Менежер устгах эрхгүй"); return; }
       const v=(DB.vehicles||{})[d.dataset.vd];
       if(v && confirm(`«${v.plate||""}» · ${v.date||""} хяналтыг устгах уу?`)){ write({["vehicles/"+v.id]:null}); toast("Устгалаа"); vehicleListPage(); }
     }
   });
+
+  if(ro) return;
 
   app.onsubmit = async e=>{
     e.preventDefault();
@@ -4305,7 +4327,8 @@ function vehicleListPage(editId){
 }
 
 function vehicleDetail(id){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
+  const ro = u.role==="manager";
   const v = (DB.vehicles||{})[id]; if(!v){ toast("Бичлэг олдсонгүй"); return vehicleListPage(); }
   view(()=>vehicleDetail(id), true);
   const checks = VEH_CHECKS.map(([k,l])=>{
@@ -4316,7 +4339,7 @@ function vehicleDetail(id){
   const app = mount(shell("тээвэр", `${phead(esc(v.plate||"Тээвэр"), `${esc(v.date||"")} · ${esc(v.time||"")} · ${esc(vehPurpose(v.purpose))}`, `<button class="btn ghost sm" id="vback">${ic("back","sm")} Жагсаалт</button>`)}
     <div class="card">
       <div class="row-between wrap"><div class="row-gap">${vehBadge(v.result)}<span class="muted sm">${esc(v.by||"")} · ${esc(v.at||"")}</span></div>
-        <div class="row-gap"><button class="btn ghost sm" id="vprint">${ic("printer","sm")} Хэвлэх</button><button class="btn ghost sm" id="vedit">${ic("edit","sm")} Засах</button></div></div>
+        <div class="row-gap"><button class="btn ghost sm" id="vprint">${ic("printer","sm")} Хэвлэх</button>${ro?"":`<button class="btn ghost sm" id="vedit">${ic("edit","sm")} Засах</button>`}</div></div>
       <div class="lockgrid" style="margin-top:10px">
         <div class="cell"><span>Улсын дугаар</span><b>${esc(v.plate||"—")}</b></div>
         <div class="cell"><span>Төрөл / загвар</span><b>${esc(v.vtype||v.model||"—")}</b></div>
@@ -4335,12 +4358,12 @@ function vehicleDetail(id){
     </div>`));
   $("#vback").onclick = ()=>{ vehicleListPage(); window.scrollTo(0,0); };
   $("#vprint").onclick = ()=>vehiclePrint(id);
-  $("#vedit").onclick = ()=>{ vehicleListPage(id); window.scrollTo(0,0); };
+  if($("#vedit")) $("#vedit").onclick = ()=>{ vehicleListPage(id); window.scrollTo(0,0); };
   bindNav(app);
 }
 
 function vehiclePrint(id){
-  const u = requireRole("hygiene"); if(!u) return;
+  const u = requireRole("hygiene","manager"); if(!u) return;
   const v = (DB.vehicles||{})[id]; if(!v){ toast("Бичлэг олдсонгүй"); return; }
   view(()=>vehiclePrint(id), true);
   const body = VEH_CHECKS.map(([k,l],i)=>{
@@ -4396,7 +4419,7 @@ function addVehSheet(wb, inR){
 
 /* ======================= EXCEL ======================= */
 function reportPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(reportPage, false);
   const app = mount(shell("excel", `${phead("Excel татах", "УХААН орохгүй. Хэрэгтэй тайлангаа сонгоно уу.")}
     <form class="card" id="xf">
@@ -4616,7 +4639,7 @@ function placeBugBtn(){
 }
 function bugContext(){
   const s = session || null;
-  const role = s && ["worker","supervisor","hygiene"].includes(s.role) ? s.role : "none";
+  const role = s && ["worker","supervisor","hygiene","manager"].includes(s.role) ? s.role : "none";
   const sap = s && authSapOk(s.sap) ? String(s.sap) : (s && s.sap ? keyOf(s.sap).slice(0,40) : null);
   return {
     view: viewName(), nav: ($("#app .navb.on")||{}).dataset?.nav || "", modals: $$(".modal-bg").map(m=>m.id).filter(id=>id && id!=="bugmodal"),
@@ -4846,7 +4869,7 @@ function waterWeeklyPopup(u){
 }
 let WF = {mon:null, alba:""};
 function waterReportPage(){
-  if(!requireRole("hygiene")) return;
+  if(!requireRole("hygiene","manager")) return;
   view(waterReportPage, true);
   if(!WF.mon) WF.mon = mondayOf(today());
   const w = waterWeek(WF.mon, WF.alba), cur = WF.mon===mondayOf(today());
@@ -4981,6 +5004,369 @@ document.addEventListener("click", e=>{
   if(e.target.closest("[data-pushon]")){ e.preventDefault(); pushSync(true); }
   else if(e.target.closest("[data-pushoff]")){ e.preventDefault(); pushOff(); }
 });
+
+/* ======================= v30: Гарын үсгийн pad (өөртөө агуулсан) ======================= */
+function sigPad(canvas, opts){
+  const o = opts||{}; const ratio = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  const cssW = canvas.clientWidth || o.w || 320, cssH = canvas.clientHeight || o.h || 110;
+  canvas.width = Math.round(cssW*ratio); canvas.height = Math.round(cssH*ratio);
+  const ctx = canvas.getContext("2d"); ctx.setTransform(ratio,0,0,ratio,0,0);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cssW,cssH);
+  ctx.strokeStyle = "#111"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  let drawing=false, empty=true, last=null;
+  const pos = e=>{
+    const r = canvas.getBoundingClientRect();
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    return {x:(t.clientX-r.left)*(cssW/r.width), y:(t.clientY-r.top)*(cssH/r.height)};
+  };
+  const start = e=>{ e.preventDefault(); drawing=true; last=pos(e); };
+  const move = e=>{
+    if(!drawing) return; e.preventDefault();
+    const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+    last=p; empty=false;
+  };
+  const end = e=>{ if(!drawing) return; e.preventDefault(); drawing=false; last=null; };
+  canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+  canvas.addEventListener("touchstart", start, {passive:false});
+  canvas.addEventListener("touchmove", move, {passive:false});
+  canvas.addEventListener("touchend", end, {passive:false});
+  canvas.addEventListener("touchcancel", end, {passive:false});
+  return {
+    clear(){ ctx.fillStyle="#fff"; ctx.fillRect(0,0,cssW,cssH); empty=true; },
+    isEmpty(){ return empty; },
+    dataURL(){ return empty ? "" : canvas.toDataURL("image/png"); },
+    load(data){ if(!data) return; const img=new Image(); img.onload=()=>{ ctx.fillStyle="#fff"; ctx.fillRect(0,0,cssW,cssH); ctx.drawImage(img,0,0,cssW,cssH); empty=false; }; img.src=data; }
+  };
+}
+
+/* ======================= v30: Шилдэг ажилтан ======================= */
+const BEST_ROLES_WRITE = u => u && (u.role==="hygiene" || u.role==="manager");
+function bestList(){ return list("best").filter(x=>x && x.id).sort((a,b)=>String(b.period||"").localeCompare(String(a.period||"")) || (b.ts||0)-(a.ts||0)); }
+function bestPeriodNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function bestSuggest(){
+  const from = addDays(-30);
+  const hz = {}, fa = {};
+  list("hazards").map(normHazard).forEach(x=>{
+    const sap = x.bySap || (x.reporter && (users().find(u=>u.name===x.reporter)||{}).sap);
+    if(!sap || !x.date || x.date<from) return;
+    hz[sap]=(hz[sap]||0)+1;
+  });
+  list("fatigue").forEach(x=>{ if(x.sap && x.date && x.date>=from) fa[x.sap]=(fa[x.sap]||0)+1; });
+  return users().filter(u=>u.role==="worker").map(u=>({
+    sap:u.sap, name:u.name, alba:albaN(u.alba), hz:hz[u.sap]||0, fa:fa[u.sap]||0, score:(hz[u.sap]||0)*3+(fa[u.sap]||0)
+  })).filter(x=>x.score>0).sort((a,b)=>b.score-a.score || a.name.localeCompare(b.name)).slice(0,8);
+}
+function bestCardHtml(limit){
+  const period = bestPeriodNow();
+  const items = bestList().filter(x=>x.period===period).slice(0, limit||6);
+  if(!items.length){
+    const prev = bestList().slice(0, limit||3);
+    if(!prev.length) return `<div class="card bestboard"><div class="ctitle">${ic("star")}<h3>Аюулгүй ажиллагааны шилдэг ажилтан</h3></div><p class="muted">Энэ сард сонгогдоогүй байна.</p></div>`;
+    return `<div class="card bestboard"><div class="ctitle">${ic("star")}<h3>Аюулгүй ажиллагааны шилдэг ажилтан</h3><span class="muted">Сүүлийн</span></div>
+      <div class="bestgrid">${prev.map(bestTile).join("")}</div>
+      <button class="btn ghost sm" data-nav="шилдэг">Бүгд ${ic("chev","sm")}</button></div>`;
+  }
+  return `<div class="card bestboard"><div class="ctitle">${ic("star")}<h3>Аюулгүй ажиллагааны шилдэг ажилтан</h3><span class="muted">${esc(period)}</span></div>
+    <div class="bestgrid">${items.map(bestTile).join("")}</div>
+    <button class="btn ghost sm" data-nav="шилдэг">Бүгд ${ic("chev","sm")}</button></div>`;
+}
+function bestTile(x){
+  const ph = x.hasPhoto ? `<img class="bestph" data-bestimg="${esc(x.id)}" alt=""/>` : `<span class="bestav">${esc(initials(x.name))}</span>`;
+  return `<div class="besttile"><div class="bestmedia">${ph}</div><div><b>${esc(x.name||"")}</b><small class="muted">${esc(albaN(x.alba)||"")} · ${esc(x.period||"")}</small>
+    ${x.reason?`<p class="bestwhy">${esc(x.reason)}</p>`:""}</div></div>`;
+}
+async function loadBestImgs(root){
+  if(!_fb) return;
+  $$(root?"#"+(root.id||"")+" [data-bestimg]":"[data-bestimg]").forEach(async el=>{
+    const id = el.dataset.bestimg; if(!id || el.dataset.loaded) return;
+    try{
+      const snap = await _fb.ref(ROOT+"/bestimg/"+id).once("value");
+      const v = snap.val(); if(v){ el.src=v; el.dataset.loaded="1"; }
+    }catch(_){}
+  });
+}
+function bestPage(){
+  const u = requireRole("hygiene","manager","supervisor","worker"); if(!u) return;
+  // worker has no shell — use simple page; staff uses shell
+  const canWrite = BEST_ROLES_WRITE(u);
+  const canDel = u.role==="hygiene";
+  const period = bestPeriodNow();
+  const all = bestList();
+  const months = [...new Set(all.map(x=>x.period).filter(Boolean))];
+  if(!months.includes(period)) months.unshift(period);
+  const show = (window._BESTP || period);
+  window._BESTP = show;
+  const items = all.filter(x=>x.period===show);
+  const people = users().filter(w=>w.role==="worker"||w.role==="supervisor").sort((a,b)=>a.name.localeCompare(b.name));
+  const sug = canWrite ? bestSuggest() : [];
+  const body = `${phead("Аюулгүй ажиллагааны шилдэг ажилтан", "Сараар сонгосон ажилтнууд · бүх нэвтэрсэн хэрэглэгч харна")}
+    <div class="card filters noprint"><div class="frow">
+      <select id="bp" aria-label="Сар">${months.map(m=>`<option value="${esc(m)}" ${m===show?"selected":""}>${esc(m)}</option>`).join("")}</select>
+    </div></div>
+    ${canWrite?`<form class="card noprint" id="bf">
+      <div class="ctitle">${ic("plus")}<h3>Шинээр нэмэх</h3></div>
+      <div class="g3">
+        <div><label class="f" for="bper">Сар *</label><input id="bper" type="month" required value="${esc(period)}"/></div>
+        <div><label class="f" for="bsap">Ажилтан *</label><select id="bsap" required><option value="">— Сонгоно уу —</option>${people.map(w=>`<option value="${esc(w.sap)}">${esc(w.name)} (${esc(w.sap)}) · ${esc(albaN(w.alba))}</option>`).join("")}</select></div>
+        <div><label class="f" for="balba">Алба</label><input id="balba" readonly value=""/></div>
+      </div>
+      <label class="f" for="breason">Шалтгаан / амжилт *</label><textarea id="breason" maxlength="500" required placeholder="Жишээ: Аюулыг цаг тухайд нь мэдээлсэн, УХААН сахисан…"></textarea>
+      <label class="f" for="bph">Зураг (заавал биш)</label><input type="file" id="bph" accept="image/*"/>
+      ${sug.length?`<details class="bsug"><summary>Санал болгох (сүүлийн 30 хоног: аюул×3 + ядаргаа)</summary>
+        <ul>${sug.map(s=>`<li><button type="button" class="linkbtn" data-bsug="${esc(s.sap)}">${esc(s.name)}</button> <span class="muted">аюул ${s.hz} · ядаргаа ${s.fa}</span></li>`).join("")}</ul></details>`:""}
+      <div class="gap"></div><button class="btn" type="submit">${ic("check")} Хадгалах</button>
+    </form>`:""}
+    <div class="card"><div class="ctitle">${ic("star")}<h3>${esc(show)} · ${items.length}</h3></div>
+      <div class="bestgrid lg">${items.map(x=>`${bestTile(x)}${canDel?`<button class="btn warn sm noprint" data-bdel="${esc(x.id)}">${ic("trash","sm")} Устгах</button>`:""}`).join("") || `<p class="muted">Энэ сард бүртгэл алга.</p>`}</div>
+    </div>`;
+  if(u.role==="worker"){
+    view(bestPage, true);
+    const app = mount(`${appbar("Шилдэг ажилтан", esc(u.name), true)}<main class="page">${body}<div class="actions"><button class="btn ghost" id="bback">Буцах</button></div></main>`);
+    $("#bback").onclick = workerHome; $("[data-hback]").onclick = workerHome;
+    $("#bp").onchange = ()=>{ window._BESTP=$("#bp").value; bestPage(); };
+    loadBestImgs();
+    return;
+  }
+  view(bestPage, true);
+  const app = mount(shell("шилдэг", body));
+  bindNav(app, e=>{
+    const d=e.target.closest("[data-bdel]");
+    if(d && canDel && confirm("Устгах уу?")){
+      write({["best/"+d.dataset.bdel]:null, ["bestimg/"+d.dataset.bdel]:null});
+      toast("Устгалаа"); bestPage();
+    }
+    const s=e.target.closest("[data-bsug]");
+    if(s && $("#bsap")){ $("#bsap").value=s.dataset.bsug; $("#bsap").dispatchEvent(new Event("change")); }
+  });
+  $("#bp").onchange = ()=>{ window._BESTP=$("#bp").value; bestPage(); };
+  if($("#bsap")) $("#bsap").onchange = ()=>{ const w=DB.users[keyOf($("#bsap").value)]; $("#balba").value = w?albaN(w.alba):""; };
+  if($("#bf")) $("#bf").onsubmit = async e=>{
+    e.preventDefault();
+    if(!canWrite) return;
+    const sap=$("#bsap").value, w=DB.users[keyOf(sap)];
+    if(!w){ toast("Ажилтан сонгоно уу"); return; }
+    const per=$("#bper").value; if(!/^\d{4}-\d{2}$/.test(per)){ toast("Сар буруу"); return; }
+    const reason=$("#breason").value.trim(); if(!reason){ toast("Шалтгаан бичнэ үү"); return; }
+    const id=uid(); const upd={};
+    let hasPhoto=false;
+    const f=$("#bph").files[0];
+    if(f){
+      try{
+        const data = await new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(f); img.onload=()=>{ try{ const j=imgToJpeg(img,900,0.72); URL.revokeObjectURL(url); res(j.data); }catch(ex){ rej(ex);} }; img.onerror=()=>rej(new Error("img")); img.src=url; });
+        if(data && data.length<=640000){ upd["bestimg/"+id]=data; hasPhoto=true; }
+        else toast("Зураг хэт том — мета хадгаллаа");
+      }catch(ex){ toast("Зураг уншиж чадсангүй"); }
+    }
+    upd["best/"+id]={id, period:per, sap:w.sap, name:w.name, alba:albaN(w.alba), reason:reason.slice(0,500), by:u.name, bySap:u.sap, at:nowStr(), ts:Date.now(), hasPhoto};
+    write(upd); toast("Хадгаллаа"); window._BESTP=per; bestPage();
+  };
+  loadBestImgs();
+}
+
+/* ======================= v30: Удирдах ажилтны алжаал ядаргааны үнэлгээ ======================= */
+const FI_OBS = {
+  appearance: ["Нүд анилдах","Нүд улайх","Ойр ойрхон эвшээлгэх","Удаан тасалдсан яриа"],
+  mood: ["Бухимдуу, уцаартай","Тэвчээр муутай","Шийдвэр гаргахдаа муу","Маргах шинжтэй"],
+  perf: ["Анхаарал сул","Зааварчилгааг дутуу ойлгох","Оюуны чадамж буурах"]
+};
+const FI_OBS_L = {appearance:"Харагдах байдал", mood:"Ааш зан", perf:"Ажлын гүйцэтгэл"};
+const FI_LV = [
+  {n:1, name:"Сэргэг", cls:"fi-g", desc:"Идэвхитэй, сэргэг, орчин тойрндоо анхааралтай, чиг баримжаа сайн"},
+  {n:2, name:"Бага зэрэг ядарсан", cls:"fi-a", desc:"Сэргэг гэхдээ анхаарал бага зэрэг буурсан. Нөхцөл байдалд хариу үйлдэл хийнэ, гэхдээ чармайлт шаардана. Амрахыг илүүд үзнэ."},
+  {n:3, name:"Ядарсан", cls:"fi-r", desc:"Нүд чилсэн, анхаарал төвлөрөхөд хүнд, зааварчилгааг удаан ойлгоно, эрч хүч сул, ойлгомжгүй ярина."},
+  {n:4, name:"Маш их ядарсан", cls:"fi-r", desc:"Зовхи хүндрэнэ, дохилзоно, унтахгүйг хичээнэ, ярихаас төвөгшөөнө, хэлэх гэсэн зүйлээ мартана, ганцаар байхыг илүүд үзнэ, унтах хүсэл маш их төрнө."}
+];
+const FI_QS = [
+  {id:"q1", t:"Хэдэн цаг сэрүүн байна вэ?", b:"< 14 цаг", d:"14-16 цаг", i:"> 16 цаг"},
+  {id:"q2", t:"Сүүлийн 24 цагийн хугацаанд хэдэн цаг унтсан бэ?", b:"7 цаг", d:"6 - 7 цаг", i:"< 6 цаг"},
+  {id:"q3", t:"Сүүлийн 48 цагийн хугацаанд хэдэн цаг унтсан бэ?", b:"> 14 цаг", d:"12 - 14 цаг", i:"< 12 цаг"},
+  {id:"q4", t:"Сүүлийн 24 цагийн хугацаанд согтууруулах ундааны зүйл уусан эсэх?", b:"Эрэгтэй: 0-3 / Эмэгтэй: 0-2", d:"Эрэгтэй: 4-6 / Эмэгтэй: 3-4", i:"Эрэгтэй: > 6 / Эмэгтэй: > 4"},
+  {id:"q5", t:"Ажлын гүйцэтгэлд нөлөөлж болзошгүй эм тариа, бусад бэлдмэл хэрэглэсэн эсэх?", b:"Үгүй", d:"", i:"Тийм"},
+  {id:"q6", t:"Биеийн хүч хэр их шаардсан ажил вэ? Нэгэн хэмийн давтамжтай ажил уу?", b:"Дунд зэрэг", d:"Бага зэрэг", i:"Их-нэгэн хэмийн"},
+  {id:"q7", t:"Оюуны хүч хэр их шаардсан ажил вэ?", b:"Дунд зэрэг", d:"Бага зэрэг", i:"Их"},
+  {id:"q8", t:"Эрсдлийн түвшин их ажил үүрэг гүйцэтгэх шаардлагатай ажил уу?", b:"Үгүй", d:"", i:"Тийм"},
+  {id:"q9", t:"Тухайн ажлыг гүйцэтгэж дуусах үед ажилтан хэдэн цаг сэрүүн байх вэ?", b:"< 14 цаг", d:"14-18 цаг", i:"> 18 цаг"}
+];
+const FI_CTRL = {
+  "Бага": {
+    when:["Бүх хариу Бага Эрсдэл байвал","Ядарсан шинж тэмдэг илрээгүй бол","Удирдах ажилтан ажилтнаа ажилд бэлэн байна гэж үзэж байвал"],
+    acts:["Хувийн алжаал ядаргааны үнэлгээг УХААН-ы хамт хийх","Ажилтан өөрийгөө үргэлжлүүлэн хянах","Завсарлага авах боломжтойг сануулах","Ажилтантай хяналтын арга хэмжээнүүдийн талаар ярилцах (кофе, дасгал хөдөлгөөн, сэргүүцэх зэргийн ач холбогдол гм)"]
+  },
+  "Дунд": {
+    when:["Нэг болон түүнээс дээш Дунд Эрсдэл гарсан","Их Эрсдэл гараагүй","Удирдах ажилтан нэмэлт хяналттайгаар ажиллуулж болно гэж үзэж байвал"],
+    acts:["Дээрхийн адил","Ажил гүйцэтгэх үед нэмэлт хяналтад байлгах","Ажил гүйцэтгэх үед нэмэлт завсарлага өгөх","Ажил үүргийг ээлжлүүлэх / солих","Дээр дурдсантай төстэй хяналтын арга хэмжээг авч хэрэгжүүлэх"]
+  },
+  "Их": {
+    when:["Нэг болон түүнээс дээш Их Эрсдэл гарсан","Олон Дунд Эрсдэл гарсан","Удирдах ажилтан ажилтнаа ажилд бэлэн эсэхэд эргэлзэж байвал"],
+    acts:["Дээрхийн адил","Эрсдэл ихтэй ажил, үүрэг гүйцэтгүүлэхгүй байх","Тухайн ээлжийн ажлаас чөлөөлж амрах газарт явуулах эсэхийг шийдэх","Илүү цагаар ажиллах төлөвлөгөөтэй байсан бол зөвхөн зайлшгүй шаардлагатай ажлыг гүйцэтгүүлэх","Эрсдлийг тооцоолж шаардлагатай хяналтын арга хэмжээ авах","Үнэлгээний дүнг ахлах мэргэжилтэнтэй зөвлөлдөх","Илүү цагаар ажиллах хүсэлтийг зөвшөөрөхгүй байх"]
+  }
+};
+const FI_NOTICE = "Дээр дурдсан алжаал ядаргааны хяналтын арга хэмжээг ойлгож хэрэгжүүлснээр тухайн ээлжинд ажлын явцад гарч болох алжаал ядарлын эрсдлийг бууруулна гэж үзэж байна. Уг бичиг баримтыг хариуцсан хэлтсийн ахлах мэргэжилтэнд хүргүүлнэ.";
+function fiRiskFromQs(qs){
+  const vals = Object.values(qs||{});
+  if(vals.some(v=>v==="Их")) return "Их";
+  if(vals.filter(v=>v==="Дунд").length>=3) return "Их"; // «олон дунд»
+  if(vals.some(v=>v==="Дунд")) return "Дунд";
+  return "Бага";
+}
+function fatIntByFatId(fatId){ return list("fatint").find(x=>x && x.fatId===fatId); }
+function fatIntPending(u){
+  const red = fatigueMine(u).filter(x=>x.level==="Өндөр"||x.level==="Их");
+  return red.filter(x=>!fatIntByFatId(x.id)).sort(byNew);
+}
+function fatIntDone(u){
+  let all = list("fatint").filter(x=>x && x.status==="done");
+  if(u.role==="supervisor") all = all.filter(x=>albaN(x.alba)===albaN(u.alba) || x.bySap===u.sap);
+  return all.sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+function fatIntBadgeHtml(u){
+  if(!u || u.role!=="supervisor") return "";
+  const n = fatIntPending(u).length;
+  if(!n) return "";
+  return `<span class="badge b-bad" title="Өндөр ядаргааны ярилцлага">Ярилцлага ${n}</span>`;
+}
+function fatIntForm(fatId, existingId){
+  const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
+  const fat = (DB.fatigue||{})[fatId];
+  const ed = existingId ? (DB.fatint||{})[existingId] : (fat ? fatIntByFatId(fatId) : null);
+  if(!fat && !ed){ toast("Ядаргааны бүртгэл олдсонгүй"); return fatigueListPage(); }
+  const w = DB.users[keyOf((ed&&ed.sap)||fat.sap)] || {sap:(ed&&ed.sap)||fat.sap, name:(ed&&ed.name)||fat.name, alba:(ed&&ed.alba)||fat.alba, job:""};
+  if(u.role==="supervisor" && albaN(w.alba)!==albaN(u.alba) && w.sap!==u.sap){ toast("Зөвхөн өөрийн албаны ажилтан"); return fatigueListPage(); }
+  const canEdit = u.role==="supervisor" && (!ed || ed.status!=="done" || true) && albaN(w.alba)===albaN(u.alba);
+  const readOnly = u.role!=="supervisor" || (ed && ed.status==="done" && location.hash==="#view");
+  // supervisors always can fill/edit pending; hygiene/manager view
+  const ro = u.role!=="supervisor";
+  view(()=>fatIntForm(fatId, existingId||(ed&&ed.id)), false);
+  const date0 = (ed&&ed.date)||today();
+  const obs = (ed&&ed.obs)||{};
+  const qs0 = (ed&&ed.qs)||{};
+  const lvl0 = (ed&&ed.level)||"";
+  const purpose = (ed&&ed.purpose)||{fit:true, ot:false};
+  const risk0 = (ed&&ed.risk)||"";
+  const ctrls0 = (ed&&ed.ctrls)||{};
+  const chip = (group, label)=>`<label class="fi-chip"><input type="checkbox" data-obs="${group}" value="${esc(label)}" ${(obs[group]||[]).includes(label)?"checked":""} ${ro?"disabled":""}/> ${esc(label)}</label>`;
+  const qRow = q=>{
+    const cur = qs0[q.id]||"";
+    const cell = (v,txt)=> !txt?`<td class="fi-na">—</td>`:`<td class="fi-q ${v==="Бага"?"fi-g":v==="Дунд"?"fi-a":"fi-r"}"><label><input type="radio" name="${q.id}" value="${v}" ${cur===v?"checked":""} ${ro?"disabled":""}/> <span>${esc(txt)}</span></label></td>`;
+    return `<tr><th>${esc(q.t)}</th>${cell("Бага",q.b)}${cell("Дунд",q.d)}${cell("Их",q.i)}</tr>`;
+  };
+  const app = mount(`${appbar("Удирдах ажилтны үнэлгээ", esc(w.name), true)}
+    <div class="sheet-wrap fi-wrap"><div class="sheet fi-sheet" id="fisheet">
+      <h2 class="fi-title">УДИРДАХ АЖИЛТНЫ АЛЖААЛ ЯДАРГААНЫ ҮНЭЛГЭЭ</h2>
+      ${fat?`<p class="muted noprint">Холбоос: ядаргааны үнэлгээ ${esc(fat.date)} · ${fLvlB(fat.level)} · оноо ${esc(fat.score)}</p>`:""}
+      <table class="fi-head"><tr>
+        <td><b>Ажилтны нэр:</b> ${esc(w.name||"")}</td>
+        <td><b>Огноо:</b> ${ro?esc(date0):`<input type="date" id="fidate" value="${esc(date0)}"/>`}</td>
+      </tr><tr>
+        <td><b>Удирдлагын нэр:</b> ${esc((ed&&ed.byName)||u.name)}</td>
+        <td><b>Албан тушаал:</b> ${esc((ed&&ed.byJob)||u.job||roleName(u.role))}</td>
+      </tr><tr>
+        <td colspan="2"><b>Хэлтэс:</b> ${esc(albaN(w.alba)||"")}</td>
+      </tr><tr>
+        <td colspan="2"><b>Үнэлгээний зорилго:</b>
+          <label class="fi-inline"><input type="checkbox" id="fipfit" ${(purpose.fit!==false)?"checked":""} ${ro?"disabled":""}/> Ажилд бэлэн эсэх</label>
+          <label class="fi-inline"><input type="checkbox" id="fipot" ${purpose.ot?"checked":""} ${ro?"disabled":""}/> Илүү цаг</label>
+        </td>
+      </tr><tr>
+        <td colspan="2"><b>Товч тайлбар:</b><br/>${ro?`<div class="fi-box">${esc(ed&&ed.brief||"")}</div>`:`<textarea id="fibrief" maxlength="1000" rows="2">${esc(ed&&ed.brief||"")}</textarea>`}</td>
+      </tr></table>
+
+      <h3>Ажиглалт (дугуйлна уу) — Ажилтанд алжаал ядаргааны доорх шинж тэмдгүүдээс аль нь илэрч байна?</h3>
+      ${Object.keys(FI_OBS).map(g=>`<div class="fi-obs"><b>${esc(FI_OBS_L[g])}:</b> ${FI_OBS[g].map(l=>chip(g,l)).join(" ")}</div>`).join("")}
+
+      <h3>Үнэлгээ</h3>
+      <table class="fi-lv">${FI_LV.map(L=>`<tr class="${L.cls}"><td><label><input type="radio" name="filevel" value="${L.n}" ${+lvl0===L.n?"checked":""} ${ro?"disabled":""}/> <b>${esc(L.name)}</b></label></td><td>${esc(L.desc)}</td><td class="fi-n">${L.n}</td></tr>`).join("")}</table>
+
+      <h3>Асуултууд / Эрсдэл</h3>
+      <table class="fi-qs"><thead><tr><th>Асуултууд</th><th class="fi-g">Бага</th><th class="fi-a">Дунд</th><th class="fi-r">Их</th></tr></thead>
+        <tbody>${FI_QS.map(qRow).join("")}</tbody></table>
+
+      <p><b>Нэмэлт тэмдэглэл (байгаа бол):</b></p>
+      ${ro?`<div class="fi-box">${esc(ed&&ed.notes||"")}</div>`:`<textarea id="finotes" maxlength="2000" rows="3">${esc(ed&&ed.notes||"")}</textarea>`}
+
+      <h3>Хяналтын арга хэмжээ / Тайлбар</h3>
+      <div id="fictrl"></div>
+      <p><b>Нэмэлт хяналтын арга хэмжээ:</b></p>
+      ${ro?`<div class="fi-box">${esc(ed&&ed.ctrlExtra||"")}</div>`:`<textarea id="fiextra" maxlength="1000" rows="2">${esc(ed&&ed.ctrlExtra||"")}</textarea>`}
+
+      <div class="fi-notice"><b>Мэдэгдэл:</b> ${esc(FI_NOTICE)}</div>
+
+      <table class="fi-sig"><tr>
+        <td><b>Ажилтны гарын үсэг:</b><div class="sigbox"><canvas id="sigw" width="320" height="110"></canvas>${ro?"":`<button type="button" class="btn ghost sm noprint" id="clrw">Цэвэрлэх</button>`}</div></td>
+        <td class="fi-sigdate"><b>Огноо:</b> ${ro?esc(ed&&ed.sigWorkerAt||""):`<input type="date" id="sigwd" value="${esc((ed&&ed.sigWorkerAt)||today())}"/>`}</td>
+      </tr><tr>
+        <td><b>Удирдах ажилтны гарын үсэг:</b><div class="sigbox"><canvas id="sigs" width="320" height="110"></canvas>${ro?"":`<button type="button" class="btn ghost sm noprint" id="clrs">Цэвэрлэх</button>`}</div></td>
+        <td class="fi-sigdate"><b>Огноо:</b> ${ro?esc(ed&&ed.sigSupAt||""):`<input type="date" id="sigsd" value="${esc((ed&&ed.sigSupAt)||today())}"/>`}</td>
+      </tr></table>
+    </div>
+    <div class="actions noprint">
+      ${ro?"":`<button class="btn" id="fisave">${ic("check")} Хадгалах (дуусгах)</button>`}
+      <button class="btn ghost" id="fiprint">${ic("printer")} Хэвлэх (A4)</button>
+      <button class="btn ghost" id="fiback">Буцах</button>
+    </div></div>`);
+
+  const padW = sigPad($("#sigw")), padS = sigPad($("#sigs"));
+  if(ed&&ed.sigWorker) padW.load(ed.sigWorker);
+  if(ed&&ed.sigSup) padS.load(ed.sigSup);
+  if($("#clrw")) $("#clrw").onclick=()=>padW.clear();
+  if($("#clrs")) $("#clrs").onclick=()=>padS.clear();
+
+  const drawCtrl = ()=>{
+    const qs={}; FI_QS.forEach(q=>{ const el=document.querySelector(`input[name="${q.id}"]:checked`); if(el) qs[q.id]=el.value; else if(qs0[q.id]) qs[q.id]=qs0[q.id]; });
+    const risk = Object.keys(qs).length? fiRiskFromQs(qs) : (risk0||"");
+    const box = $("#fictrl");
+    const row = (band, cls)=>{
+      const C = FI_CTRL[band]; const on = risk===band;
+      return `<tr class="fi-risk-${cls} ${on?"fi-on":""}">
+        <td><ul>${C.when.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>${on?`<p class="fi-cur"><b>Одоогийн түвшин: ${esc(band)}</b></p>`:""}</td>
+        <td><ul class="fi-acts">${C.acts.map((a,i)=>`<li><label><input type="checkbox" data-ctrl="${band}-${i}" ${ctrls0[band+"-"+i]||(on&&(ctrls0[i]||ctrls0["c"+i]))?"checked":""} ${ro||!on?"disabled":""}/> ${esc(a)}</label></li>`).join("")}</ul></td>
+        <td class="fi-tick"></td></tr>`;
+    };
+    box.innerHTML = `<p class="muted noprint">Эрсдэлийн түвшин: <b id="firisk">${esc(risk||"—")}</b> (бүх Бага → Бага; ≥1 Дунд, Ихгүй → Дунд; ≥1 Их эсвэл олон Дунд → Их)</p>
+      <table class="fi-ctrl"><thead><tr><th>Алжаал ядаргааны эрсдэл</th><th>Санал болгож буй хяналтын арга хэмжээ</th><th>☐</th></tr></thead>
+      <tbody>${row("Бага","g")}${row("Дунд","a")}${row("Их","r")}</tbody></table>`;
+  };
+  drawCtrl();
+  app.addEventListener("change", e=>{ if(e.target.matches('input[type="radio"][name^="q"]')) drawCtrl(); });
+
+  $("#fiback").onclick = fatigueListPage; $("[data-hback]").onclick = fatigueListPage;
+  $("#fiprint").onclick = ()=>window.print();
+  if($("#fisave")) $("#fisave").onclick = ()=>{
+    if(ro) return;
+    const qs={}; let miss=false;
+    FI_QS.forEach(q=>{ const el=document.querySelector(`input[name="${q.id}"]:checked`); if(!el) miss=true; else qs[q.id]=el.value; });
+    const lvEl=document.querySelector('input[name="filevel"]:checked');
+    if(!lvEl){ toast("Үнэлгээний түвшин сонгоно уу"); return; }
+    if(miss){ toast("Бүх асуултыг хариулна уу"); return; }
+    if(padW.isEmpty()||padS.isEmpty()){ toast("Хоёр гарын үсэг зурна уу"); return; }
+    const obsOut={}; Object.keys(FI_OBS).forEach(g=>{ obsOut[g]=$$(`input[data-obs="${g}"]:checked`).map(x=>x.value); });
+    const risk = fiRiskFromQs(qs);
+    const ctrls={}; $$("#fictrl input[data-ctrl]:checked").forEach(x=>{ ctrls[x.dataset.ctrl]=true; }); /* keys like Бага-0 */
+    const id = (ed&&ed.id)||uid();
+    const rec = {
+      id, fatId: fat?fat.id:(ed&&ed.fatId)||"", sap:w.sap, name:w.name, alba:albaN(w.alba),
+      date: $("#fidate")?$("#fidate").value:date0,
+      bySap:u.sap, byName:u.name, byJob:u.job||roleName(u.role),
+      purpose:{fit:!!$("#fipfit").checked, ot:!!$("#fipot").checked},
+      brief:($("#fibrief")&&$("#fibrief").value||"").slice(0,1000),
+      obs:obsOut, level:+lvEl.value, qs, notes:($("#finotes")&&$("#finotes").value||"").slice(0,2000),
+      risk, ctrls, ctrlExtra:($("#fiextra")&&$("#fiextra").value||"").slice(0,1000),
+      sigWorker:padW.dataURL(), sigWorkerAt:($("#sigwd")&&$("#sigwd").value)||today(),
+      sigSup:padS.dataURL(), sigSupAt:($("#sigsd")&&$("#sigsd").value)||today(),
+      status:"done", ts:Date.now(), at:nowStr()
+    };
+    const nid = keyOf("fatint_"+id);
+    const upd = {["fatint/"+id]: rec};
+    upd["notifs/"+nid] = {id:nid, type:"fatint", level:"high", ts:Date.now(),
+      title: `Ядаргааны ярилцлага хийгдсэн: ${w.name}`.slice(0,200),
+      body: `${albaN(w.alba)} · ${rec.date} · эрсдэл ${risk} · түвшин ${rec.level}`.slice(0,300),
+      alba: albaN(w.alba), ref:id, by:u.name, bySap:u.sap};
+    write(upd); toast("Хадгаллаа · эрүүл ахуйчид мэдэгдлээ"); fatigueListPage();
+  };
+}
+
+
 
 /* ======================= ЭХЛЭЛ ======================= */
 (function boot(){

@@ -6,7 +6,7 @@
     },
     "eahs": {
       "v2": {
-        ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+        ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager')",
         "_meta": {
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') && !data.exists()"
         },
@@ -14,7 +14,7 @@
           "$uid": {
             ".read": "auth != null && auth.uid === $uid",
             ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && auth.uid === $uid && !data.exists() && newData.child('sap').isString() && auth.token.email === newData.child('sap').val().toLowerCase() + '@eahs.local' && root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').exists() && newData.child('proof').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/pinHash').val() && newData.child('role').val() === root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val()) || ((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && !data.exists() && newData.child('role').val() === 'worker' && newData.child('sap').isString() && root.child('eahs/v2/users/'+newData.child('sap').val()+'/role').val() === 'worker')",
-            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/))"
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene|manager)$/))"
           }
         },
         "authgen": {
@@ -25,11 +25,11 @@
           }
         },
         "users": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           "$sap": {
             ".read": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap",
             ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || ((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && !data.exists() && newData.exists() && newData.child('role').val() === 'worker' && newData.child('alba').isString() && (!(root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().length > 0) || ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар')))",
-            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene)$/) && !newData.child('pin').exists() && (!newData.child('uid').exists() || newData.child('uid').isString()))",
+            ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('role').val().matches(/^(worker|supervisor|hygiene|manager)$/) && !newData.child('pin').exists() && (!newData.child('uid').exists() || newData.child('uid').isString()))",
             "uid": {
               ".write": "auth != null && root.child('eahs/v2/roles/'+auth.uid+'/sap').val() === $sap && !data.exists() && newData.val() === auth.uid"
             },
@@ -46,7 +46,7 @@
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')"
         },
         "uhaan": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
           ".indexOn": [
             "sap"
           ],
@@ -56,7 +56,7 @@
           }
         },
         "fatigue": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
           ".indexOn": [
             "sap"
           ],
@@ -135,7 +135,7 @@
           }
         },
         "hazards": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && data.exists() && newData.exists()) || (auth != null && !data.exists() && newData.child('status').val() === 'Шинэ')",
@@ -143,22 +143,22 @@
           }
         },
         "photos": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".write": "auth != null && !data.exists() && newData.parent().parent().child('hazards/'+$id).exists()"
           }
         },
         "notifs": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
-            ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))))) || (auth != null && newData.exists() && newData.child('type').val() === 'health' && (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || data.child('type').val() === 'health'))",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".write": "(auth != null && !data.exists() && newData.exists() && ((newData.child('type').val() === 'hazard' && $id === 'hz_' + newData.child('ref').val() && (newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Их' || newData.parent().parent().child('hazards/'+newData.child('ref').val()+'/risk').val() === 'Маш их')) || (newData.child('type').val() === 'hygfail' && (auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))))) || (auth != null && newData.exists() && newData.child('type').val() === 'health' && (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || data.child('type').val() === 'health')) || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'fatint' && (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар')) || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'infect' && $id === 'inf_' + newData.child('ref').val() && newData.child('bySap').val() === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
         "renew": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager')) || (auth != null && query.orderByChild === 'sap' && query.equalTo === root.child('eahs/v2/roles/'+auth.uid+'/sap').val())",
           ".indexOn": [
             "sap"
           ],
@@ -168,7 +168,7 @@
           }
         },
         "advice": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && (!data.exists() || (data.child('target/type').val() === 'all' || (data.child('target/type').val() === 'alba' && ((data.child('target/alba').isString() && (data.child('target/alba').val().contains('Оффис') || data.child('target/alba').val().contains('оффис') || data.child('target/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар')) || data.child('target/saps/' + root.child('eahs/v2/roles/'+auth.uid+'/sap').val()).exists()))",
@@ -207,7 +207,7 @@
           }
         },
         "advimg": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists()) && root.child('eahs/v2/advice/' + $id).exists() && (root.child('eahs/v2/advice/' + $id).child('target/type').val() === 'all' || (root.child('eahs/v2/advice/' + $id).child('target/type').val() === 'alba' && ((root.child('eahs/v2/advice/' + $id).child('target/alba').isString() && (root.child('eahs/v2/advice/' + $id).child('target/alba').val().contains('Оффис') || root.child('eahs/v2/advice/' + $id).child('target/alba').val().contains('оффис') || root.child('eahs/v2/advice/' + $id).child('target/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар')) || root.child('eahs/v2/advice/' + $id).child('target/saps/' + root.child('eahs/v2/roles/'+auth.uid+'/sap').val()).exists())",
@@ -217,7 +217,7 @@
           }
         },
         "wbfiles": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".indexOn": [
             "sap"
           ],
@@ -227,28 +227,28 @@
           }
         },
         "wbdata": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
           }
         },
         "labcerts": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 200 && newData.child('certNo').isString() && newData.child('certNo').val().length > 0 && newData.child('certNo').val().length <= 80 && newData.child('analyzed').isString() && newData.child('analyzed').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('received').isString() && newData.child('received').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('exp').isString() && newData.child('exp').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 500)) && (!newData.child('fileType').exists() || newData.child('fileType').val().matches(/^(image\\/(jpeg|png|webp)|application\\/pdf)$/)) && (!newData.child('fileSize').exists() || (newData.child('fileSize').isNumber() && newData.child('fileSize').val() <= 1100000)) && (!newData.child('fileName').exists() || (newData.child('fileName').isString() && newData.child('fileName').val().length <= 200)))"
           }
         },
         "labdata": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".validate": "!newData.exists() || (newData.isString() && newData.val().beginsWith('data:') && newData.val().length <= 1450000)"
           }
         },
         "vehicles": {
-          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           ".indexOn": [
             "date",
@@ -269,7 +269,7 @@
           }
         },
         "svcheck": {
-          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor'))",
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
           ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene')",
           "$id": {
             ".write": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && newData.exists() && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || ((data.child('alba').isString() && (data.child('alba').val().contains('Оффис') || data.child('alba').val().contains('оффис') || data.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар'))",
@@ -293,6 +293,37 @@
                 ".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"
               }
             }
+          }
+        },
+        "best": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
+          ".indexOn": [
+            "period",
+            "sap"
+          ],
+          ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
+          "$id": {
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('period').isString() && newData.child('period').val().matches(/^[0-9]{4}-[0-9]{2}$/) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 100 && (!newData.child('reason').exists() || (newData.child('reason').isString() && newData.child('reason').val().length <= 500)) && (!newData.child('alba').exists() || newData.child('alba').isString()) && (!newData.child('hasPhoto').exists() || newData.child('hasPhoto').isBoolean()))"
+          }
+        },
+        "bestimg": {
+          ".read": "(auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').exists())",
+          ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene') || (auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
+          "$id": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
+          }
+        },
+        "fatint": {
+          ".read": "(auth != null && (root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'hygiene' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor' || root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'manager'))",
+          ".indexOn": [
+            "sap",
+            "fatId",
+            "alba"
+          ],
+          ".write": false,
+          "$id": {
+            ".write": "((auth != null && root.child('eahs/v2/roles/'+auth.uid+'/role').val() === 'supervisor') && newData.exists() && ((newData.child('alba').isString() && (newData.child('alba').val().contains('Оффис') || newData.child('alba').val().contains('оффис') || newData.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') && (!data.exists() || ((data.child('alba').isString() && (data.child('alba').val().contains('Оффис') || data.child('alba').val().contains('оффис') || data.child('alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар') === ((root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').isString() && (root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('Оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('оффис') || root.child('eahs/v2/users/'+root.child('eahs/v2/roles/'+auth.uid+'/sap').val()+'/alba').val().contains('ОФФИС'))) ? 'Оффис' : 'Бар')))",
+            ".validate": "!newData.exists() || (newData.child('sap').isString() && newData.child('alba').isString() && newData.child('fatId').isString() && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.child('bySap').isString() && (!newData.child('status').exists() || newData.child('status').val().matches(/^(done|pending)$/)) && (!newData.child('level').exists() || newData.child('level').isNumber()) && (!newData.child('risk').exists() || newData.child('risk').val().matches(/^(Бага|Дунд|Их)$/)) && (!newData.child('notes').exists() || (newData.child('notes').isString() && newData.child('notes').val().length <= 2000)) && (!newData.child('brief').exists() || (newData.child('brief').isString() && newData.child('brief').val().length <= 1000)) && (!newData.child('ctrlExtra').exists() || (newData.child('ctrlExtra').isString() && newData.child('ctrlExtra').val().length <= 1000)) && (!newData.child('sigWorker').exists() || (newData.child('sigWorker').isString() && newData.child('sigWorker').val().length <= 200000)) && (!newData.child('sigSup').exists() || (newData.child('sigSup').isString() && newData.child('sigSup').val().length <= 200000)))"
           }
         },
         "$other": {

@@ -31,12 +31,15 @@ SVCHECK_KIDS = {
     "sign": {"$d": {".validate": "$d.matches(/^d[0-6]$/) && newData.child('by').isString() && newData.child('by').val().length <= 80"}}}
 HYG = f"(auth != null && {ROLE} === 'hygiene')"
 SUP = f"(auth != null && {ROLE} === 'supervisor')"
+MGR = f"(auth != null && {ROLE} === 'manager')"
 STAFF = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'supervisor'))"
+# v30: менежер бүх нэгжийг уншина (бичихгүй); STAFF_R = ахлах+эрүүл ахуйч+менежер
+STAFF_R = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'supervisor' || {ROLE} === 'manager'))"
 MEMBER = f"(auth != null && root.child('{V2}/roles/'+auth.uid+'/role').exists())"
 ANY = "auth != null"
 OWNQ = f"(auth != null && query.orderByChild === 'sap' && query.equalTo === {MYSAP})"
 OWN_CREATE = f"({MEMBER} && !data.exists() && newData.child('sap').val() === {MYSAP})"
-ROLE_RE = "/^(worker|supervisor|hygiene)$/"
+ROLE_RE = "/^(worker|supervisor|hygiene|manager)$/"
 
 BORLUULALT = {".read": "auth != null", ".write": "auth != null"}
 
@@ -72,8 +75,10 @@ NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 f" || (newData.child('type').val() === 'hygfail' && {STAFF})))"
                 # v8: Цагаан дэвтэр / шинжилгээний мэдэгдэл — ахлах зөвхөн өөрийн албаных; давхар үүсгэлтэд (уралдаан) health→health дахин бичиж болно
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'health' && {SUP} && {SAME_ALBA_NEW}"
-                f" && (!data.exists() || data.child('type').val() === 'health'))")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab)$/) && newData.child('ts').isNumber()"
+                f" && (!data.exists() || data.child('type').val() === 'health'))"
+                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'fatint' && {SUP} && {SAME_ALBA_NEW})"
+                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'infect' && $id === 'inf_' + newData.child('ref').val() && newData.child('bySap').val() === {MYSAP})")
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"
@@ -137,12 +142,37 @@ SLEEP_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newD
                   # v26: ажлын байр (хуучин бичлэг/апп-д байхгүй байж болно)
                   " && (!newData.child('loc').exists() || newData.child('loc').val().matches(/^(Оюут бар|Манлай бар|Оффис)$/)))")
 
+
+
+# v30: Удирдах ажилтны алжаал ядаргааны үнэлгээ (ярилцлага) — fatint/{id}
+FATINT_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('alba').isString()"
+                   " && newData.child('fatId').isString() && newData.child('date').isString()"
+                   " && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+                   " && newData.child('bySap').isString()"
+                   " && (!newData.child('status').exists() || newData.child('status').val().matches(/^(done|pending)$/))"
+                   " && (!newData.child('level').exists() || newData.child('level').isNumber())"
+                   " && (!newData.child('risk').exists() || newData.child('risk').val().matches(/^(Бага|Дунд|Их)$/))"
+                   " && (!newData.child('notes').exists() || (newData.child('notes').isString() && newData.child('notes').val().length <= 2000))"
+                   " && (!newData.child('brief').exists() || (newData.child('brief').isString() && newData.child('brief').val().length <= 1000))"
+                   " && (!newData.child('ctrlExtra').exists() || (newData.child('ctrlExtra').isString() && newData.child('ctrlExtra').val().length <= 1000))"
+                   " && (!newData.child('sigWorker').exists() || (newData.child('sigWorker').isString() && newData.child('sigWorker').val().length <= 200000))"
+                   " && (!newData.child('sigSup').exists() || (newData.child('sigSup').isString() && newData.child('sigSup').val().length <= 200000)))")
+FATINT_WRITE = f"({SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD}))"  # v30: зөвхөн ахлах (өөрийн алба)
+
+# v30: Аюулгүй ажиллагааны шилдэг ажилтан — best/{id}; зураг bestimg/{id} (JPEG dataURL)
+BEST_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newData.child('period').isString() && newData.child('period').val().matches(/^[0-9]{4}-[0-9]{2}$/)"
+                 " && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 100"
+                 " && (!newData.child('reason').exists() || (newData.child('reason').isString() && newData.child('reason').val().length <= 500))"
+                 " && (!newData.child('alba').exists() || newData.child('alba').isString())"
+                 " && (!newData.child('hasPhoto').exists() || newData.child('hasPhoto').isBoolean()))")
+BEST_IMG_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
+BEST_WRITE = f"({HYG} || {MGR})"
+
 # v22: Web Push захиалга — push/{sap}/{hash}; хэрэглэгч зөвхөн өөрийн sap дор бичнэ/устгана/уншина; эрүүл ахуйч (сервер) бүгдийг уншина/устгана
 
 # v30b: Тээврийн хэрэгсэлийн хяналт — эрүүл ахуйч CRUD.
-# Менежер уншихыг хялбар нэмэх: HYG_OR_MGR = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'manager'))"
-#   дараа нь VEH_READ = HYG_OR_MGR болго (v30-roles агент). Одоо: VEH_READ = HYG.
-VEH_READ = HYG   # TODO v30-roles: || ROLE === 'manager'
+HYG_OR_MGR = f"(auth != null && ({ROLE} === 'hygiene' || {ROLE} === 'manager'))"
+VEH_READ = HYG_OR_MGR  # v30: эрүүл ахуйч + менежер уншина
 VEH_PURPOSE_RE = "/^(food|staff|other)$/"
 VEH_RESULT_RE = "/^(pass|fail)$/"
 VEH_ANS_RE = "/^(Тийм|Үгүй|Хамаарахгүй)$/"
@@ -175,12 +205,12 @@ PUSH_NODE = {".write": HYG, "_sent": {"$k": {".validate": "newData.isString() &&
 
 def strict():
     return {"rules": {"borluulalt": BORLUULALT, "eahs": {"v2": {
-        ".read": HYG,
+        ".read": f"{HYG} || {MGR}",
         "_meta": {".write": f"{HYG} && !data.exists()"},
         "roles": ROLES,
         "authgen": AUTHGEN,
         "users": {
-            ".read": STAFF,
+            ".read": STAFF_R,
             "$sap": {
                 ".read": f"auth != null && {MYSAP} === $sap",
                 ".write": f"{HYG} || {SUP_ADD_USER}",
@@ -189,10 +219,10 @@ def strict():
                 "pinHash": {".write": f"auth != null && {MYSAP} === $sap && !newData.exists()"},
                 "mustChange": {".write": f"auth != null && {MYSAP} === $sap"}}},
         "settings": {".read": MEMBER, ".write": HYG},
-        "uhaan": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
+        "uhaan": {".read": f"{STAFF_R} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG,
                   "$id": {".write": f"({SUP} && data.exists() && {SAME_ALBA_OLD}) || {OWN_CREATE}"}},  # v14: ахлах өөрийн албаны УХААН-ыг устгаж болно
-        # v26: ахлах ядаргааг уншина (апп өөрийн албаныхыг шүүж харуулна; УХААН-тай адил), бичих эрхгүй
-        "fatigue": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
+        # v26/v30: ахлах+менежер ядаргаа уншина; гишүүн бүр өөрийн sap-аар шинээр үүсгэнэ
+        "fatigue": {".read": f"{STAFF_R} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         "infect": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE}},
         # v19: Нойрны чанарын судалгаа — ажилтан өөрийн sap-аар шинээр үүсгэнэ/уншина; эрүүл ахуйч бүгдийг уншина/устгана
         "sleep": {".read": f"{HYG} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".write": OWN_CREATE, ".validate": SLEEP_VALIDATE}},
@@ -204,39 +234,44 @@ def strict():
                     "rows": {"$rk": {
                         "sign": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"},
                         "signAt": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"}}}}},
-        "hazards": {".read": STAFF, ".write": HYG,
+        "hazards": {".read": STAFF_R, ".write": HYG,
             "$id": {".write": f"({SUP} && data.exists() && newData.exists()) || ({ANY} && !data.exists() && newData.child('status').val() === 'Шинэ')",
                     ".validate": HZ_VALIDATE}},
-        "photos": {".read": STAFF, ".write": HYG,
+        "photos": {".read": STAFF_R, ".write": HYG,
             "$id": {".write": f"{ANY} && !data.exists() && newData.parent().parent().child('hazards/'+$id).exists()"}},
-        "notifs": {".read": STAFF, ".write": HYG, "$id": {".write": NOTIF_CREATE, ".validate": NOTIF_VALIDATE}},
+        "notifs": {".read": STAFF_R, ".write": HYG, "$id": {".write": NOTIF_CREATE, ".validate": NOTIF_VALIDATE}},
         # Сунгалтын түүх: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрийнхөө (sap-аар query)
-        "renew": {".read": f"{STAFF} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": RENEW_VALIDATE}},
+        "renew": {".read": f"{STAFF_R} || {OWNQ}", ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": RENEW_VALIDATE}},
         # Зөвлөмж: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрт хамаарахыг (устсан бол хоосныг) уншина
-        "advice": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && (!data.exists() || " + ADV_TARGETS("data") + ")", ".validate": ADV_VALIDATE,
+        "advice": {".read": STAFF_R, ".write": HYG, "$id": {".read": f"{MEMBER} && (!data.exists() || " + ADV_TARGETS("data") + ")", ".validate": ADV_VALIDATE,
                                                       "imgs": {"$iid": {".validate": ADV_IMG_META_VALIDATE}}}},
         "adviceIdx": {".read": MEMBER, ".write": HYG, "$id": {".validate": ADV_IDX_VALIDATE}},
         "adviceTo": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".validate": ADV_TO_VALIDATE}}},
         # Танилцсан: ажилтан зөвхөн өөрийн sap дор, өөрт хамаарах зөвлөмжид нэг удаа; эрүүл ахуйч уншина/устгана
         "adviceAck": {".write": HYG, "$sap": {".read": f"auth != null && {MYSAP} === $sap", "$id": {".write": ACK_OWN, ".validate": ACK_VALIDATE}}},
         # Зөвлөмжийн зураг: эрүүл ахуйч бичнэ; ахлах уншина; ажилтан зөвхөн өөрт хамаарах (одоо байгаа) зөвлөмжийн зургийг уншина
-        "advimg": {".read": STAFF, ".write": HYG, "$id": {".read": f"{MEMBER} && {ADV_NODE}.exists() && " + ADV_TARGETS(ADV_NODE),
+        "advimg": {".read": STAFF_R, ".write": HYG, "$id": {".read": f"{MEMBER} && {ADV_NODE}.exists() && " + ADV_TARGETS(ADV_NODE),
                                                           "$iid": {".validate": ADV_IMG_VALIDATE}}},
         # Цагаан дэвтрийн файл: эрүүл ахуйч бичнэ, эрүүл ахуйч + ахлах уншина (сунгалтын зурагтай адил)
-        "wbfiles": {".read": STAFF, ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": WB_META_VALIDATE}},
-        "wbdata": {".read": STAFF, ".write": HYG, "$id": {".validate": WB_DATA_VALIDATE}},
-        # Бүтээгдэхүүний шинжилгээ: эрүүл ахуйч бичнэ; ахлах уншина
-        "labcerts": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_VALIDATE}},
-        "labdata": {".read": STAFF, ".write": HYG, "$id": {".validate": LAB_DATA_VALIDATE}},
-        # v30b: Тээврийн хяналт — эрүүл ахуйч CRUD; менежер унших: VEH_READ-д || ROLE==='manager'
+        "wbfiles": {".read": STAFF_R, ".indexOn": ["sap"], ".write": HYG, "$id": {".validate": WB_META_VALIDATE}},
+        "wbdata": {".read": STAFF_R, ".write": HYG, "$id": {".validate": WB_DATA_VALIDATE}},
+        # Бүтээгдэхүүний шинжилгээ: эрүүл ахуйч бичнэ; ахлах+менежер уншина
+        "labcerts": {".read": STAFF_R, ".write": HYG, "$id": {".validate": LAB_VALIDATE}},
+        "labdata": {".read": STAFF_R, ".write": HYG, "$id": {".validate": LAB_DATA_VALIDATE}},
+        # v30: Тээврийн хяналт — эрүүл ахуйч CRUD; менежер уншина (VEH_READ=HYG||MGR)
         "vehicles": {".read": VEH_READ, ".write": HYG, ".indexOn": ["date", "plate"],
             "$id": {".validate": VEH_VALIDATE,
                     "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
                     "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
-        # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
-        "svcheck": {".read": STAFF, ".write": HYG,
+        # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах + менежер уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
+        "svcheck": {".read": STAFF_R, ".write": HYG,
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
                     ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
+        # v30: шилдэг ажилтан — бүх гишүүн уншина; эрүүл ахуйч+менежер бичнэ; устгахыг апп эрүүл ахуйчаар хязгаарлана
+        "best": {".read": MEMBER, ".indexOn": ["period", "sap"], ".write": BEST_WRITE, "$id": {".validate": BEST_VALIDATE}},
+        "bestimg": {".read": MEMBER, ".write": BEST_WRITE, "$id": {".validate": BEST_IMG_VALIDATE}},
+        # v30: ахлахын ядаргааны ярилцлага — ахлах өөрийн албаныхыг бичнэ; эрүүл ахуйч+менежер уншина
+        "fatint": {".read": STAFF_R, ".indexOn": ["sap", "fatId", "alba"], ".write": False, "$id": {".write": FATINT_WRITE, ".validate": FATINT_VALIDATE}},
         "$other": {".write": False}}}}}
 
 def transition():
@@ -271,6 +306,9 @@ def transition():
             "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
             "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
+        "best": {"$id": {".write": ANY, ".validate": BEST_VALIDATE}},
+        "bestimg": {"$id": {".write": ANY, ".validate": BEST_IMG_VALIDATE}},
+        "fatint": {"$id": {".write": ANY, ".validate": FATINT_VALIDATE}},
         "$other": {".write": False}}}}}
 
 if __name__ == "__main__":
