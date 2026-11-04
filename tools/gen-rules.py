@@ -90,8 +90,16 @@ NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 # v31: ахлах өөрийн албаны svcheck бүх үл нийцлийг залруулсны мэдэгдэл
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'svfix' && {SUP} && {SAME_ALBA_NEW}"
                 f" && $id === 'svfix_' + newData.child('ref').val()"
-                f" && (!data.exists() || data.child('type').val() === 'svfix'))")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix)$/) && newData.child('ts').isNumber()"
+                f" && (!data.exists() || data.child('type').val() === 'svfix'))"
+                # v32: ахлах өөрийн УХААН → эрүүл ахуйчид мэдэгдэл
+                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'uhaan'"
+                f" && {SUP} && {SAME_ALBA_NEW} && $id === 'uhaan_' + newData.child('ref').val()"
+                f" && newData.child('bySap').val() === {MYSAP})"
+                # v32: ариун цэврийн залруулга дууссан мэдэгдэл
+                f" || (auth != null && newData.exists() && newData.child('type').val() === 'hygfix' && {STAFF} && {SAME_ALBA_NEW}"
+                f" && $id === 'hygfix_' + newData.child('ref').val()"
+                f" && (!data.exists() || data.child('type').val() === 'hygfix'))")
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix|uhaan|hygfix)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"
@@ -246,7 +254,9 @@ def strict():
             "$id": {".write": f"{SUP} && newData.exists() && {SAME_ALBA_NEW} && (!data.exists() || {SAME_ALBA_OLD})",
                     "rows": {"$rk": {
                         "sign": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"},
-                        "signAt": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"}}}}},
+                        "signAt": {".write": f"auth != null && {MYSAP} !== null && newData.parent().child('sap').val() === {MYSAP}"},
+                        # v32: үл нийцэл бүрийн залруулга (ci = 0..6)
+                        "fixes": {"$ci": {".validate": "$ci.matches(/^[0-6]$/) && (" + SV_FIX_VALIDATE + ")"}}}}}},
         "hazards": {".read": STAFF_R, ".write": HYG,
             "$id": {".write": f"({SUP} && data.exists() && newData.exists()) || ({ANY} && !data.exists() && newData.child('status').val() === 'Шинэ')",
                     ".validate": HZ_VALIDATE}},

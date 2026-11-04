@@ -115,7 +115,7 @@
         "notifs": {
           "$id": {
             ".write": "auth != null",
-            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
+            ".validate": "!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix|uhaan|hygfix)$/) && newData.child('ts').isNumber() && newData.child('title').isString() && newData.child('title').val().length <= 200 && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))"
           }
         },
         "renew": {
