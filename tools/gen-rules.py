@@ -91,15 +91,12 @@ NOTIF_CREATE = (f"(auth != null && !data.exists() && newData.exists() && ("
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'svfix' && {SUP} && {SAME_ALBA_NEW}"
                 f" && $id === 'svfix_' + newData.child('ref').val()"
                 f" && (!data.exists() || data.child('type').val() === 'svfix'))"
-                # v32: ахлах өөрийн УХААН → эрүүл ахуйчид мэдэгдэл
-                f" || (auth != null && !data.exists() && newData.exists() && newData.child('type').val() === 'uhaan'"
-                f" && {SUP} && {SAME_ALBA_NEW} && $id === 'uhaan_' + newData.child('ref').val()"
-                f" && newData.child('bySap').val() === {MYSAP})"
+                # v33: ахлах УХААН мэдэгдэл устгасан (шууд бүртгэнэ)
                 # v32: ариун цэврийн залруулга дууссан мэдэгдэл
                 f" || (auth != null && newData.exists() && newData.child('type').val() === 'hygfix' && {STAFF} && {SAME_ALBA_NEW}"
                 f" && $id === 'hygfix_' + newData.child('ref').val()"
                 f" && (!data.exists() || data.child('type').val() === 'hygfix'))")
-NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix|uhaan|hygfix)$/) && newData.child('ts').isNumber()"
+NOTIF_VALIDATE = ("!newData.exists() || (newData.child('type').val().matches(/^(hazard|hygfail|health|lab|fatint|infect|svfix|hygfix)$/) && newData.child('ts').isNumber()"
                   " && newData.child('title').isString() && newData.child('title').val().length <= 200"
                   " && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 300)))")
 DATE_RE = "/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/"

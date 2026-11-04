@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v32 · 2026-11-04";
+const APP_VER = "v33 · 2026-11-04";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -997,7 +997,7 @@ function uhaanForm(){
       <p class="warnbox">${ic("alert","sm")}<span>Аль нэг ✓ (шаардана) бол ажлаа зогсоож хяналтанд авна.</span></p>
       <label class="f" for="risk">Аюулыг удирдаагүйгээс юу тохиолдож болох вэ?</label><textarea id="risk" maxlength="1000"></textarea>
       <label class="f" for="ctrl">Ямар хяналтуудыг хэрэгжүүлж болох вэ?</label><textarea id="ctrl" maxlength="1000"></textarea>
-      <p class="note">Нэн тэргүүнд аюулгүй бай. Хянах боломжгүй бол ажлаа зогсоож ${isSup?"эрүүл ахуйчид":"ахлагчид"} мэдэгд.</p>
+      <p class="note">Нэн тэргүүнд аюулгүй бай. Хянах боломжгүй бол ажлаа зогсоож ${isSup?"холбогдох удирдлагад":"ахлагчид"} мэдэгд.</p>
       <div class="actions">
       <button class="btn" id="send">${ic("send")} Илгээх</button>
       <button class="btn ghost" id="back">Буцах</button></div>
@@ -1013,16 +1013,13 @@ function uhaanForm(){
     const stop = b.b3==="no" || Object.values(c).some(v=>v==="ok");
     const id = uid();
     const upd = {["uhaan/"+id]: {id, sap:u.sap, name:u.name, alba:albaN(u.alba), loc, job:$("#job").value, date:today(), time:nowStr(), a,b,c,
-      risk:$("#risk").value, ctrl:$("#ctrl").value, stop, status: stop?"zogsooson":"huleegdej", supervisor:null, byRole:u.role}};
-    // v32: ахлах өөрийн УХААН → эрүүл ахуйч батална
-    if(isSup){
-      const nid = "uhaan_"+id;
-      upd["notifs/"+nid] = {id:nid, type:"uhaan", level:"uhaan", ts:Date.now(), alba:albaN(u.alba), ref:id, by:u.name, bySap:u.sap,
-        title: ("Ахлахын УХААН: "+u.name).slice(0,180),
-        body: ((stop?"Зогсоосон · ":"Хүлээгдэж · ")+albaN(u.alba)+" · "+today()+" · "+loc).slice(0,280)};
-    }
+      risk:$("#risk").value, ctrl:$("#ctrl").value, stop,
+      // v33: ахлах өөрийн УХААН — батлах шаардлагагүй, шууд дууссан; мэдэгдэлгүй
+      status: stop?"zogsooson":(isSup?"batlagdsan":"huleegdej"),
+      supervisor: isSup ? (u.name+" "+nowStr()) : null,
+      byRole:u.role}};
     write(upd);
-    if(isSup) alert(stop?"Ажлаа зогсоо. Эрүүл ахуйчид мэдэгдлээ — тэд батална.":"Илгээгдлээ. Эрүүл ахуйч батална.");
+    if(isSup) alert(stop?"Ажлаа зогсоо. УХААН бүртгэгдлээ.":"УХААН бүртгэгдлээ.");
     else alert(stop?"Ажлаа зогсоо. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйчид мэдэгдлээ.":"Илгээгдлээ. Ахлах болон аюулгүй ажиллагаа, эрүүл ахуйч харна.");
     back();
   };
@@ -1767,8 +1764,8 @@ function uhaanIsSupervisor(x){
 function canApproveUhaan(u,x){
   if(!u || !x || x.status!=="huleegdej") return false;
   if(x.sap && u.sap && String(x.sap)===String(u.sap)) return false; // өөрийнхөө УХААН-ыг батлахгүй
-  if(u.role==="supervisor" && !uhaanIsSupervisor(x) && albaN(x.alba)===albaN(u.alba)) return true; // ажилтныг ахлах батална
-  if(u.role==="hygiene" && uhaanIsSupervisor(x)) return true; // ахлахынхыг эрүүл ахуйч батална
+  // v33: ахлахын УХААН шууд дуусна — эрүүл ахуйч батлахгүй; зөвхөн ажилтныг ахлах батална
+  if(u.role==="supervisor" && !uhaanIsSupervisor(x) && albaN(x.alba)===albaN(u.alba)) return true;
   return false;
 }
 function viewUhaan(id){
@@ -1778,7 +1775,7 @@ function viewUhaan(id){
   const sym = v => v==="ok"?"✓":v==="na"?"—":v==="no"?"✕":"?";
   const show=(a,pref,src)=>a.map((t,i)=>`<div class="item inl"><p>${esc(t)}</p><b>${sym((src||{})[pref+i])}</b></div>`).join("");
   const canApp = canApproveUhaan(u,x);
-  const revLabel = uhaanIsSupervisor(x) ? "Эрүүл ахуйч" : "Ахлах";
+  const revLabel = uhaanIsSupervisor(x) ? "Бүртгэсэн" : "Ахлах";
   const app = mount(`${appbar("УХААН · "+esc(x.name), esc(x.date), true)}<div class="paper"><div class="formcard">
     <p class="muted">${esc(x.date)} ${esc(x.time||"")} · ${esc(albaN(x.alba))} · ${esc(x.job||"")}${uhaanIsSupervisor(x)?' · <span class="badge b-wait">Ахлах</span>':""}</p>
     <p id="uloc"><b>Байршил:</b> ${esc(locTxt(x))}</p>
@@ -2785,7 +2782,7 @@ async function qrPrint(items){
 const seenKey = ()=> LS+"seen_"+(session ? keyOf(session.sap) : "");
 function notifList(){
   const u = me(); if(!u || u.role==="worker") return [];
-  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (n.type==="infect" || n.type==="uhaan" ? (u.role==="hygiene" || u.role==="manager") : (u.role==="hygiene" || u.role==="manager" || !n.alba || albaN(n.alba)===albaN(u.alba)))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return list("notifs").filter(n=> n && n.id && !(n.type==="health" && n.kind==="exam") && (n.type==="infect" ? (u.role==="hygiene" || u.role==="manager") : (u.role==="hygiene" || u.role==="manager" || !n.alba || albaN(n.alba)===albaN(u.alba)))).sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 const readSet = ()=> new Set(lsGet(seenKey(), []) || []);
 function markRead(ids){ const r=readSet(); ids.forEach(i=>r.add(i)); lsSet(seenKey(), [...r].slice(-800)); }
@@ -2817,7 +2814,6 @@ function openNotif(id){
   markRead([id]);
   if(n.type==="hazard" && DB.hazards[n.ref]) return hazardDetail(n.ref);
   if(n.type==="hygfail" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
-  if(n.type==="uhaan" && DB.uhaan[n.ref]) return viewUhaan(n.ref);
   if(n.type==="svfix" && DB.svcheck[n.ref]) return svEdit(n.ref);
   if(n.type==="hygfix" && DB.hygcheck[n.ref]){ const h=DB.hygcheck[n.ref]; return hygEdit(h.date, h.alba, h.id); }
   if(n.type==="health" && DB.users[keyOf(n.ref)]){ WP.from = notifPage; return workerProfile(n.ref); }
@@ -2829,7 +2825,7 @@ function openNotif(id){
 const NLEVEL = {critical:["Маш их эрсдэл","b-bad","alert"], high:["Их эрсдэл","b-wait","alert"], fail:["Ажиллахгүй","b-bad","drop"],
   hexp:["Дууссан","b-bad","book"], hsoon:["Дуусах дөхсөн","b-wait","book"],
   lexp:["Дууссан","b-bad","flask"], lsoon:["Дуусах дөхсөн","b-wait","flask"],
-  infect:["Халдвар","b-wait","virus"], ok:["Залруулсан","b-ok","checks"], uhaan:["УХААН","b-wait","checks"]};
+  infect:["Халдвар","b-wait","virus"], ok:["Залруулсан","b-ok","checks"]};
 function notifPage(){
   const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(notifPage, true);
