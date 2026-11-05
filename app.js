@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v35 · 2026-11-05";
+const APP_VER = "v36 · 2026-11-05";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -4431,8 +4431,9 @@ async function svExcel(recs, wb0){
 
 /* ======================= ТЭЭВРИЙН ХЭРЭГСЭЛИЙН ХЯНАЛТ (v30b) =======================
    Эрүүл ахуйч: ариун цэвэр + аюулгүй ажиллагааны шалгалт (хүнс/ажилтан тээвэр).
-   Бичлэг: vehicles/{id} = {id,date,time,plate,vtype,model,driver,license,purpose,
+   Бичлэг: vehicles/{id} = {id,date,time,plate,driver,purpose,
      checks:{k:{v,note}}, result, notes, photos:[dataURL…], signature:dataURL, by,bySap,at,ts}
+   (v36: vtype/model/license + checks health/clothes/docs хассан; хуучин бичлэгт байвал нууна)
    Зөвхөн эрүүл ахуйч CRUD. Менежер унших эрхийг gen-rules-д хялбар нэмнэ. */
 const VEH_PURPOSE = [["food","Хүнс тээвэрлэх"],["staff","Ажилтан тээвэрлэх"],["other","Бусад"]];
 const VEH_RESULT = [["pass","Тэнцсэн"],["fail","Тэнцээгүй"]];
@@ -4442,14 +4443,15 @@ const VEH_CHECKS = [
   ["temp","Температурын хяналт / термометрийн заалт"],
   ["sep","Хүнс химийн бодис / бохирдолоос тусдаа"],
   ["pest","Хортон шавьж / мэрэгчгүй"],
-  ["health","Жолоочийн эрүүл мэнд / цагаан дэвтэр хүчинтэй"],
-  ["clothes","Жолоочийн цэвэр хувцас"],
   ["firstaid","Анхны тусламжийн хэрэгсэл"],
   ["fire","Гал унтраагуур"],
   ["belt","Суудлын бүс"],
-  ["tyre","Дугуй / гэрэл хэвийн"],
-  ["docs","Бичиг баримт / бүртгэл хүчинтэй"]
+  ["tyre","Дугуй / гэрэл хэвийн"]
 ];
+/* v36: removed from form/detail/print/export (hidden if present on old records):
+   header: vtype/model (төрөл/загвар), license (жолооны үнэмлэх);
+   checks: health (жолоочийн эрүүл мэнд), clothes (хувцас), docs (бичиг баримт). */
+const VEH_CHECKS_HIDDEN = ["health","clothes","docs"];
 const VEH_PHOTO_MAX = 3;
 let VEHF = {q:"", from:"", to:"", result:""};
 let VEH_DRAFT = {photos:[], signature:null};
@@ -4492,7 +4494,7 @@ function vehicleListPage(editId){
     if(F.to && String(v.date||"") > F.to) return false;
     if(F.result && v.result!==F.result) return false;
     if(!q) return true;
-    const hay = `${v.plate||""} ${v.driver||""} ${v.model||""} ${v.vtype||""} ${v.license||""} ${v.notes||""}`.toLowerCase();
+    const hay = `${v.plate||""} ${v.driver||""} ${v.notes||""} ${vehPurpose(v.purpose)}`.toLowerCase();
     return hay.includes(q);
   });
   const ed = editId ? (DB.vehicles||{})[editId] : null;
@@ -4517,9 +4519,7 @@ function vehicleListPage(editId){
       <div><label class="f" for="vdate">Огноо *</label><input type="date" id="vdate" required value="${esc(ed?.date||today())}" max="${today()}"/></div>
       <div><label class="f" for="vtime">Цаг *</label><input type="time" id="vtime" required value="${esc(ed?.time||new Date().toTimeString().slice(0,5))}"/></div>
       <div><label class="f" for="vplate">Улсын дугаар *</label><input id="vplate" maxlength="20" required value="${esc(ed?.plate||"")}" placeholder="Жишээ: 1234 УБА" autocomplete="off"/></div>
-      <div><label class="f" for="vvtype">Төрөл / загвар *</label><input id="vvtype" maxlength="80" required value="${esc(ed?.vtype||ed?.model||"")}" placeholder="Жишээ: Фургон / Toyota Hiace"/></div>
       <div><label class="f" for="vdriver">Жолоочийн нэр *</label><input id="vdriver" maxlength="100" required value="${esc(ed?.driver||"")}" placeholder="Жолоочийн нэр"/></div>
-      <div><label class="f" for="vlic">Жолооны үнэмлэх №</label><input id="vlic" maxlength="40" value="${esc(ed?.license||"")}" placeholder="Заавал биш"/></div>
       <div><label class="f" for="vpur">Зориулалт *</label><select id="vpur">${VEH_PURPOSE.map(([k,l])=>`<option value="${k}" ${(ed?.purpose||"food")===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
       <div><label class="f" for="vres">Ерөнхий дүн *</label><select id="vres">${VEH_RESULT.map(([k,l])=>`<option value="${k}" ${(ed?.result||"pass")===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
     </div>
@@ -4545,7 +4545,7 @@ function vehicleListPage(editId){
 
   const rows = shown.map(v=>`<tr>
     <td class="nowrap">${esc(v.date||"")}<div class="muted sm">${esc(v.time||"")}</div></td>
-    <td><b>${esc(v.plate||"—")}</b><div class="muted sm">${esc(v.vtype||v.model||"")}</div></td>
+    <td><b>${esc(v.plate||"—")}</b></td>
     <td>${esc(v.driver||"—")}<div class="muted sm">${esc(vehPurpose(v.purpose))}</div></td>
     <td>${vehBadge(v.result)}</td>
     <td class="nowrap">
@@ -4559,7 +4559,7 @@ function vehicleListPage(editId){
     ${ro?"":form}
     <div class="card filters" id="vehfilt">
       <div class="frow g3">
-        <div><label class="f" for="vq">Хайх</label><input type="search" id="vq" value="${esc(F.q||"")}" placeholder="Дугаар, жолооч, загвар…"/></div>
+        <div><label class="f" for="vq">Хайх</label><input type="search" id="vq" value="${esc(F.q||"")}" placeholder="Дугаар, жолооч…"/></div>
         <div><label class="f" for="vfrom">Эхлэх</label><input type="date" id="vfrom" value="${esc(F.from||"")}"/></div>
         <div><label class="f" for="vto">Дуусах</label><input type="date" id="vto" value="${esc(F.to||"")}"/></div>
         <div><label class="f" for="vresf">Дүн</label><select id="vresf"><option value="">Бүгд</option>${VEH_RESULT.map(([k,l])=>`<option value="${k}" ${F.result===k?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
@@ -4628,13 +4628,12 @@ function vehicleListPage(editId){
   app.onsubmit = async e=>{
     e.preventDefault();
     const date=$("#vdate").value, time=$("#vtime").value, plate=$("#vplate").value.trim().slice(0,20);
-    const vtype=$("#vvtype").value.trim().slice(0,80), driver=$("#vdriver").value.trim().slice(0,100);
-    const license=$("#vlic").value.trim().slice(0,40), purpose=$("#vpur").value, result=$("#vres").value;
+    const driver=$("#vdriver").value.trim().slice(0,100);
+    const purpose=$("#vpur").value, result=$("#vres").value;
     const notes=$("#vnotes").value.trim().slice(0,800);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ toast("Огноо буруу"); return; }
     if(!time){ toast("Цаг оруулна уу"); return; }
     if(!plate){ toast("Улсын дугаар оруулна уу"); $("#vplate").focus(); return; }
-    if(!vtype){ toast("Төрөл / загвар оруулна уу"); return; }
     if(!driver){ toast("Жолоочийн нэр оруулна уу"); return; }
     const checks={}; let missing=0;
     VEH_CHECKS.forEach(([k])=>{
@@ -4648,8 +4647,9 @@ function vehicleListPage(editId){
     if(!signature){ toast("Жолоочийн гарын үсэг зурна уу"); return; }
     const ts = Date.now(), id = ed ? ed.id : keyOf("veh_"+ts.toString(36)+uid().slice(-3));
     const photos = (VEH_DRAFT.photos||[]).slice(0, VEH_PHOTO_MAX);
-    const rec = {id, date, time, plate, vtype, model:vtype, driver, license, purpose, checks, result, notes,
+    const rec = {id, date, time, plate, driver, purpose, checks, result, notes,
       photos, signature, by:u.name, bySap:u.sap, at:nowStr(), ts: ed?.ts||ts, ...(ed?{updatedAt:nowStr(), updatedBy:u.name}:{})};
+    // v36: do not keep/write removed fields (vtype/model/license + hidden checks)
     write({["vehicles/"+id]: rec});
     VEH_DRAFT = {photos:[], signature:null};
     toast(ed?"Хадгаллаа":"Бүртгэлээ");
@@ -4674,9 +4674,7 @@ function vehicleDetail(id){
         <div class="row-gap"><button class="btn ghost sm" id="vprint">${ic("printer","sm")} Хэвлэх</button>${ro?"":`<button class="btn ghost sm" id="vedit">${ic("edit","sm")} Засах</button>`}</div></div>
       <div class="lockgrid" style="margin-top:10px">
         <div class="cell"><span>Улсын дугаар</span><b>${esc(v.plate||"—")}</b></div>
-        <div class="cell"><span>Төрөл / загвар</span><b>${esc(v.vtype||v.model||"—")}</b></div>
         <div class="cell"><span>Жолооч</span><b>${esc(v.driver||"—")}</b></div>
-        <div class="cell"><span>Жолооны үнэмлэх</span><b>${esc(v.license||"—")}</b></div>
         <div class="cell"><span>Зориулалт</span><b>${esc(vehPurpose(v.purpose))}</b></div>
         <div class="cell"><span>Шалгасан</span><b>${esc(v.by||"—")}</b></div>
       </div>
@@ -4713,8 +4711,7 @@ function vehiclePrint(id){
       <div class="sh-meta"><span>Огноо: <b>${esc(v.date||"")}</b> ${esc(v.time||"")}</span><span>Дүн: <b>${esc(vehResult(v.result))}</b></span></div>
       <table class="sht vehm">
         <tbody>
-          <tr><th>Улсын дугаар</th><td>${esc(v.plate||"")}</td><th>Төрөл / загвар</th><td>${esc(v.vtype||v.model||"")}</td></tr>
-          <tr><th>Жолооч</th><td>${esc(v.driver||"")}</td><th>Жолооны үнэмлэх</th><td>${esc(v.license||"")}</td></tr>
+          <tr><th>Улсын дугаар</th><td>${esc(v.plate||"")}</td><th>Жолооч</th><td>${esc(v.driver||"")}</td></tr>
           <tr><th>Зориулалт</th><td>${esc(vehPurpose(v.purpose))}</td><th>Шалгасан</th><td>${esc(v.by||"")}</td></tr>
         </tbody>
       </table>
@@ -4738,14 +4735,14 @@ function vehiclePrint(id){
 function addVehSheet(wb, inR){
   const head = r=>{ r.font={bold:true}; r.eachCell(c=>{ c.fill={type:"pattern", pattern:"solid", fgColor:{argb:"FFDCE5FB"}}; c.border={bottom:{style:"thin"}}; }); };
   const s = wb.addWorksheet("Тээврийн хяналт");
-  const cols = ["Огноо","Цаг","Улсын дугаар","Төрөл/загвар","Жолооч","Үнэмлэх","Зориулалт","Дүн","Тэмдэглэл", ...VEH_CHECKS.map(([,l])=>l), ...VEH_CHECKS.map(([,l])=>l+" (тайлбар)"), "Зураг тоо","Гарын үсэг","Шалгасан","Бүртгэсэн"];
+  const cols = ["Огноо","Цаг","Улсын дугаар","Жолооч","Зориулалт","Дүн","Тэмдэглэл", ...VEH_CHECKS.map(([,l])=>l), ...VEH_CHECKS.map(([,l])=>l+" (тайлбар)"), "Зураг тоо","Гарын үсэг","Шалгасан","Бүртгэсэн"];
   head(s.addRow(cols));
   vehList().filter(v=>!inR || inR(v.date||"")).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).forEach(v=>{
     const checks = VEH_CHECKS.map(([k])=>((v.checks||{})[k]||{}).v||"");
     const notes = VEH_CHECKS.map(([k])=>((v.checks||{})[k]||{}).note||"");
-    s.addRow([v.date||"", v.time||"", v.plate||"", v.vtype||v.model||"", v.driver||"", v.license||"", vehPurpose(v.purpose), vehResult(v.result), v.notes||"", ...checks, ...notes, vehPhotos(v).length, v.signature?"Тийм":"Үгүй", v.by||"", v.at||""]);
+    s.addRow([v.date||"", v.time||"", v.plate||"", v.driver||"", vehPurpose(v.purpose), vehResult(v.result), v.notes||"", ...checks, ...notes, vehPhotos(v).length, v.signature?"Тийм":"Үгүй", v.by||"", v.at||""]);
   });
-  s.columns.forEach((c,i)=>{ c.width = [12,8,14,18,18,12,16,12,28][i] || 14; });
+  s.columns.forEach((c,i)=>{ c.width = [12,8,14,18,16,12,28][i] || 14; });
   s.views=[{state:"frozen", ySplit:1}];
 }
 

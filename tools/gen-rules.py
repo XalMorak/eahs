@@ -194,11 +194,13 @@ VEH_READ = HYG_OR_MGR  # v30: эрүүл ахуйч + менежер уншин�
 VEH_PURPOSE_RE = "/^(food|staff|other)$/"
 VEH_RESULT_RE = "/^(pass|fail)$/"
 VEH_ANS_RE = "/^(Тийм|Үгүй|Хамаарахгүй)$/"
-VEH_CHECK_KEYS = "cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs"
+VEH_CHECK_KEYS = "cargo|temp|sep|pest|firstaid|fire|belt|tyre|health|clothes|docs"  # health|clothes|docs: legacy v30 keys still readable/rewritable
 VEH_VALIDATE = ("!newData.exists() || (newData.child('date').isString() && newData.child('date').val().matches(" + DATE_RE + ")"
                 " && newData.child('time').isString() && newData.child('time').val().length <= 8"
                 " && newData.child('plate').isString() && newData.child('plate').val().length > 0 && newData.child('plate').val().length <= 20"
-                " && newData.child('vtype').isString() && newData.child('vtype').val().length > 0 && newData.child('vtype').val().length <= 80"
+                # v36: vtype/model optional (removed from form; old records may still have them)
+                " && (!newData.child('vtype').exists() || (newData.child('vtype').isString() && newData.child('vtype').val().length <= 80))"
+                " && (!newData.child('model').exists() || (newData.child('model').isString() && newData.child('model').val().length <= 80))"
                 " && newData.child('driver').isString() && newData.child('driver').val().length > 0 && newData.child('driver').val().length <= 100"
                 " && (!newData.child('license').exists() || (newData.child('license').isString() && newData.child('license').val().length <= 40))"
                 " && newData.child('purpose').val().matches(" + VEH_PURPOSE_RE + ")"
@@ -281,7 +283,7 @@ def strict():
         # v30: Тээврийн хяналт — эрүүл ахуйч CRUD; менежер уншина (VEH_READ=HYG||MGR)
         "vehicles": {".read": VEH_READ, ".write": HYG, ".indexOn": ["date", "plate"],
             "$id": {".validate": VEH_VALIDATE,
-                    "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
+                    "checks": {"$ck": {".validate": "$ck.matches(/^(" + VEH_CHECK_KEYS + ")$/) && (" + VEH_CHECK_VALIDATE + ")"}},
                     "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
         # Ахлахын хяналтын хуудас: эрүүл ахуйч + ахлах + менежер уншина; ахлах зөвхөн өөрийн албаных (устгахгүй); эрүүл ахуйч бүгд
         "svcheck": {".read": STAFF_R, ".write": HYG,
@@ -323,7 +325,7 @@ def transition():
         "labcerts": {"$id": {".write": ANY, ".validate": LAB_VALIDATE}},
         "labdata": {"$id": {".write": ANY, ".validate": LAB_DATA_VALIDATE}},
         "vehicles": {"$id": {".write": ANY, ".validate": VEH_VALIDATE,
-            "checks": {"$ck": {".validate": "$ck.matches(/^(cargo|temp|sep|pest|health|clothes|firstaid|fire|belt|tyre|docs)$/) && (" + VEH_CHECK_VALIDATE + ")"}},
+            "checks": {"$ck": {".validate": "$ck.matches(/^(" + VEH_CHECK_KEYS + ")$/) && (" + VEH_CHECK_VALIDATE + ")"}},
             "photos": {"$i": {".validate": VEH_PHOTO_VALIDATE}}}},
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "best": {"$id": {".write": ANY, ".validate": BEST_VALIDATE}},
