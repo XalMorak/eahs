@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v33 · 2026-11-04";
+const APP_VER = "v34 · 2026-11-05";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1481,6 +1481,7 @@ const HZ_ST = [HZ_PEND, HZ_DONE];
 const HZ_ST_CLOSED = new Set([HZ_DONE,"Хаасан","Шийдсэн","Шийдвэрлэсэн"]);
 const hzSt = s => HZ_ST_CLOSED.has(s) ? HZ_DONE : HZ_PEND;
 const HZ_OPEN = s => hzSt(s)!==HZ_DONE;
+const isPastHz = x => !!(x && (x.via==="past" || x.past===true || x.form==="past-v34"));
 const HZ_HIGH = r => r==="Их" || r==="Маш их";
 /* Газрын нэрнээс алба: «оффис» → Оффис, «баар»/«бар» гэсэн үг → Бар, бусад → "" (бүх ахлахад харагдана) */
 const albaOf = area => { const s = String(area||""); return /оффис/i.test(s) ? "Оффис" : /баар|(^|[\s,.;:\/()-])бар($|[\s,.;:\/()-])/i.test(s) ? "Бар" : ""; };
@@ -2173,6 +2174,99 @@ function dueTxt(x){
   if(HZ_OPEN(x.status) && d<=2) return `<span class="badge b-wait">${d===0?"Өнөөдөр дуусна":d+" хоног үлдсэн"}</span>`;
   return "";
 }
+
+/* ---------- v34: Өмнөх (сайтгүй үеийн) аюулын бүртгэл — гараар нэг нэгээр ---------- */
+function hazardPastForm(opts){
+  const u = requireRole("hygiene"); if(!u) return;
+  const editId = opts && opts.id ? opts.id : null;
+  const raw = editId ? DB.hazards[editId] : null;
+  if(editId && !raw){ toast("Олдсонгүй"); return hazardListPage(); }
+  const x = raw ? normHazard(raw) : null;
+  if(x && !isPastHz(x)){ toast("Зөвхөн өмнөх бүртгэлийг засна"); return hazardListPage(); }
+  view(()=>hazardPastForm(opts), false);
+  const people = users().filter(w=>w.role==="worker"||w.role==="supervisor").sort((a,b)=>a.name.localeCompare(b.name));
+  const maxD = today();
+  const app = mount(shell("аюул", `
+    ${phead(editId?"Өмнөх бүртгэл засах":"Өмнөх бүртгэл нэмэх", "Сайтгүй үед гарсан аюулыг огноо + ажилтнаар бүртгэнэ · шилдэг самбарт тоологдоно")}
+    <form class="card" id="hzpastf" novalidate>
+      <div class="ctitle">${ic("calendar")}<h3>${editId?"Засах":"Шинэ өмнөх бүртгэл"}</h3>
+        <span class="tagp past">Өмнөх бүртгэл</span></div>
+      <div class="g2">
+        <div><label class="f" for="hpdate">Огноо *</label>
+          <input type="date" id="hpdate" required max="${esc(maxD)}" value="${esc(x?x.date:maxD)}"/></div>
+        <div><label class="f" for="hpsap">Ажилтан (мэдээлэгч) *</label>
+          <select id="hpsap" required><option value="">— Сонгоно уу —</option>
+            ${people.map(w=>`<option value="${esc(w.sap)}" ${x&&x.bySap===w.sap?"selected":""}>${esc(w.name)} (${esc(w.sap)}) · ${esc(albaN(w.alba)||"—")}</option>`).join("")}
+          </select></div>
+      </div>
+      <div class="g2">
+        <div><label class="f" for="hparea">Газар / хэсэг *</label>
+          <input id="hparea" list="albaListPast" maxlength="120" required value="${esc(x?x.area:"")}" placeholder="Жишээ: Бар, гал тогоо"/>
+          <datalist id="albaListPast">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div>
+        <div><label class="f" for="hprisk">Эрсдэл</label>
+          <select id="hprisk"><option value="">—</option>
+            ${HZ_RISK.map(r=>`<option value="${esc(r[0])}" ${x&&x.risk===r[0]?"selected":""}>${esc(r[0])}</option>`).join("")}
+          </select></div>
+      </div>
+      <label class="f">Аюулын төрөл</label>
+      <div class="otchecks c2" id="hptypes">${HZ_TYPES.map(tp=>{
+        const on = x && (x.types||[]).includes(tp[0]);
+        return `<label class="otc"><input type="checkbox" name="hptype" value="${esc(tp[0])}" ${on?"checked":""}/><span><b>${esc(tp[0])}</b></span></label>`;
+      }).join("")}</div>
+      <label class="f" for="hpdet">Тайлбар *</label>
+      <textarea id="hpdet" maxlength="1000" rows="4" required placeholder="Юу ажиглагдсан, хаана…">${esc(x?x.det:"")}</textarea>
+      <div id="hperr" class="errtxt" role="alert"></div>
+      <div class="actions">
+        <button class="btn" type="submit">${ic("check")} ${editId?"Хадгалах":"Хадгалаад дараагийнх"}</button>
+        <button class="btn ghost" type="button" id="hpback">${ic("back")} Жагсаалт</button>
+      </div>
+      ${editId?"":`<p class="muted">Хадгалсны дараа маягт цэвэрлэгдэж дахин оруулна — хурдан дараалан бүртгэнэ.</p>`}
+    </form>`));
+  $("#hpback").onclick = ()=> hazardListPage();
+  app.onsubmit = e=>{
+    e.preventDefault();
+    const errs=[];
+    const date=$("#hpdate").value, sap=$("#hpsap").value, area=$("#hparea").value.trim(), det=$("#hpdet").value.trim();
+    const risk=$("#hprisk").value, types=$$('#hzpastf input[name="hptype"]:checked').map(el=>el.value);
+    if(!date) errs.push("Огноо");
+    if(date && date>today()) errs.push("Ирээдүйн огноо биш");
+    if(!sap) errs.push("Ажилтан");
+    if(!area) errs.push("Газар");
+    if(!det) errs.push("Тайлбар");
+    if(errs.length){ $("#hperr").textContent="Бөглөнө үү: "+errs.join(", "); return; }
+    const w=DB.users[keyOf(sap)]; if(!w){ toast("Ажилтан олдсонгүй"); return; }
+    const id = editId || uid();
+    const prev = editId ? (DB.hazards[id]||{}) : {};
+    const rec = {
+      ...prev,
+      id, form:"past-v34", via:"past", past:true,
+      area, alba: albaOf(area) || albaN(w.alba) || prev.alba || "",
+      date, reporter: w.name, bySap: w.sap,
+      reviewer: u.name, types, cls: arr(prev.cls),
+      risk: risk||"", det,
+      photoCount: prev.photoCount||0,
+      status: prev.status && hzSt(prev.status) ? hzSt(prev.status) : HZ_DONE,
+      created: prev.created || nowStr(),
+      ts: prev.ts || Date.now(),
+      closedAt: prev.closedAt || (hzSt(prev.status)===HZ_DONE ? (prev.closedAt||date) : date) || date,
+      enteredBy: prev.enteredBy || u.name,
+      enteredBySap: prev.enteredBySap || u.sap,
+      enteredAt: prev.enteredAt || nowStr()
+    };
+    if(editId){ rec.updatedAt = nowStr(); rec.updatedBy = u.name; }
+    // шинэ өмнөх бүртгэл — нээлттэй дараалалд орохгүй
+    if(!editId){ rec.status = HZ_DONE; rec.closedAt = date; }
+    write({["hazards/"+id]: rec});
+    toast(editId ? "Заслаа" : "Хадгаллаа · дараагийн бүртгэл");
+    if(editId) return hazardListPage();
+    // consecutive: clear keep page
+    $("#hpsap").value=""; $("#hparea").value=""; $("#hpdet").value=""; $("#hprisk").value="";
+    $$('#hzpastf input[name="hptype"]').forEach(el=>el.checked=false);
+    $("#hperr").textContent="";
+    $("#hpdate").focus();
+  };
+}
+
 function hazardListPage(){
   const u = requireRole("hygiene","supervisor","manager"); if(!u) return;
   view(hazardListPage, true);
@@ -2183,6 +2277,7 @@ function hazardListPage(){
   const chip = (k,l)=>`<button type="button" class="fchip ${HZF.st===k?"on":""} ${k==="od"?"od":""}" data-fst="${esc(k)}" aria-pressed="${HZF.st===k}">${esc(l)} <b>${cnt[k]||0}</b></button>`;
   const assignees = [...new Map(all.filter(x=>x.assignee).map(x=>[x.assignee, x.assigneeName||x.assignee])).entries()];
   const app = mount(shell("аюул", `${phead("Аюулын мэдээлэл, хяналт", "OT-03-FRM-0001-D маягтаар ирсэн бүртгэл · хариуцагч, хугацаа, залруулах арга хэмжээ")}
+    ${hyg?`<div class="actions noprint" style="margin-bottom:10px"><button type="button" class="btn" id="hzpastadd">${ic("calendar")} Өмнөх бүртгэл нэмэх</button></div>`:""}
     <div class="card filters noprint">
       <div class="fchips" role="group" aria-label="Төлөв">${chip("all","Бүгд")}${HZ_ST.map(s=>chip(s,s)).join("")}${chip("od","Хугацаа хэтэрсэн")}</div>
       <div class="frow">
@@ -2205,7 +2300,7 @@ function hazardListPage(){
       (!q || [x.area,x.det,x.act,x.reporter,x.reviewer,x.acc,x.assigneeName,x.corr].join(" ").toLowerCase().includes(q)));
     $("#hzl").innerHTML = `<p class="muted">${h.length} / ${all.length} бүртгэл</p>` + (h.map(x=>`<div class="card hzcard ${hzOverdue(x)?"overdue":""}">
       <div class="row-between"><b>${ic("map","sm")} ${esc(x.date)} · ${esc(x.area)}</b><span class="row-gap">${dueTxt(x)}${stH(x.status)}</span></div>
-      <div class="hzmeta">${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}<span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span>${x.via==="qr"?`<span class="tagp">${ic("qr","sm")} QR</span>`:""}</div>
+      <div class="hzmeta">${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}<span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span>${x.via==="qr"?`<span class="tagp">${ic("qr","sm")} QR</span>`:""}${isPastHz(x)?`<span class="tagp past">Өмнөх бүртгэл</span>`:""}</div>
       <p class="det">${esc(x.det||"")}</p>
       ${x.act?`<p class="muted"><b>Авсан арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
       ${x.corr?`<p class="muted"><b>Залруулах арга хэмжээ:</b> ${esc(x.corr)}</p>`:""}
@@ -2213,8 +2308,9 @@ function hazardListPage(){
         <span>${ic("userCheck","sm")} Хариуцагч: <b>${esc(x.assigneeName||"—")}</b></span><span>${ic("calendar","sm")} Хугацаа: <b>${esc(x.due||"—")}</b></span></div>
       <div class="thumbs" data-ph="${esc(x.id)}">${x.photoCount?`<span class="muted">Зураг ачаалж байна… (${esc(x.photoCount)})</span>`:""}</div>
       <div class="row-gap">
-        <select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===hzSt(x.status)?"selected":""}>${s}</option>`).join("")}</select>
+        ${hyg || !isPastHz(x)?`<select data-st="${esc(x.id)}" aria-label="Төлөв">${HZ_ST.map(s=>`<option ${s===hzSt(x.status)?"selected":""}>${s}</option>`).join("")}</select>`:""}
         <button class="btn sm" data-hzd="${esc(x.id)}">${ic("history","sm")} Хянах / түүх${x.log?` (${Object.keys(x.log).length})`:""}</button>
+        ${hyg && isPastHz(x)?`<button class="btn ghost sm" data-hzpedit="${esc(x.id)}">${ic("edit","sm")} Засах</button>`:""}
         <button class="btn ghost sm" data-prhz="${esc(x.id)}">${ic("download","sm")} Хэвлэх / PDF</button>
         ${hyg?`<button class="btn warn sm" data-delhz="${esc(x.id)}">${ic("trash","sm")} Устгах</button>`:""}
       </div>
@@ -2226,9 +2322,11 @@ function hazardListPage(){
   };
   draw();
   bindNav(app, e=>{
+    if(e.target.closest("#hzpastadd") && hyg){ hazardPastForm(); return; }
     const f=e.target.closest("[data-fst]"); if(f){ HZF.st=f.dataset.fst; $$("[data-fst]").forEach(b=>{ b.classList.toggle("on", b===f); b.setAttribute("aria-pressed", b===f); }); draw(); return; }
     if(e.target.closest("#freset")){ HZF={st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""}; hazardListPage(); return; }
     const dt=e.target.closest("[data-hzd]"); if(dt){ hazardDetail(dt.dataset.hzd); window.scrollTo(0,0); return; }
+    const pe=e.target.closest("[data-hzpedit]"); if(pe && hyg){ hazardPastForm({id:pe.dataset.hzpedit}); return; }
     const pr=e.target.closest("[data-prhz]"); if(pr){ hazardPrint(pr.dataset.prhz); return; }
     const d=e.target.closest("[data-delhz]");
     if(d && confirm("Энэ аюулын бүртгэлийг устгах уу?")){ write({["hazards/"+d.dataset.delhz]:null, ["photos/"+d.dataset.delhz]:null}); toast("Устгалаа"); }
@@ -2251,18 +2349,18 @@ async function hazardDetail(id){
   const people = staffList();
   const LOGIC = {status:"check", assign:"userCheck", due:"calendar", corr:"edit", note:"file"};
   const app = mount(shell("аюул", `
-    <div class="row-between wrap"><div>${phead(esc(x.area||"Аюул"), `${esc(x.date)} · Мэдээлэгч: ${esc(x.reporter||"—")}${x.via==="qr"?" · QR кодоор":""}`)}</div>
-      <div class="row-gap noprint"><button class="btn ghost sm" id="hb">${ic("back","sm")} Жагсаалт</button><button class="btn ghost sm" id="hp">${ic("download","sm")} Маягт хэвлэх / PDF</button></div></div>
+    <div class="row-between wrap"><div>${phead(esc(x.area||"Аюул"), `${esc(x.date)} · Мэдээлэгч: ${esc(x.reporter||"—")}${x.via==="qr"?" · QR кодоор":""}${isPastHz(x)?" · Өмнөх бүртгэл":""}`)}</div>
+      <div class="row-gap noprint"><button class="btn ghost sm" id="hb">${ic("back","sm")} Жагсаалт</button>${u.role==="hygiene"&&isPastHz(x)?`<button class="btn ghost sm" id="hped">${ic("edit","sm")} Засах</button>`:""}<button class="btn ghost sm" id="hp">${ic("download","sm")} Маягт хэвлэх / PDF</button></div></div>
     <div class="hzgrid">
       <div class="card hzcard ${hzOverdue(x)?"overdue":""}">
-        <div class="row-between"><span class="row-gap">${stH(x.status)}${dueTxt(x)}</span>${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}</div>
+        <div class="row-between"><span class="row-gap">${stH(x.status)}${dueTxt(x)}${isPastHz(x)?`<span class="tagp past">Өмнөх бүртгэл</span>`:""}</span>${x.risk?`<span class="tagp risk ${HZ_HIGH(x.risk)?"hi":""}">Эрсдэл: ${esc(x.risk)}</span>`:""}</div>
         <div class="hzmeta"><span class="tagp">${esc((x.types||[]).join(", "))} ${x.cls?.length?"· "+esc(x.cls.join(", ")):""}</span></div>
         <p class="det">${esc(x.det||"")}</p>
         ${x.act?`<p class="muted"><b>Авсан шуурхай арга хэмжээ:</b> ${esc(x.act)}</p>`:""}
         <div class="people"><span>Хянасан: <b>${esc(x.reviewer||"—")}</b></span><span>Хариуцах хэлтэс: <b>${esc(x.acc||"—")}</b></span>${x.closedAt?`<span>Хаасан огноо: <b>${esc(x.closedAt)}</b></span>`:""}</div>
         <div class="thumbs" id="dph"></div>
       </div>
-      <form class="card" id="hzt">
+      ${u.role==="manager" && isPastHz(x)?`<div class="card"><p class="muted">Өмнөх бүртгэл — зөвхөн харах (менежер засах эрхгүй).</p></div>`:`<form class="card" id="hzt">
         <div class="ctitle">${ic("userCheck")}<h3>Хяналт, залруулах арга хэмжээ</h3></div>
         <div class="g2">
           <div><label class="f" for="tst">Төлөв</label><select id="tst">${HZ_ST.map(s=>`<option ${s===hzSt(x.status)?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -2275,7 +2373,7 @@ async function hazardDetail(id){
         <label class="f" for="tnote">Тэмдэглэл нэмэх (түүхэнд бичигдэнэ)</label>
         <textarea id="tnote" maxlength="600" rows="2" placeholder="Жишээ: Засварын хүсэлт илгээсэн"></textarea>
         <div class="actions"><button class="btn" type="submit">${ic("check")} Хадгалах</button></div>
-      </form>
+      </form>`}
     </div>
     <div class="card"><div class="ctitle">${ic("history")}<h3>Түүх</h3><span class="muted">${logs.length} бичлэг</span></div>
       <ol class="timeline">${logs.map(l=>`<li><span class="tdot">${ic(LOGIC[l.kind]||"file","sm")}</span><div><b>${esc(l.text)}</b><span class="muted">${esc(l.by||"")} · ${esc(l.at||"")}</span></div></li>`).join("")}
@@ -2284,9 +2382,11 @@ async function hazardDetail(id){
   bindNav(app, e=>{
     if(e.target.closest("#hb")) hazardListPage();
     if(e.target.closest("#hp")) hazardPrint(id);
+    if(e.target.closest("#hped") && u.role==="hygiene") hazardPastForm({id});
   });
-  app.onsubmit = e=>{
+  if($("#hzt")) app.onsubmit = e=>{
     e.preventDefault();
+    if(u.role==="manager" && isPastHz(normHazard(DB.hazards[id]||{}))){ toast("Эрхгүй"); return; }
     const cur = normHazard(DB.hazards[id]||{}); if(!cur.id){ toast("Олдсонгүй"); return; }
     let upd = {};
     const st=$("#tst").value, due=$("#tdue").value, as=$("#tas").value, corr=$("#tcorr").value.trim(), note=$("#tnote").value.trim();
@@ -5295,18 +5395,22 @@ function sigPad(canvas, opts){
 const BEST_ROLES_WRITE = u => u && (u.role==="hygiene" || u.role==="manager");
 function bestList(){ return list("best").filter(x=>x && x.id).sort((a,b)=>String(b.period||"").localeCompare(String(a.period||"")) || (b.ts||0)-(a.ts||0)); }
 function bestPeriodNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
-function bestSuggest(){
-  const from = addDays(-30);
-  const hz = {}, fa = {};
+function bestSuggest(period){
+  let from = addDays(-30), to = null;
+  if(period && /^\d{4}-\d{2}$/.test(period)){
+    from = period + "-01";
+    const [y,m] = period.split("-").map(Number);
+    to = period + "-" + String(new Date(y, m, 0).getDate()).padStart(2,"0");
+  }
+  const hz = {};
   list("hazards").map(normHazard).forEach(x=>{
     const sap = x.bySap || (x.reporter && (users().find(u=>u.name===x.reporter)||{}).sap);
-    if(!sap || !x.date || x.date<from) return;
+    if(!sap || !x.date || x.date<from || (to && x.date>to)) return;
     hz[sap]=(hz[sap]||0)+1;
   });
-  list("fatigue").forEach(x=>{ if(x.sap && x.date && x.date>=from) fa[x.sap]=(fa[x.sap]||0)+1; });
   return users().filter(u=>u.role==="worker").map(u=>({
-    sap:u.sap, name:u.name, alba:albaN(u.alba), hz:hz[u.sap]||0, fa:fa[u.sap]||0, score:(hz[u.sap]||0)*3+(fa[u.sap]||0)
-  })).filter(x=>x.score>0).sort((a,b)=>b.score-a.score || a.name.localeCompare(b.name)).slice(0,8);
+    sap:u.sap, name:u.name, alba:albaN(u.alba), hz:hz[u.sap]||0, score:hz[u.sap]||0
+  })).filter(x=>x.hz>0).sort((a,b)=>b.hz-a.hz || a.name.localeCompare(b.name)).slice(0,8);
 }
 function bestCardHtml(limit){
   const period = bestPeriodNow();
@@ -5350,7 +5454,8 @@ function bestPage(){
   window._BESTP = show;
   const items = all.filter(x=>x.period===show);
   const people = users().filter(w=>w.role==="worker"||w.role==="supervisor").sort((a,b)=>a.name.localeCompare(b.name));
-  const sug = canWrite ? bestSuggest() : [];
+  const sug = canWrite ? bestSuggest(show) : [];
+  const sugLabel = /^\d{4}-\d{2}$/.test(show) ? (show+" сар: илрүүлсэн аюул") : "сүүлийн 30 хоног: илрүүлсэн аюул";
   const body = `${phead("Аюулгүй ажиллагааны шилдэг ажилтан", "Сараар сонгосон ажилтнууд · бүх нэвтэрсэн хэрэглэгч харна")}
     <div class="card filters noprint"><div class="frow">
       <select id="bp" aria-label="Сар">${months.map(m=>`<option value="${esc(m)}" ${m===show?"selected":""}>${esc(m)}</option>`).join("")}</select>
@@ -5364,8 +5469,8 @@ function bestPage(){
       </div>
       <label class="f" for="breason">Шалтгаан / амжилт *</label><textarea id="breason" maxlength="500" required placeholder="Жишээ: Аюулыг цаг тухайд нь мэдээлсэн, УХААН сахисан…"></textarea>
       <label class="f" for="bph">Зураг (заавал биш)</label><input type="file" id="bph" accept="image/*"/>
-      ${sug.length?`<details class="bsug"><summary>Санал болгох (сүүлийн 30 хоног: аюул×3 + ядаргаа)</summary>
-        <ul>${sug.map(s=>`<li><button type="button" class="linkbtn" data-bsug="${esc(s.sap)}">${esc(s.name)}</button> <span class="muted">аюул ${s.hz} · ядаргаа ${s.fa}</span></li>`).join("")}</ul></details>`:""}
+      ${sug.length?`<details class="bsug"><summary>Санал болгох (${esc(sugLabel)})</summary>
+        <ul>${sug.map(s=>`<li><button type="button" class="linkbtn" data-bsug="${esc(s.sap)}">${esc(s.name)}</button> <span class="muted">аюул ${s.hz}</span></li>`).join("")}</ul></details>`:""}
       <div class="gap"></div><button class="btn" type="submit">${ic("check")} Хадгалах</button>
     </form>`:""}
     <div class="card"><div class="ctitle">${ic("star")}<h3>${esc(show)} · ${items.length}</h3></div>
@@ -5392,6 +5497,16 @@ function bestPage(){
   });
   $("#bp").onchange = ()=>{ window._BESTP=$("#bp").value; bestPage(); };
   if($("#bsap")) $("#bsap").onchange = ()=>{ const w=DB.users[keyOf($("#bsap").value)]; $("#balba").value = w?albaN(w.alba):""; };
+  if($("#bper")) $("#bper").onchange = ()=>{
+    const per=$("#bper").value; const box=$(".bsug");
+    if(!box) return;
+    const list = bestSuggest(per);
+    const lab = /^\d{4}-\d{2}$/.test(per) ? (per+" сар: илрүүлсэн аюул") : "сүүлийн 30 хоног: илрүүлсэн аюул";
+    box.querySelector("summary").textContent = "Санал болгох ("+lab+")";
+    const ul=box.querySelector("ul");
+    if(!ul) return;
+    ul.innerHTML = list.map(s=>`<li><button type="button" class="linkbtn" data-bsug="${esc(s.sap)}">${esc(s.name)}</button> <span class="muted">аюул ${s.hz}</span></li>`).join("") || `<li class="muted">Энэ сард аюул алга</li>`;
+  };
   if($("#bf")) $("#bf").onsubmit = async e=>{
     e.preventDefault();
     if(!canWrite) return;

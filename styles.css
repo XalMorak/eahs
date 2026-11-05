@@ -623,6 +623,7 @@ table.hyg td.acts .btn{margin:2px}
 /* аюулын карт: хугацаа хэтэрсэн */
 .hzcard.overdue{border-color:var(--danger-200);box-shadow:inset 4px 0 0 var(--danger),var(--sh-1)}
 .hzcard .tagp.risk.hi{background:var(--danger-50);border-color:var(--danger-200);color:var(--danger)}
+.hzcard .tagp.past,.tagp.past{background:#EEF6FF;border-color:#BFDBFE;color:#1D4ED8}
 .hzmeta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .hzcard .det{margin:6px 0;white-space:pre-wrap}
 .hzgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:var(--s4);align-items:start}
