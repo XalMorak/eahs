@@ -1320,3 +1320,16 @@ table.fcrit td.rk0,table.fcrit td.rk1,table.fcrit td.rk2,table.fcrit th.rk0,tabl
 .hyfixrow > td{background:var(--surface-2,var(--surface));padding:8px 12px;border-top:none}
 .hyfixrow .svfix{margin:8px 0}
 .hyg .badge.svfixst{margin-left:6px}
+
+/* —— v37: шилдэг ажилтны баяр хүргэх —— */
+.bestbadge{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;color:var(--accent-ink);background:linear-gradient(180deg,#FFF8F3,#FFE9D9);border:1px solid #FBD5BF}
+.bestbg .bestm{position:relative;overflow:hidden;border:1px solid var(--brand-200);background:linear-gradient(180deg,#fff 0%,var(--brand-50) 55%,var(--accent-50) 100%);max-width:420px}
+.bestmh .beststar{background:linear-gradient(135deg,var(--accent),var(--brand));color:#fff;border-radius:14px}
+.bestbody{padding-top:4px}
+.bestlead{font-size:16px;line-height:1.45;color:var(--brand-950);margin:0 0 8px}
+.bestreason{margin:10px 0;padding:10px 12px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14px}
+.bestconfetti{pointer-events:none;position:absolute;inset:0;overflow:hidden}
+.bestconfetti i{position:absolute;top:-8px;left:calc(var(--i) * 5.5%);width:8px;height:12px;border-radius:2px;opacity:.85;
+  animation:bestfall 2.4s ease-in calc(var(--i) * 0.08s) infinite;
+  background:hsl(calc(20 + var(--i) * 17), 85%, 55%)}
+@keyframes bestfall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(110%) rotate(220deg);opacity:0}}

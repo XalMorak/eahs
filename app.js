@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v36 · 2026-11-05";
+const APP_VER = "v37 · 2026-11-05";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -89,7 +89,7 @@ const EMU = (typeof window!=="undefined" && window.EAHS_EMU) || null;
 const EMU_NO_SW = !!(typeof window!=="undefined" && window.EAHS_NO_SW);
 const FB_CONFIG = EMU ? {...firebaseConfig, ...(EMU.config||{})} : firebaseConfig;
 const ROOT = "eahs/v2";
-const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water","vehicles","best","fatint"];
+const COLS = ["users","settings","uhaan","fatigue","hazards","infect","roster","hygcheck","notifs","svcheck","renew","advice","adviceIdx","adviceTo","adviceAck","wbfiles","labcerts","sleep","water","vehicles","best","bestseen","fatint"];
 /* Нэвтрэлт: Firebase Auth (имэйл/нууц үг) — SAP → «<sap>@eahs.local» (нууц үг шинэчилбэл «<sap>+N@eahs.local») */
 const AUTH_DOMAIN = "eahs.local";
 const authSapOk = sap => /^[A-Za-z0-9_-]{2,40}$/.test(String(sap||""));
@@ -408,7 +408,7 @@ const OWN_COLS = ["uhaan","fatigue","infect","sleep","water"];
 function syncPlan(role){
   if(role==="hygiene" || role==="manager") return COLS;
   if(role==="supervisor") return ["users","settings","uhaan","fatigue","hazards","roster","hygcheck","notifs","svcheck","renew","wbfiles","labcerts","water","best","fatint"];
-  return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck","best"];
+  return ["users","settings","roster","hygcheck",...OWN_COLS,"adviceIdx","adviceTo","adviceAck","best","bestseen"];
 }
 function startSync(role, sap){
   stopSync();
@@ -420,7 +420,7 @@ function startSync(role, sap){
     if(role==="worker" && c==="users"){ q = _fb.ref(ROOT+"/users/"+k); map = v=> v? {[k]:v} : {}; }
     else if(role==="worker" && OWN_COLS.includes(c)) q = q.orderByChild("sap").equalTo(k);
     else if(role!=="hygiene" && role!=="manager" && c==="water") q = q.orderByChild("sap").equalTo(k);
-    else if(role==="worker" && (c==="adviceTo" || c==="adviceAck")){ q = _fb.ref(ROOT+"/"+c+"/"+k); map = v=> ({[k]: v||{}}); }
+    else if(role==="worker" && (c==="adviceTo" || c==="adviceAck" || c==="bestseen")){ q = _fb.ref(ROOT+"/"+c+"/"+k); map = v=> ({[k]: v||{}}); }
     const cb = snap=>{ SYNCED.add(c); DB[c] = map(snap.val()); overlayPending(c); persist([c]); if(c==="notifs") onNotifs(); if(c==="users") ready();
       if(role==="worker" && (c==="adviceIdx" || c==="adviceTo" || c==="users")) syncWorkerAdvice(k);
       scheduleRender(); };
@@ -673,7 +673,7 @@ function apkOffer(){
     </div>`;
 }
 function landing(){
-  closeModal("advlb"); closeModal("advmodal"); closeModal("wbbox"); closeModal("labbox"); closeModal("bugmodal"); ADV_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}}; BUG_DRAFT = {text:"", img:null};
+  closeModal("advlb"); closeModal("advmodal"); closeModal("bestmodal"); closeModal("wbbox"); closeModal("labbox"); closeModal("bugmodal"); ADV_DISMISSED = false; BEST_POP_DISMISSED = false; ADV_DRAFT = {key:null, add:[], del:{}}; BUG_DRAFT = {text:"", img:null};
   setSession(null); signOutCloud(); view(landing, false);
   const app = mount(`
     <div class="land">
@@ -901,7 +901,7 @@ function workerHome(){
   const app = mount(`
     ${appbar("ЭАХС", esc(albaN(u.alba)))}
     <main class="page">
-    <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><div class="muted">SAP ${esc(u.sap)} · ${esc(albaN(u.alba))}</div></div></div>
+    <div class="card row-between"><div class="hello"><span class="avatar" aria-hidden="true">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${bestBadgeHtml(u)}<div class="muted">SAP ${esc(u.sap)} · ${esc(albaN(u.alba))}</div></div></div>
       <button class="btn ghost sm" id="out">${ic("logout","sm")} Гарах</button></div>
     <div class="sec-t">Өнөөдрийн ажил · ${today()}</div>
     <div class="tasks">
@@ -940,6 +940,7 @@ function workerHome(){
   if($("#advall")) $("#advall").onclick = ()=>{ workerAdvicePage(); window.scrollTo(0,0); };
   $$("[data-wadvopen]").forEach(b=> b.onclick = ()=>{ workerAdvicePage(); const el = document.querySelector(`[data-wadv="${CSS.escape(b.dataset.wadvopen)}"]`); if(el) el.scrollIntoView({block:"start"}); });
   maybeAdvicePopup(u);
+  maybeBestPopup(u);
   const hb = $("#hsign");
   if(hb) hb.onclick = ()=>{
     write({[`hygcheck/${hb.dataset.id}/rows/${hb.dataset.rk}/sign`]: true, [`hygcheck/${hb.dataset.id}/rows/${hb.dataset.rk}/signAt`]: nowStr()});
@@ -5389,6 +5390,74 @@ function sigPad(canvas, opts){
 }
 
 /* ======================= v30: Шилдэг ажилтан ======================= */
+/* v37: баяр хүргэх popup — bestseen/{sap}/{bestId}; нэг удаа харуулна */
+let BEST_POP_DISMISSED = false;
+function bestPeriodLabel(p){
+  if(!p || !/^\d{4}-\d{2}$/.test(p)) return p||"";
+  const [y,m] = p.split("-");
+  return y+" оны "+(+m)+"-р сар";
+}
+function bestMine(u){
+  if(!u) return [];
+  return bestList().filter(x=>String(x.sap||"")===String(u.sap||""));
+}
+function bestSeen(id, sap){
+  const bag = (DB.bestseen||{})[keyOf(sap)]||{};
+  return !!(bag && bag[id]);
+}
+function bestUnseen(u){
+  return bestMine(u).filter(x=>x && x.id && !bestSeen(x.id, u.sap));
+}
+function bestAwardThisMonth(u){
+  const per = bestPeriodNow();
+  return bestMine(u).find(x=>x.period===per) || null;
+}
+function bestBadgeHtml(u){
+  const a = bestAwardThisMonth(u);
+  if(!a) return "";
+  return `<span class="bestbadge" title="${esc(bestPeriodLabel(a.period))}">${ic("star","sm")} Энэ сарын шилдэг</span>`;
+}
+function markBestSeen(u, a){
+  if(!u || !a || !a.id) return;
+  if(bestSeen(a.id, u.sap)) return;
+  write({[`bestseen/${keyOf(u.sap)}/${a.id}`]: {at:Date.now(), period:String(a.period||"").slice(0,7), name:String(u.name||"").slice(0,100)}});
+}
+function maybeBestPopup(u){
+  if(!u || u.role!=="worker" || BEST_POP_DISMISSED) return;
+  if(document.getElementById("bestmodal") || document.getElementById("advmodal")) return;
+  const q = bestUnseen(u);
+  if(!q.length) return;
+  showBestModal(u, q[0], q.length);
+}
+function showBestModal(u, a, total){
+  closeModal("bestmodal");
+  const perLbl = bestPeriodLabel(a.period||bestPeriodNow());
+  const m = document.createElement("div");
+  m.id = "bestmodal"; m.className = "modal-bg bestbg";
+  m.innerHTML = `<div class="modal bestm" role="dialog" aria-modal="true" aria-labelledby="bestmt">
+    <div class="bestconfetti" aria-hidden="true">${Array.from({length:18},(_,i)=>`<i style="--i:${i}"></i>`).join("")}</div>
+    <div class="mhead bestmh"><span class="mic beststar">${ic("star")}</span>
+      <div><small>Аюулыг мэдээлэх хуудас · шилдэг ажилтан${total>1?` · 1 / ${total}`:""}</small>
+        <h3 id="bestmt">Баяр хүргэе, ${esc(u.name||a.name||"")}!</h3></div></div>
+    <div class="mbody bestbody">
+      <p class="bestlead">Баяр хүргэе! Та <b>аюулыг мэдээлэх хуудасны энэ сарын шилдэг ажилтан</b> боллоо.</p>
+      <p class="muted"><b>${esc(perLbl)}</b> · таны аюулын мэдээлэл багийн аюулгүй ажиллагаанд хувь нэмэр оруулсан.</p>
+      ${a.reason?`<div class="bestreason"><small class="muted">Шалтгаан</small><div>${esc(a.reason)}</div></div>`:""}
+      <p class="muted sm">${esc(perLbl)}${a.by?` · сонгосон: ${esc(a.by)}`:""}</p>
+    </div>
+    <div class="mfoot"><button class="btn" type="button" id="bestok">${ic("check","sm")} Баярлалаа</button></div>
+  </div>`;
+  document.body.appendChild(m); document.body.classList.add("modal-open");
+  const done = ()=>{
+    markBestSeen(u, a);
+    closeModal("bestmodal");
+    const rest = bestUnseen(u);
+    if(rest.length) showBestModal(u, rest[0], rest.length);
+  };
+  m.querySelector("#bestok").onclick = done;
+  m.onkeydown = e=>{ if(e.key==="Escape") done(); };
+  m.querySelector("#bestok").focus();
+}
 const BEST_ROLES_WRITE = u => u && (u.role==="hygiene" || u.role==="manager");
 function bestList(){ return list("best").filter(x=>x && x.id).sort((a,b)=>String(b.period||"").localeCompare(String(a.period||"")) || (b.ts||0)-(a.ts||0)); }
 function bestPeriodNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
@@ -5522,7 +5591,7 @@ function bestPage(){
       }catch(ex){ toast("Зураг уншиж чадсангүй"); }
     }
     upd["best/"+id]={id, period:per, sap:w.sap, name:w.name, alba:albaN(w.alba), reason:reason.slice(0,500), by:u.name, bySap:u.sap, at:nowStr(), ts:Date.now(), hasPhoto};
-    write(upd); toast("Хадгаллаа"); window._BESTP=per; bestPage();
+    write(upd); toast("Хадгаллаа · "+w.name+"-д баяр хүргэх цонх гарна"); window._BESTP=per; bestPage();
   };
   loadBestImgs();
 }

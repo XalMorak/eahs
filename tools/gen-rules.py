@@ -185,6 +185,16 @@ BEST_VALIDATE = ("!newData.exists() || (newData.child('sap').isString() && newDa
                  " && (!newData.child('hasPhoto').exists() || newData.child('hasPhoto').isBoolean()))")
 BEST_IMG_VALIDATE = "!newData.exists() || (newData.isString() && newData.val().matches(/^data:image\\/(jpeg|png|webp);base64,/) && newData.val().length <= 640000)"
 BEST_WRITE = f"({HYG} || {MGR})"
+# v37: ажилтан өөрийн шилдэг шагналыг үзсэн тэмдэг — bestseen/{sap}/{bestId}
+BESTSEEN_VALIDATE = ("!newData.exists() || (newData.hasChildren()"
+                     " && newData.child('at').isNumber()"
+                     " && (!newData.child('period').exists() || (newData.child('period').isString() && newData.child('period').val().matches(/^[0-9]{4}-[0-9]{2}$/)))"
+                     " && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 100)))")
+BESTSEEN_NODE = {".read": MEMBER,
+    "$sap": {".read": f"auth != null && ({MYSAP} === $sap || {HYG} || {MGR})",
+             ".write": f"auth != null && {MYSAP} === $sap",
+             "$id": {".validate": BESTSEEN_VALIDATE}}}
+
 
 # v22: Web Push захиалга — push/{sap}/{hash}; хэрэглэгч зөвхөн өөрийн sap дор бичнэ/устгана/уншина; эрүүл ахуйч (сервер) бүгдийг уншина/устгана
 
@@ -292,6 +302,7 @@ def strict():
         # v30: шилдэг ажилтан — бүх гишүүн уншина; эрүүл ахуйч+менежер бичнэ; устгахыг апп эрүүл ахуйчаар хязгаарлана
         "best": {".read": MEMBER, ".indexOn": ["period", "sap"], ".write": BEST_WRITE, "$id": {".validate": BEST_VALIDATE}},
         "bestimg": {".read": MEMBER, ".write": BEST_WRITE, "$id": {".validate": BEST_IMG_VALIDATE}},
+        "bestseen": BESTSEEN_NODE,
         # v30: ахлахын ядаргааны ярилцлага — ахлах өөрийн албаныхыг бичнэ; эрүүл ахуйч+менежер уншина
         "fatint": {".read": STAFF_R, ".indexOn": ["sap", "fatId", "alba"], ".write": False, "$id": {".write": FATINT_WRITE, ".validate": FATINT_VALIDATE}},
         "$other": {".write": False}}}}}
@@ -330,6 +341,7 @@ def transition():
         "svcheck": {"$id": {".write": ANY, ".validate": SV_VALIDATE, **SVCHECK_KIDS}},
         "best": {"$id": {".write": ANY, ".validate": BEST_VALIDATE}},
         "bestimg": {"$id": {".write": ANY, ".validate": BEST_IMG_VALIDATE}},
+        "bestseen": {"$sap": {"$id": {".write": ANY, ".validate": BESTSEEN_VALIDATE}}},
         "fatint": {"$id": {".write": ANY, ".validate": FATINT_VALIDATE}},
         "$other": {".write": False}}}}}
 
