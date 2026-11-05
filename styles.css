@@ -624,6 +624,10 @@ table.hyg td.acts .btn{margin:2px}
 .hzcard.overdue{border-color:var(--danger-200);box-shadow:inset 4px 0 0 var(--danger),var(--sh-1)}
 .hzcard .tagp.risk.hi{background:var(--danger-50);border-color:var(--danger-200);color:var(--danger)}
 .hzcard .tagp.past,.tagp.past{background:#EEF6FF;border-color:#BFDBFE;color:#1D4ED8}
+.pastbanner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 12px 0;padding:10px 14px;border-radius:12px;background:#EEF6FF;border:1px solid #BFDBFE;color:#1E3A8A;font-size:13.5px}
+.pastbanner .tagp{flex:0 0 auto}
+.otpage input[readonly]{background:var(--surface-2);color:var(--ink-2)}
+
 .hzmeta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .hzcard .det{margin:6px 0;white-space:pre-wrap}
 .hzgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:var(--s4);align-items:start}

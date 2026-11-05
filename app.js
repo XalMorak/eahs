@@ -4,7 +4,7 @@
  * офлайн үед localStorage дээр хадгалж, "pending" дараалалд үлдээгээд холбогдмогц илгээнэ.
  */
 /* ---------- Алдаа барих (v13: «Алдаа мэдээлэх»-д хавсаргана) — хамгийн эхэнд, ачаалах үеийн алдааг ч барина ---------- */
-const APP_VER = "v34 · 2026-11-05";
+const APP_VER = "v35 · 2026-11-05";
 const BUG_ERRS = [];   // сүүлийн 10 JS алдаа (ring buffer)
 const bugScrub = s => String(s==null?"":s)
   .replace(/\b(pass(?:word)?|pwd|pin|token|secret|api[_-]?key|key|auth|sig|signature|code|access_token|id_token)=([^&\s"'<>]+)/gi, "$1=[redacted]")
@@ -1487,49 +1487,80 @@ const HZ_HIGH = r => r==="Их" || r==="Маш их";
 const albaOf = area => { const s = String(area||""); return /оффис/i.test(s) ? "Оффис" : /баар|(^|[\s,.;:\/()-])бар($|[\s,.;:\/()-])/i.test(s) ? "Бар" : ""; };
 const hzOverdue = x => !!(x.due && x.due < today() && HZ_OPEN(x.status));
 function hazardForm(opts){
+  opts = opts || {};
+  const pastMode = !!(opts.past || opts.mode==="past");
+  const editId = pastMode && opts.id ? opts.id : null;
+  if(pastMode){
+    const hu = requireRole("hygiene"); if(!hu) return;
+  }
+  const rawEdit = editId ? DB.hazards[editId] : null;
+  if(editId && !rawEdit){ toast("Олдсонгүй"); return hazardListPage(); }
+  const xEdit = rawEdit ? normHazard(rawEdit) : null;
+  if(xEdit && !isPastHz(xEdit)){ toast("Зөвхөн өмнөх бүртгэлийг засна"); return hazardListPage(); }
+
   hazardPics = [];
-  const preArea = opts && typeof opts.area==="string" ? opts.area.slice(0,120) : null;
+  const preArea = (!pastMode && typeof opts.area==="string") ? opts.area.slice(0,120) : null;
   view(()=>hazardForm(opts), false);
   const u = me();
-  const back = ()=> u? homeFor(u) : landing();
+  const back = ()=> pastMode ? hazardListPage() : (u? homeFor(u) : landing());
+  const people = pastMode ? users().filter(w=>w.role==="worker"||w.role==="supervisor").sort((a,b)=>a.name.localeCompare(b.name)) : [];
+  const areaVal = xEdit ? (xEdit.area||"") : (preArea!=null&&preArea!==""?preArea:(pastMode?"":(albaN(u?.alba)||"")));
+  const dateVal = xEdit ? (xEdit.date||today()) : today();
+  const repVal = xEdit ? (xEdit.reporter||"") : (pastMode?"":(u?.name||""));
+  const revVal = xEdit ? (xEdit.reviewer||"") : (pastMode?(u?.name||""):"");
+  const accVal = xEdit ? (xEdit.acc||"") : "";
+  const detVal = xEdit ? (xEdit.det||"") : "";
+  const actVal = xEdit ? (xEdit.act||"") : "";
+  const bySapVal = xEdit ? (xEdit.bySap||"") : "";
   const lbl = (mn,en,forId)=>`<label class="otl" ${forId?`for="${forId}"`:""}><b>${esc(mn)}</b>${en?`<i>${esc(en)}</i>`:""}</label>`;
-  const chk = (name,[mn,en],type="checkbox")=>`<label class="otc"><input type="${type}" name="${name}" value="${esc(mn)}"/><span><b>${esc(mn)}</b><i>${esc(en)}</i></span></label>`;
+  const chk = (name,[mn,en],type="checkbox",on=false)=>`<label class="otc"><input type="${type}" name="${name}" value="${esc(mn)}" ${on?"checked":""}/><span><b>${esc(mn)}</b><i>${esc(en)}</i></span></label>`;
   const app = mount(`
     <div class="otpage">
       <div class="otband"><div><h1>АЮУЛЫГ МЭДЭЭЛЭХ ХУУДАС</h1><h2>RECORD AN OBSERVED HAZARD</h2></div><img src="/logo.png" alt="Ерөө говь ХХК"/></div>
+      ${pastMode?`<div class="pastbanner noprint"><span class="tagp past">Өмнөх бүртгэл</span>
+        <span>Сайтгүй үеийн аюул — огноо болон мэдээлэгч ажилтныг сонгоно. Маягт нь энгийн аюулын мэдээлэлтэй ижил.</span></div>`:""}
       <form id="hzf" novalidate>
+      ${pastMode?`<div class="otbar big"><b>ӨМНӨХ БҮРТГЭЛ</b><span>PAST ENTRY</span></div>
+      <div class="otgrid">
+        <div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","Date observed","hdate")}
+          <div class="otv"><input type="date" id="hdate" value="${esc(dateVal)}" max="${today()}" required/></div></div>
+        <div class="otrow">${lbl("Аюулыг мэдээлсэн ажилтан (SAP):","Reporting employee","hsap")}
+          <div class="otv"><select id="hsap" required><option value="">— Сонгоно уу —</option>
+            ${people.map(w=>`<option value="${esc(w.sap)}" ${bySapVal===w.sap?"selected":""}>${esc(w.name)} (${esc(w.sap)}) · ${esc(albaN(w.alba)||"—")}</option>`).join("")}
+          </select></div></div>
+      </div>`:""}
       <div class="otbar big"><b>ЕРӨНХИЙ МЭДЭЭЛЭЛ</b><span>HAZARD HEADER</span></div>
       <div class="otgrid">
         <div class="otrow full">${lbl("Аюулыг харсан газар, харъяа хэлтэс:","What work area was the hazard observed in?","area")}
-          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(preArea!=null&&preArea!==""?preArea:(albaN(u?.alba)||""))}" placeholder="Жишээ: Бар, гал тогоо"/>
+          <div class="otv"><input id="area" list="albaList" maxlength="120" required value="${esc(areaVal)}" placeholder="Жишээ: Бар, гал тогоо"/>
           ${preArea?`<small class="qrnote">${ic("qr","sm")} QR кодоор нээсэн — газар бөглөгдсөн</small>`:""}
           <datalist id="albaList">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div></div>
-        <div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","","hdate")}<div class="otv"><input type="date" id="hdate" value="${today()}" max="${today()}" required/></div></div>
-        <div class="otrow">${lbl("Аюулыг хянаж бууруулах ажлыг хариуцах хэлтэс:","What part of the organisation is accountable for the hazard?","acc")}<div class="otv"><input id="acc" maxlength="120"/></div></div>
-        <div class="otrow">${lbl("Аюулыг мэдээлсэн хүн:","Hazard Reporter:","rep")}<div class="otv"><input id="rep" maxlength="120" value="${esc(u?.name||"")}" placeholder="Нэр, албан тушаал"/></div></div>
-        <div class="otrow">${lbl("Аюулыг хянаж , судласан хүн (ахлах ажилтан):","Hazard Reviewer:","rev")}<div class="otv"><input id="rev" maxlength="120" placeholder="Нэр, албан тушаал"/></div></div>
+        ${pastMode?"":`<div class="otrow">${lbl("Аюулыг олж ажигласан огноо:","","hdate")}<div class="otv"><input type="date" id="hdate" value="${esc(dateVal)}" max="${today()}" required/></div></div>`}
+        <div class="otrow">${lbl("Аюулыг хянаж бууруулах ажлыг хариуцах хэлтэс:","What part of the organisation is accountable for the hazard?","acc")}<div class="otv"><input id="acc" maxlength="120" value="${esc(accVal)}"/></div></div>
+        <div class="otrow">${lbl("Аюулыг мэдээлсэн хүн:","Hazard Reporter:","rep")}<div class="otv"><input id="rep" maxlength="120" value="${esc(repVal)}" placeholder="Нэр, албан тушаал" ${pastMode?"readonly":""}/></div></div>
+        <div class="otrow">${lbl("Аюулыг хянаж , судласан хүн (ахлах ажилтан):","Hazard Reviewer:","rev")}<div class="otv"><input id="rev" maxlength="120" value="${esc(revVal)}" placeholder="Нэр, албан тушаал"/></div></div>
       </div>
       <div class="otbar"><b>АЮУЛЫН ТАЙЛБАР</b><span>HAZARD DESCRIPTION</span></div>
       <div class="otgrid">
         <div class="otrow full">${lbl("Аюулын төрөл","What type of hazard did you observe?")}
-          <div class="otv otchecks c3" id="types">${[HZ_TYPES[0],HZ_TYPES[1],HZ_TYPES[2],null,HZ_TYPES[3],null].map(t=>t?chk("type",t):'<div class="otc-empty"></div>').join("")}</div></div>
+          <div class="otv otchecks c3" id="types">${[HZ_TYPES[0],HZ_TYPES[1],HZ_TYPES[2],null,HZ_TYPES[3],null].map(t=>t?chk("type",t,"checkbox", !!(xEdit&&(xEdit.types||[]).includes(t[0]))):'<div class="otc-empty"></div>').join("")}</div></div>
         <div class="otrow full">${lbl("Тухайн аюулыг аль ангилалд хамааруулах вэ?","What hazard type would you classify the hazard as?")}
-          <div class="otv otchecks c4" id="cls">${HZ_GRID.flat().map(t=>t?chk("cls",t):'<div class="otc-empty"></div>').join("")}</div></div>
+          <div class="otv otchecks c4" id="cls">${HZ_GRID.flat().map(t=>t?chk("cls",t,"checkbox", !!(xEdit&&(xEdit.cls||[]).includes(t[0]))):'<div class="otc-empty"></div>').join("")}</div></div>
         <div class="otrow full">${lbl("Эрсдлийн түвшинг өөрийн сэтгэгдлээр илэрхийлнэ үү?","What is your impression of the risk?")}
-          <div class="otv otchecks c4 risk" id="riskg">${HZ_RISK.map(t=>chk("risk",t,"radio")).join("")}</div></div>
+          <div class="otv otchecks c4 risk" id="riskg">${HZ_RISK.map(t=>chk("risk",t,"radio", !!(xEdit&&xEdit.risk===t[0]))).join("")}</div></div>
         <div class="otrow full">${lbl("Харсан аюулаа дэлгэрэнгүй дүрсэлж бичнэ үү?","Record details of the hazard","det")}
-          <div class="otv"><textarea id="det" maxlength="1000" rows="5" required placeholder="Аюулын байршил, нөхцөл, юу ажиглагдсаныг дэлгэрэнгүй бичнэ үү..."></textarea></div></div>
+          <div class="otv"><textarea id="det" maxlength="1000" rows="5" required placeholder="Аюулын байршил, нөхцөл, юу ажиглагдсаныг дэлгэрэнгүй бичнэ үү...">${esc(detVal)}</textarea></div></div>
         <div class="otrow full">${lbl("Авсан шуурхай арга хэмжээ","Were any immediate actions taken?","act")}
-          <div class="otv"><textarea id="act" maxlength="1000" rows="4" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?..."></textarea></div></div>
+          <div class="otv"><textarea id="act" maxlength="1000" rows="4" placeholder="Аюулыг бууруулах эсвэл арилгахын тулд шууд юу хийсэн бэ?...">${esc(actVal)}</textarea></div></div>
       </div>
       <div class="otbar"><b>НЭМЭЛТ: ЗУРАГ</b><span>PHOTOS (2–8)</span></div>
       <label class="drop">${ic("camera")}<span>Зураг оруулах — багадаа 2, дээд тал нь 8 зураг (JPG/PNG)</span>
         <input type="file" id="pics" accept="image/*" multiple/></label>
       <div class="thumbs" id="thumbs"></div>
       <div id="hzerr" class="errtxt" role="alert"></div>
-      <button class="btn" type="submit" id="send">${ic("send")} Илгээх / Submit</button>
-      <p class="muted center">${ic("lock","sm")} Таны мэдээлэл нууцлагдана.</p>
-      <button class="btn ghost" type="button" id="back">Буцах</button>
+      <button class="btn" type="submit" id="send">${ic(pastMode?"check":"send")} ${pastMode?(editId?"Хадгалах":"Хадгалаад дараагийнх / Save & next"):"Илгээх / Submit"}</button>
+      <p class="muted center">${pastMode?`Өмнөх бүртгэл · шилдэг самбарт огноогоор тоологдоно.${editId?"":" Хадгалсны дараа маягт цэвэрлэгдэнэ."}`:`${ic("lock","sm")} Таны мэдээлэл нууцлагдана.`}</p>
+      <button class="btn ghost" type="button" id="back">${pastMode?"Жагсаалт руу":"Буцах"}</button>
       </form>
       <div class="otfoot"><b>Ерөө говь ХХК</b><span>PRINTED COPIES ARE UNCONTROLLED<br>${esc(HZ_FORM_CODE)}</span><span></span></div>
     </div>`);
@@ -1543,12 +1574,32 @@ function hazardForm(opts){
     }
     e.target.value=""; drawThumbs();
   };
+  // load existing photos when editing past
+  if(editId){
+    (async()=>{
+      try{
+        const ps = await getPhotos(editId);
+        if(ps && ps.length){ hazardPics = ps.slice(0,8); drawThumbs(); }
+      }catch(err){ console.warn(err); }
+    })();
+  }
+  if(pastMode && $("#hsap")){
+    $("#hsap").onchange = ()=>{
+      const w=DB.users[keyOf($("#hsap").value)];
+      if($("#rep")) $("#rep").value = w ? w.name : "";
+    };
+  }
   $("#back").onclick = back;
   app.onchange = app.oninput = ()=>{ const er=$("#hzerr"); if(er && er.textContent) er.textContent=""; };
   app.onsubmit = e=>{
     e.preventDefault();
     const vals = n => $$(`#hzf input[name="${n}"]:checked`).map(x=>x.value);
     const errs = [];
+    if(pastMode){
+      if(!$("#hdate").value) errs.push("Огноо");
+      if($("#hdate").value && $("#hdate").value>today()) errs.push("Ирээдүйн огноо биш");
+      if(!$("#hsap").value) errs.push("Мэдээлэгч ажилтан");
+    }
     if(!$("#area").value.trim()) errs.push("Аюулыг харсан газар");
     if(!vals("type").length) errs.push("Аюулын төрөл");
     if(!vals("cls").length) errs.push("Аюулын ангилал");
@@ -1556,18 +1607,53 @@ function hazardForm(opts){
     if(!$("#det").value.trim()) errs.push("Аюулын дэлгэрэнгүй");
     if(hazardPics.length<2) errs.push("Багадаа 2 зураг");
     if(errs.length){ $("#hzerr").textContent = "Бөглөнө үү: "+errs.join(", "); $("#hzerr").scrollIntoView({block:"center"}); return; }
-    const id=uid();
     const area=$("#area").value.trim(), risk=vals("risk")[0];
-    const upd = {
-      ["hazards/"+id]: {id, form:"OT-03-v2", area, alba:albaOf(area), date:$("#hdate").value||today(), acc:$("#acc").value.trim(), reporter:$("#rep").value.trim(), reviewer:$("#rev").value.trim(),
-        types:vals("type"), cls:vals("cls"), risk, det:$("#det").value, act:$("#act").value,
-        photoCount: hazardPics.length, status:"Шинэ", created:nowStr(), ts:Date.now(), ...(preArea?{via:"qr"}:{})},
-      ["photos/"+id]: hazardPics.slice(0,8)
+    const id = editId || uid();
+    const prev = editId ? (DB.hazards[id]||{}) : {};
+    let bySap = "", reporter = $("#rep").value.trim();
+    if(pastMode){
+      const w=DB.users[keyOf($("#hsap").value)]; if(!w){ toast("Ажилтан олдсонгүй"); return; }
+      bySap = w.sap; reporter = w.name;
+    }
+    const rec = {
+      ...prev,
+      id, form:"OT-03-v2", area, alba:albaOf(area) || (pastMode && bySap ? albaN((DB.users[keyOf(bySap)]||{}).alba) : "") || prev.alba || "",
+      date:$("#hdate").value||today(), acc:$("#acc").value.trim(), reporter, reviewer:$("#rev").value.trim(),
+      types:vals("type"), cls:vals("cls"), risk, det:$("#det").value, act:$("#act").value,
+      photoCount: hazardPics.length,
+      created: prev.created || nowStr(),
+      ts: prev.ts || Date.now()
     };
-    if(HZ_HIGH(risk)) upd["notifs/hz_"+id] = {id:"hz_"+id, type:"hazard", level: risk==="Маш их"?"critical":"high", ts:Date.now(),
+    if(pastMode){
+      rec.via = "past"; rec.past = true;
+      rec.bySap = bySap;
+      rec.enteredBy = prev.enteredBy || (u?.name||"");
+      rec.enteredBySap = prev.enteredBySap || (u?.sap||"");
+      rec.enteredAt = prev.enteredAt || nowStr();
+      if(editId){ rec.updatedAt = nowStr(); rec.updatedBy = u?.name||""; rec.status = prev.status ? hzSt(prev.status) : HZ_DONE; }
+      else { rec.status = HZ_DONE; rec.closedAt = rec.date; }
+    } else {
+      rec.status = "Шинэ";
+      if(preArea) rec.via = "qr";
+    }
+    const upd = { ["hazards/"+id]: rec, ["photos/"+id]: hazardPics.slice(0,8) };
+    // past: no high-risk push notifs (historical)
+    if(!pastMode && HZ_HIGH(risk)) upd["notifs/hz_"+id] = {id:"hz_"+id, type:"hazard", level: risk==="Маш их"?"critical":"high", ts:Date.now(),
       title: (risk==="Маш их"?"Маш их":"Их")+" эрсдэлтэй аюул: "+area.slice(0,80), body: $("#det").value.slice(0,160), alba: albaOf(area), ref:id,
-      by: (u?.name || $("#rep").value.trim() || "Нэргүй").slice(0,80), bySap: u?.sap || ""};
+      by: (u?.name || reporter || "Нэргүй").slice(0,80), bySap: u?.sap || ""};
     write(upd);
+    if(pastMode){
+      toast(editId ? "Заслаа" : "Хадгаллаа · дараагийн бүртгэл");
+      if(editId) return hazardListPage();
+      // consecutive: clear form, keep past mode
+      hazardPics = []; drawThumbs();
+      $("#area").value=""; $("#acc").value=""; $("#det").value=""; $("#act").value="";
+      $("#rep").value=""; if($("#hsap")) $("#hsap").value="";
+      $$('#hzf input[name="type"], #hzf input[name="cls"], #hzf input[name="risk"]').forEach(el=>el.checked=false);
+      $("#hzerr").textContent="";
+      $("#hdate").focus();
+      return;
+    }
     alert("Мэдэгдэл хүлээн авлаа.");
     back();
   };
@@ -2175,96 +2261,10 @@ function dueTxt(x){
   return "";
 }
 
-/* ---------- v34: Өмнөх (сайтгүй үеийн) аюулын бүртгэл — гараар нэг нэгээр ---------- */
+/* ---------- v35: өмнөх бүртгэл = hazardForm past mode (бүтэн OT-03 + зураг) ---------- */
 function hazardPastForm(opts){
-  const u = requireRole("hygiene"); if(!u) return;
-  const editId = opts && opts.id ? opts.id : null;
-  const raw = editId ? DB.hazards[editId] : null;
-  if(editId && !raw){ toast("Олдсонгүй"); return hazardListPage(); }
-  const x = raw ? normHazard(raw) : null;
-  if(x && !isPastHz(x)){ toast("Зөвхөн өмнөх бүртгэлийг засна"); return hazardListPage(); }
-  view(()=>hazardPastForm(opts), false);
-  const people = users().filter(w=>w.role==="worker"||w.role==="supervisor").sort((a,b)=>a.name.localeCompare(b.name));
-  const maxD = today();
-  const app = mount(shell("аюул", `
-    ${phead(editId?"Өмнөх бүртгэл засах":"Өмнөх бүртгэл нэмэх", "Сайтгүй үед гарсан аюулыг огноо + ажилтнаар бүртгэнэ · шилдэг самбарт тоологдоно")}
-    <form class="card" id="hzpastf" novalidate>
-      <div class="ctitle">${ic("calendar")}<h3>${editId?"Засах":"Шинэ өмнөх бүртгэл"}</h3>
-        <span class="tagp past">Өмнөх бүртгэл</span></div>
-      <div class="g2">
-        <div><label class="f" for="hpdate">Огноо *</label>
-          <input type="date" id="hpdate" required max="${esc(maxD)}" value="${esc(x?x.date:maxD)}"/></div>
-        <div><label class="f" for="hpsap">Ажилтан (мэдээлэгч) *</label>
-          <select id="hpsap" required><option value="">— Сонгоно уу —</option>
-            ${people.map(w=>`<option value="${esc(w.sap)}" ${x&&x.bySap===w.sap?"selected":""}>${esc(w.name)} (${esc(w.sap)}) · ${esc(albaN(w.alba)||"—")}</option>`).join("")}
-          </select></div>
-      </div>
-      <div class="g2">
-        <div><label class="f" for="hparea">Газар / хэсэг *</label>
-          <input id="hparea" list="albaListPast" maxlength="120" required value="${esc(x?x.area:"")}" placeholder="Жишээ: Бар, гал тогоо"/>
-          <datalist id="albaListPast">${ALBA.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div>
-        <div><label class="f" for="hprisk">Эрсдэл</label>
-          <select id="hprisk"><option value="">—</option>
-            ${HZ_RISK.map(r=>`<option value="${esc(r[0])}" ${x&&x.risk===r[0]?"selected":""}>${esc(r[0])}</option>`).join("")}
-          </select></div>
-      </div>
-      <label class="f">Аюулын төрөл</label>
-      <div class="otchecks c2" id="hptypes">${HZ_TYPES.map(tp=>{
-        const on = x && (x.types||[]).includes(tp[0]);
-        return `<label class="otc"><input type="checkbox" name="hptype" value="${esc(tp[0])}" ${on?"checked":""}/><span><b>${esc(tp[0])}</b></span></label>`;
-      }).join("")}</div>
-      <label class="f" for="hpdet">Тайлбар *</label>
-      <textarea id="hpdet" maxlength="1000" rows="4" required placeholder="Юу ажиглагдсан, хаана…">${esc(x?x.det:"")}</textarea>
-      <div id="hperr" class="errtxt" role="alert"></div>
-      <div class="actions">
-        <button class="btn" type="submit">${ic("check")} ${editId?"Хадгалах":"Хадгалаад дараагийнх"}</button>
-        <button class="btn ghost" type="button" id="hpback">${ic("back")} Жагсаалт</button>
-      </div>
-      ${editId?"":`<p class="muted">Хадгалсны дараа маягт цэвэрлэгдэж дахин оруулна — хурдан дараалан бүртгэнэ.</p>`}
-    </form>`));
-  $("#hpback").onclick = ()=> hazardListPage();
-  app.onsubmit = e=>{
-    e.preventDefault();
-    const errs=[];
-    const date=$("#hpdate").value, sap=$("#hpsap").value, area=$("#hparea").value.trim(), det=$("#hpdet").value.trim();
-    const risk=$("#hprisk").value, types=$$('#hzpastf input[name="hptype"]:checked').map(el=>el.value);
-    if(!date) errs.push("Огноо");
-    if(date && date>today()) errs.push("Ирээдүйн огноо биш");
-    if(!sap) errs.push("Ажилтан");
-    if(!area) errs.push("Газар");
-    if(!det) errs.push("Тайлбар");
-    if(errs.length){ $("#hperr").textContent="Бөглөнө үү: "+errs.join(", "); return; }
-    const w=DB.users[keyOf(sap)]; if(!w){ toast("Ажилтан олдсонгүй"); return; }
-    const id = editId || uid();
-    const prev = editId ? (DB.hazards[id]||{}) : {};
-    const rec = {
-      ...prev,
-      id, form:"past-v34", via:"past", past:true,
-      area, alba: albaOf(area) || albaN(w.alba) || prev.alba || "",
-      date, reporter: w.name, bySap: w.sap,
-      reviewer: u.name, types, cls: arr(prev.cls),
-      risk: risk||"", det,
-      photoCount: prev.photoCount||0,
-      status: prev.status && hzSt(prev.status) ? hzSt(prev.status) : HZ_DONE,
-      created: prev.created || nowStr(),
-      ts: prev.ts || Date.now(),
-      closedAt: prev.closedAt || (hzSt(prev.status)===HZ_DONE ? (prev.closedAt||date) : date) || date,
-      enteredBy: prev.enteredBy || u.name,
-      enteredBySap: prev.enteredBySap || u.sap,
-      enteredAt: prev.enteredAt || nowStr()
-    };
-    if(editId){ rec.updatedAt = nowStr(); rec.updatedBy = u.name; }
-    // шинэ өмнөх бүртгэл — нээлттэй дараалалд орохгүй
-    if(!editId){ rec.status = HZ_DONE; rec.closedAt = date; }
-    write({["hazards/"+id]: rec});
-    toast(editId ? "Заслаа" : "Хадгаллаа · дараагийн бүртгэл");
-    if(editId) return hazardListPage();
-    // consecutive: clear keep page
-    $("#hpsap").value=""; $("#hparea").value=""; $("#hpdet").value=""; $("#hprisk").value="";
-    $$('#hzpastf input[name="hptype"]').forEach(el=>el.checked=false);
-    $("#hperr").textContent="";
-    $("#hpdate").focus();
-  };
+  const o = Object.assign({}, opts||{}, {past:true});
+  return hazardForm(o);
 }
 
 function hazardListPage(){
@@ -2322,11 +2322,11 @@ function hazardListPage(){
   };
   draw();
   bindNav(app, e=>{
-    if(e.target.closest("#hzpastadd") && hyg){ hazardPastForm(); return; }
+    if(e.target.closest("#hzpastadd") && hyg){ hazardForm({past:true}); return; }
     const f=e.target.closest("[data-fst]"); if(f){ HZF.st=f.dataset.fst; $$("[data-fst]").forEach(b=>{ b.classList.toggle("on", b===f); b.setAttribute("aria-pressed", b===f); }); draw(); return; }
     if(e.target.closest("#freset")){ HZF={st:"all", risk:"", alba:"", who:"", q:"", from:"", to:""}; hazardListPage(); return; }
     const dt=e.target.closest("[data-hzd]"); if(dt){ hazardDetail(dt.dataset.hzd); window.scrollTo(0,0); return; }
-    const pe=e.target.closest("[data-hzpedit]"); if(pe && hyg){ hazardPastForm({id:pe.dataset.hzpedit}); return; }
+    const pe=e.target.closest("[data-hzpedit]"); if(pe && hyg){ hazardForm({past:true, id:pe.dataset.hzpedit}); return; }
     const pr=e.target.closest("[data-prhz]"); if(pr){ hazardPrint(pr.dataset.prhz); return; }
     const d=e.target.closest("[data-delhz]");
     if(d && confirm("Энэ аюулын бүртгэлийг устгах уу?")){ write({["hazards/"+d.dataset.delhz]:null, ["photos/"+d.dataset.delhz]:null}); toast("Устгалаа"); }
@@ -2382,7 +2382,7 @@ async function hazardDetail(id){
   bindNav(app, e=>{
     if(e.target.closest("#hb")) hazardListPage();
     if(e.target.closest("#hp")) hazardPrint(id);
-    if(e.target.closest("#hped") && u.role==="hygiene") hazardPastForm({id});
+    if(e.target.closest("#hped") && u.role==="hygiene") hazardForm({past:true, id});
   });
   if($("#hzt")) app.onsubmit = e=>{
     e.preventDefault();
